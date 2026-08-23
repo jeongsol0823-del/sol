@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>정말 쏠쏠한 국어</title>
+<meta name="description" content="정말 쏠쏠한 국어 · 쏠T 온라인 학습 시스템"/>
+<meta name="theme-color" content="#4f7cff"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+  var tag=document.createElement('script');
+  tag.src='https://www.youtube.com/iframe_api';
+  var first=document.getElementsByTagName('script')[0];
+  first.parentNode.insertBefore(tag,first);
+})();
+</script>
+<style>
+:root{
+  --bg:#0f1117;--bg2:#181c27;--bg3:#1e2333;--card:#242938;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
+  --text:#e8eaf0;--text2:#8b90a0;--text3:#555c70;
+  --accent:#4f7cff;--accent2:#3d63e0;
+  --green:#22c55e;--green-bg:rgba(34,197,94,0.1);
+  --amber:#f59e0b;--amber-bg:rgba(245,158,11,0.1);
+  --red:#ef4444;--red-bg:rgba(239,68,68,0.1);
+  --radius:12px;--radius-sm:8px;
+  --font:'Noto Sans KR',sans-serif;--mono:'DM Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.6}
+input,button,select,textarea{font-family:var(--font)}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+#loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px;transition:opacity .3s}
+#loading-screen.hide{opacity:0;pointer-events:none}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:13px;color:var(--text2)}
+.page{display:none;min-height:100vh;flex-direction:column}
+.page.active{display:flex}
+
+/* ---- login ---- */
+#page-login{align-items:center;justify-content:center;background:var(--bg)}
+.login-wrap{width:100%;max-width:400px;padding:2rem}
+.login-logo{text-align:center;margin-bottom:2rem}
+.login-logo-icon{width:52px;height:52px;background:var(--accent);border-radius:14px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:.75rem;font-size:26px}
+.login-logo h1{font-size:19px;font-weight:700;letter-spacing:-.5px}
+.login-logo p{font-size:13px;color:var(--text2);margin-top:3px}
+.login-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.75rem}
+.form-group{margin-bottom:.875rem}
+.form-group label{display:block;font-size:11px;font-weight:500;color:var(--text2);margin-bottom:5px;letter-spacing:.5px;text-transform:uppercase}
+.form-input,.form-select,textarea.form-input{width:100%;padding:9px 13px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:14px;transition:border-color .2s}
+.form-input:focus,.form-select:focus{outline:none;border-color:var(--accent)}
+.form-input::placeholder{color:var(--text3)}
+.form-select{cursor:pointer}
+.role-tabs{display:flex;gap:8px;margin-bottom:1.25rem}
+.role-tab{flex:1;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--text2);font-size:13px;cursor:pointer;transition:all .2s}
+.role-tab.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:500}
+.btn-primary{width:100%;padding:10px;background:var(--accent);border:none;border-radius:var(--radius-sm);color:#fff;font-size:14px;font-weight:500;cursor:pointer;transition:background .2s}
+.btn-primary:hover{background:var(--accent2)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.err-text{color:var(--red);font-size:12px;min-height:16px;margin-bottom:8px}
+.link-text{text-align:center;font-size:12px;color:var(--text2);margin-top:14px;cursor:pointer}
+.link-text span{color:var(--accent)}
+
+/* ---- app shell ---- */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20}
+.topbar-title{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px}
+.topbar-title .tb-icon{width:28px;height:28px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.topbar-right{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text2)}
+.btn{padding:7px 13px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--card);color:var(--text);font-size:13px;cursor:pointer;transition:all .15s}
+.btn:hover{border-color:var(--border2)}
+.btn.blue{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.blue:hover{background:var(--accent2)}
+.btn.green{background:var(--green);border-color:var(--green);color:#fff}
+.btn.red{background:var(--red);border-color:var(--red);color:#fff}
+.btn.sm{padding:5px 10px;font-size:12px}
+
+.tabnav{display:flex;gap:4px;padding:10px 20px 0;background:var(--bg2);border-bottom:1px solid var(--border)}
+.tabnav button{padding:10px 16px;background:none;border:none;color:var(--text2);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;font-weight:500}
+.tabnav button.active{color:var(--text);border-color:var(--accent)}
+
+.content{flex:1;padding:20px;max-width:920px;width:100%;margin:0 auto}
+.section{display:none}
+.section.active{display:block}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.section-head h2{font-size:15px;font-weight:700}
+.empty-hint{color:var(--text3);font-size:13px;padding:24px;text-align:center;background:var(--card);border:1px dashed var(--border2);border-radius:var(--radius)}
+
+/* ---- cards / lists ---- */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px}
+.row-between{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pill{font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600}
+.pill.amber{background:var(--amber-bg);color:var(--amber)}
+.pill.green{background:var(--green-bg);color:var(--green)}
+.pill.blue{background:rgba(79,124,255,.12);color:var(--accent)}
+
+.video-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.video-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color .15s}
+.video-card:hover{border-color:var(--border2)}
+.video-thumb{width:100%;aspect-ratio:16/9;background:var(--bg3);object-fit:cover;display:block}
+.video-info{padding:10px 12px}
+.video-info .vt{font-size:13px;font-weight:600;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.progress-bar{height:5px;background:var(--bg3);border-radius:99px;overflow:hidden;margin-top:6px}
+.progress-bar-fill{height:100%;background:var(--accent);border-radius:99px}
+.video-meta{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:11px;color:var(--text2)}
+
+.admin-form{display:grid;gap:10px;grid-template-columns:1fr 1fr}
+.admin-form .full{grid-column:1/-1}
+
+table.simple{width:100%;border-collapse:collapse;font-size:13px}
+table.simple th{text-align:left;color:var(--text2);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--border)}
+table.simple td{padding:9px 10px;border-bottom:1px solid var(--border)}
+table.simple tr:last-child td{border-bottom:none}
+
+/* ---- modal ---- */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
+.modal.show{display:flex}
+.modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);max-width:720px;width:100%;max-height:90vh;overflow:auto}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:14px;font-weight:700}
+.modal-body{padding:16px 18px}
+.player-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000}
+.player-wrap iframe,.player-wrap>div{width:100%;height:100%}
+.track-row{display:flex;align-items:center;gap:10px;padding:12px 18px;font-size:12px;color:var(--text2)}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--text3)}
+.live-dot.active{background:var(--red)}
+
+.notif{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--border2);color:var(--text);padding:10px 18px;border-radius:var(--radius-sm);font-size:13px;opacity:0;pointer-events:none;transition:all .25s;z-index:200}
+.notif.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.notif.success{border-color:var(--green)}
+.notif.error{border-color:var(--red)}
+
+@media(max-width:640px){.admin-form{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div id="loading-screen"><div class="spinner"></div><div class="loading-text">불러오는 중...</div></div>
+
+<!-- LOGIN -->
+<div class="page" id="page-login">
+  <div class="login-wrap">
+    <div class="login-logo">
+      <div class="login-logo-icon">📚</div>
+      <h1>정말 쏠쏠한 국어</h1>
+      <p>쏠T 온라인 학습 시스템</p>
+    </div>
+    <div class="login-card">
+      <div id="form-login">
+        <div class="role-tabs">
+          <button class="role-tab" id="tab-teacher" onclick="selectRole('teacher')">강사</button>
+          <button class="role-tab" id="tab-student" onclick="selectRole('student')">학생</button>
+        </div>
+        <div class="form-group"><label>아이디</label><input class="form-input" id="login-id" placeholder="아이디"></div>
+        <div class="form-group"><label>비밀번호</label><input class="form-input" id="login-pw" type="password" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <div class="err-text" id="login-err"></div>
+        <button class="btn-primary" id="login-btn" onclick="doLogin()">로그인</button>
+        <div class="link-text" id="signup-link" onclick="showSignup()">학생이신가요? <span>회원가입</span></div>
+      </div>
+      <div id="form-signup" style="display:none">
+        <div class="form-group"><label>이름</label><input class="form-input" id="su-name" placeholder="이름"></div>
+        <div class="form-group"><label>아이디</label><input class="form-input" id="su-id" placeholder="영문/숫자/밑줄"></div>
+        <div class="form-group"><label>비밀번호</label><input class="form-input" id="su-pw" type="password" placeholder="4자 이상"></div>
+        <div class="form-group"><label>비밀번호 확인</label><input class="form-input" id="su-pw2" type="password" placeholder="비밀번호 확인"></div>
+        <div class="err-text" id="signup-err"></div>
+        <button class="btn-primary" id="signup-btn" onclick="doSignup()">가입 신청</button>
+        <div class="link-text" onclick="showLogin()"><span>← 로그인으로</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TEACHER -->
+<div class="page" id="page-teacher">
+  <div class="topbar">
+    <div class="topbar-title"><div class="tb-icon">📚</div>정말 쏠쏠한 국어 · 강사</div>
+    <div class="topbar-right"><span id="teacher-name"></span><button class="btn sm" onclick="doLogout()">로그아웃</button></div>
+  </div>
+  <div class="tabnav">
+    <button class="active" data-t="t-students" onclick="switchTeacherTab('t-students')">학생 관리</button>
+    <button data-t="t-videos" onclick="switchTeacherTab('t-videos')">영상 관리</button>
+  </div>
+  <div class="content">
+    <div class="section active" id="t-students">
+      <div class="section-head"><h2>가입 승인 대기</h2></div>
+      <div id="pending-list"></div>
+      <div class="section-head" style="margin-top:24px"><h2>학생 목록 &amp; 진도</h2></div>
+      <div id="active-list"></div>
+    </div>
+    <div class="section" id="t-videos">
+      <div class="section-head"><h2>새 영상 등록</h2></div>
+      <div class="card">
+        <div class="admin-form">
+          <div class="full form-group"><label>제목</label><input class="form-input" id="v-title" placeholder="강의 제목"></div>
+          <div class="full form-group"><label>유튜브 URL</label><input class="form-input" id="v-url" placeholder="https://youtu.be/..."></div>
+          <div class="full form-group"><label>설명 (선택)</label><input class="form-input" id="v-desc" placeholder="간단한 설명"></div>
+        </div>
+        <button class="btn blue" style="margin-top:10px" onclick="addVideo()">영상 등록</button>
+      </div>
+      <div class="section-head" style="margin-top:24px"><h2>등록된 영상</h2></div>
+      <div id="video-admin-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- STUDENT -->
+<div class="page" id="page-student">
+  <div class="topbar">
+    <div class="topbar-title"><div class="tb-icon">📚</div>정말 쏠쏠한 국어</div>
+    <div class="topbar-right"><span id="student-name"></span><button class="btn sm" onclick="doLogout()">로그아웃</button></div>
+  </div>
+  <div class="content">
+    <div class="section-head"><h2>강의 목록</h2></div>
+    <div class="video-grid" id="lecture-grid"></div>
+  </div>
+</div>
+
+<!-- PLAY MODAL -->
+<div class="modal" id="modal-play">
+  <div class="modal-box" style="max-width:760px">
+    <div class="modal-head">
+      <h3 id="play-title"></h3>
+      <button class="btn sm" onclick="closePlay()">닫기 ✕</button>
+    </div>
+    <div class="player-wrap"><div id="yt-player"></div></div>
+    <div class="track-row">
+      <span class="live-dot" id="live-dot"></span>
+      <span id="trk-pct">0%</span>
+      <span>· 시청 <span id="trk-watched">0초</span> / <span id="trk-total">0초</span></span>
+    </div>
+  </div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<script>
+/* ===================== 설정 ===================== */
+const SB_URL='https://munbqhqudknwlanlwqxr.supabase.co';
+const SB_KEY='sb_publishable_vg77XKT0jPOZBkXaXFc_jQ_5cGtt46_';
+const sb=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+
+let currentRole='teacher';
+let session=null;
+let db={users:[],videos:[],progress:[]};
+
+let ytApiReady=false;
+window.onYouTubeIframeAPIReady=function(){ytApiReady=true;};
+let ytPlayer=null,currentVid=null,currentStartPos=0;
+let watchedSet=new Set(),lastPos=-1,totalDur=0,maxRateSeen=1;
+let trackTimer=null,saveTimer=null;
+
+/* ===================== 유틸 ===================== */
+function ytId(url){if(!url)return null;const m=url.match(/(?:youtu\.be\/|v=|embed\/)([A-Za-z0-9_\-]{11})/);return m?m[1]:null;}
+function thumb(url){const id=ytId(url);return id?`https://img.youtube.com/vi/${id}/mqdefault.jpg`:'';}
+function fmtTime(sec){if(!sec||isNaN(sec)||sec<=0)return '0초';const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=Math.floor(sec%60);if(h>0)return`${h}시간 ${m}분 ${s}초`;if(m>0)return`${m}분 ${s}초`;return`${s}초`;}
+function notify(msg,type='info'){const n=document.getElementById('notif');n.textContent=msg;n.className=`notif show ${type}`;setTimeout(()=>n.classList.remove('show'),2600);}
+function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');}
+function hideLoading(){document.getElementById('loading-screen').classList.add('hide');}
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function getPct(sid,vid){const r=db.progress.find(p=>p.student_id===sid&&p.video_id===vid);return r?Math.round(r.percent||0):0;}
+function getLastPos(sid,vid){const r=db.progress.find(p=>p.student_id===sid&&p.video_id===vid);return r?(r.last_position||0):0;}
+function getMaxRate(sid,vid){const r=db.progress.find(p=>p.student_id===sid&&p.video_id===vid);return r?(r.max_rate||1):1;}
+
+/* ===================== DB ===================== */
+async function loadAll(attempt=0){
+  try{
+    const [u,v,p]=await Promise.all([
+      sb.from('users').select('*'),
+      sb.from('videos').select('*').order('created_at'),
+      sb.from('progress').select('*')
+    ]);
+    if(u.error)throw new Error(u.error.message);
+    if(v.error)throw new Error(v.error.message);
+    if(p.error)throw new Error(p.error.message);
+    db.users=u.data||[];db.videos=v.data||[];db.progress=p.data||[];
+  }catch(e){
+    if(attempt<3){
+      document.querySelector('.loading-text').textContent=`재연결 중... (${attempt+1}/3)`;
+      await new Promise(r=>setTimeout(r,1200));
+      return loadAll(attempt+1);
+    }
+    throw e;
+  }
+}
+async function upsertProgress(sid,vid,pct,watchSec,lastPosition,maxRate){
+  const payload={student_id:sid,video_id:vid,percent:Math.min(pct,100),watch_seconds:watchSec,last_position:lastPosition,max_rate:Math.max(maxRate||1,getMaxRate(sid,vid)),updated_at:new Date().toISOString()};
+  const{error}=await sb.from('progress').upsert(payload,{onConflict:'student_id,video_id'});
+  if(error){console.error('저장 실패:',error.message);return;}
+  const ex=db.progress.find(p=>p.student_id===sid&&p.video_id===vid);
+  if(ex)Object.assign(ex,payload);else db.progress.push(payload);
+}
+
+/* ===================== AUTH ===================== */
+function selectRole(r){
+  currentRole=r;
+  document.getElementById('tab-teacher').classList.toggle('active',r==='teacher');
+  document.getElementById('tab-student').classList.toggle('active',r==='student');
+  document.getElementById('signup-link').style.display=(r==='student')?'block':'none';
+}
+async function doLogin(){
+  const id=document.getElementById('login-id').value.trim();
+  const pw=document.getElementById('login-pw').value;
+  const err=document.getElementById('login-err');
+  const btn=document.getElementById('login-btn');
+  err.textContent='';
+  if(!id||!pw){err.textContent='아이디와 비밀번호를 입력하세요.';return;}
+  btn.disabled=true;btn.textContent='로그인 중...';
+  try{
+    await loadAll();
+    const user=db.users.find(u=>u.id===id&&u.pw===pw&&u.role===currentRole);
+    if(!user){err.textContent='아이디 또는 비밀번호가 올바르지 않습니다.';return;}
+    if(user.status==='pending'){err.textContent='강사 승인 대기 중입니다.';return;}
+    session=user;
+    localStorage.setItem('sk_kr_sess',JSON.stringify({id:user.id,role:user.role}));
+    if(user.role==='teacher')launchTeacher();else launchStudent();
+  }catch(e){err.textContent='연결 오류: '+e.message;}
+  finally{btn.disabled=false;btn.textContent='로그인';}
+}
+function showSignup(){document.getElementById('form-login').style.display='none';document.getElementById('form-signup').style.display='block';}
+function showLogin(){document.getElementById('form-signup').style.display='none';document.getElementById('form-login').style.display='block';selectRole('student');}
+async function doSignup(){
+  const name=document.getElementById('su-name').value.trim();
+  const id=document.getElementById('su-id').value.trim();
+  const pw=document.getElementById('su-pw').value;
+  const pw2=document.getElementById('su-pw2').value;
+  const err=document.getElementById('signup-err');
+  const btn=document.getElementById('signup-btn');
+  err.textContent='';
+  if(!name||!id||!pw||!pw2){err.textContent='모든 항목을 입력하세요.';return;}
+  if(!/^[a-zA-Z0-9_]+$/.test(id)){err.textContent='아이디는 영문/숫자/밑줄만 가능합니다.';return;}
+  if(pw.length<4){err.textContent='비밀번호는 4자 이상이어야 합니다.';return;}
+  if(pw!==pw2){err.textContent='비밀번호가 일치하지 않습니다.';return;}
+  btn.disabled=true;btn.textContent='신청 중...';
+  try{
+    await loadAll();
+    if(db.users.find(u=>u.id===id)){err.textContent='이미 사용 중인 아이디입니다.';return;}
+    const{error}=await sb.from('users').insert({id,name,pw,role:'student',status:'pending'});
+    if(error){err.textContent='가입 실패: '+error.message;return;}
+    ['su-name','su-id','su-pw','su-pw2'].forEach(i=>document.getElementById(i).value='');
+    showLogin();
+    notify('가입 신청 완료! 쏠T의 승인 후 로그인하세요.','success');
+  }catch(e){err.textContent='오류: '+e.message;}
+  finally{btn.disabled=false;btn.textContent='가입 신청';}
+}
+function doLogout(){
+  closePlay();
+  session=null;
+  localStorage.removeItem('sk_kr_sess');
+  showPage('page-login');
+  document.getElementById('login-id').value='';
+  document.getElementById('login-pw').value='';
+  document.getElementById('login-err').textContent='';
+  showLogin();selectRole('teacher');
+}
+
+/* ===================== 강사 화면 ===================== */
+function launchTeacher(){
+  document.getElementById('teacher-name').textContent=session.name+' 선생님';
+  showPage('page-teacher');
+  renderPending();renderActive();renderVideoAdmin();
+}
+function switchTeacherTab(id){
+  document.querySelectorAll('.tabnav button').forEach(b=>b.classList.toggle('active',b.dataset.t===id));
+  document.querySelectorAll('#page-teacher .section').forEach(s=>s.classList.toggle('active',s.id===id));
+}
+function renderPending(){
+  const el=document.getElementById('pending-list');
+  const pending=db.users.filter(u=>u.role==='student'&&u.status==='pending');
+  if(!pending.length){el.innerHTML='<div class="empty-hint">대기 중인 가입 신청이 없습니다.</div>';return;}
+  el.innerHTML=pending.map(u=>`
+    <div class="card row-between">
+      <div><strong>${esc(u.name)}</strong> <span style="color:var(--text2)">(${esc(u.id)})</span></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn green sm" onclick="approveStudent('${esc(u.id)}')">승인</button>
+        <button class="btn red sm" onclick="rejectStudent('${esc(u.id)}')">거절</button>
+      </div>
+    </div>`).join('');
+}
+function renderActive(){
+  const el=document.getElementById('active-list');
+  const active=db.users.filter(u=>u.role==='student'&&u.status==='active');
+  if(!active.length){el.innerHTML='<div class="empty-hint">등록된 학생이 없습니다.</div>';return;}
+  const rows=active.map(u=>{
+    const myProg=db.progress.filter(p=>p.student_id===u.id);
+    const watched=myProg.length;
+    const avg=watched?Math.round(myProg.reduce((a,p)=>a+(p.percent||0),0)/watched):0;
+    return `<tr>
+      <td>${esc(u.name)}</td><td style="color:var(--text2)">${esc(u.id)}</td>
+      <td>${watched} / ${db.videos.length}개 시청</td>
+      <td>${avg}%</td>
+      <td><button class="btn red sm" onclick="removeStudent('${esc(u.id)}')">삭제</button></td>
+    </tr>`;
+  }).join('');
+  el.innerHTML=`<table class="simple"><thead><tr><th>이름</th><th>아이디</th><th>시청 현황</th><th>평균 진도</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+async function approveStudent(id){
+  const{error}=await sb.from('users').update({status:'active'}).eq('id',id);
+  if(error){notify('처리 실패: '+error.message,'error');return;}
+  const u=db.users.find(x=>x.id===id);if(u)u.status='active';
+  renderPending();renderActive();
+  notify('학생을 승인했습니다.','success');
+}
+async function rejectStudent(id){
+  if(!confirm('가입 신청을 거절(삭제)하시겠습니까?'))return;
+  await sb.from('users').delete().eq('id',id);
+  db.users=db.users.filter(u=>u.id!==id);
+  renderPending();
+  notify('가입 신청을 거절했습니다.','info');
+}
+async function removeStudent(id){
+  if(!confirm('정말 이 학생을 삭제하시겠습니까? 진도 기록도 함께 삭제됩니다.'))return;
+  await sb.from('progress').delete().eq('student_id',id);
+  await sb.from('users').delete().eq('id',id);
+  db.progress=db.progress.filter(p=>p.student_id!==id);
+  db.users=db.users.filter(u=>u.id!==id);
+  renderActive();
+  notify('학생을 삭제했습니다.','info');
+}
+async function addVideo(){
+  const title=document.getElementById('v-title').value.trim();
+  const url=document.getElementById('v-url').value.trim();
+  const desc=document.getElementById('v-desc').value.trim();
+  if(!title||!url){notify('제목과 URL을 입력하세요.','error');return;}
+  if(!ytId(url)){notify('유효한 유튜브 URL을 입력하세요.','error');return;}
+  const id='v'+Date.now();
+  const{error}=await sb.from('videos').insert({id,title,url,description:desc,category:'lecture'});
+  if(error){notify('등록 실패: '+error.message,'error');return;}
+  db.videos.push({id,title,url,description:desc,category:'lecture',created_at:new Date().toISOString()});
+  ['v-title','v-url','v-desc'].forEach(i=>document.getElementById(i).value='');
+  notify('강의가 등록되었습니다.','success');
+  renderVideoAdmin();
+}
+function renderVideoAdmin(){
+  const el=document.getElementById('video-admin-list');
+  if(!db.videos.length){el.innerHTML='<div class="empty-hint">등록된 영상이 없습니다.</div>';return;}
+  el.innerHTML=db.videos.slice().reverse().map(v=>`
+    <div class="card row-between">
+      <div style="display:flex;gap:10px;align-items:center">
+        <img src="${thumb(v.url)}" style="width:80px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;background:var(--bg3)" alt="">
+        <div><strong>${esc(v.title)}</strong><div style="color:var(--text2);font-size:12px">${esc(v.description||'')}</div></div>
+      </div>
+      <button class="btn red sm" onclick="deleteVideo('${esc(v.id)}')">삭제</button>
+    </div>`).join('');
+}
+async function deleteVideo(id){
+  if(!confirm('정말 삭제하시겠습니까?'))return;
+  await sb.from('progress').delete().eq('video_id',id);
+  await sb.from('videos').delete().eq('id',id);
+  db.videos=db.videos.filter(v=>v.id!==id);
+  db.progress=db.progress.filter(p=>p.video_id!==id);
+  renderVideoAdmin();
+  notify('영상을 삭제했습니다.','info');
+}
+
+/* ===================== 학생 화면 ===================== */
+function launchStudent(){
+  document.getElementById('student-name').textContent=session.name+' 학생';
+  showPage('page-student');
+  renderLectures();
+}
+function renderLectures(){
+  const el=document.getElementById('lecture-grid');
+  if(!db.videos.length){el.innerHTML='<div class="empty-hint">아직 등록된 강의가 없습니다.</div>';return;}
+  el.innerHTML=db.videos.map(v=>{
+    const pct=getPct(session.id,v.id);
+    return `<div class="video-card" onclick="openPlay('${esc(v.id)}')">
+      <img class="video-thumb" src="${thumb(v.url)}" alt="">
+      <div class="video-info">
+        <div class="vt">${esc(v.title)}</div>
+        <div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+        <div class="video-meta"><span>${pct}% 시청</span>${pct>=100?'<span class="pill green">완료</span>':pct>0?'<span class="pill amber">시청중</span>':'<span class="pill blue">미시청</span>'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ===================== 영상 재생 & 진도 추적 ===================== */
+function openPlay(vid){
+  const v=db.videos.find(x=>x.id===vid);
+  if(!v)return;
+  currentVid=vid;
+  currentStartPos=getLastPos(session.id,vid);
+  const id=ytId(v.url);
+  if(!id){notify('유효하지 않은 유튜브 URL입니다.','error');return;}
+  document.getElementById('play-title').textContent=v.title;
+  document.getElementById('modal-play').classList.add('show');
+  let tries=0;
+  const tryInit=()=>{if(ytApiReady){initYT(id);}else if(tries++<20){setTimeout(tryInit,300);}else{notify('YouTube 플레이어 로드 실패. 새로고침해주세요.','error');}};
+  tryInit();
+}
+function initYT(videoId){
+  if(ytPlayer){try{ytPlayer.destroy();}catch(e){}ytPlayer=null;}
+  document.getElementById('yt-player').innerHTML='';
+  watchedSet=new Set();lastPos=-1;totalDur=0;maxRateSeen=1;
+  updateTrackUI(0);
+  const startSec=currentStartPos>0?Math.floor(currentStartPos):0;
+  if(startSec>0)notify(`${fmtTime(startSec)}부터 이어서 재생합니다.`,'info');
+  ytPlayer=new YT.Player('yt-player',{
+    videoId,width:'100%',height:'100%',
+    playerVars:{rel:0,modestbranding:1,playsinline:1,start:startSec},
+    events:{onReady:onYTReady,onStateChange:onYTState}
+  });
+}
+function onYTReady(e){
+  const tryDur=(attempts)=>{
+    const dur=e.target.getDuration();
+    if(dur>0){
+      totalDur=dur;
+      document.getElementById('trk-total').textContent=fmtTime(totalDur);
+      if(!currentVid||!session)return;
+      const pct=getPct(session.id,currentVid);
+      if(pct>0){const ws=Math.floor((pct/100)*totalDur);for(let i=0;i<ws;i++)watchedSet.add(i);updateTrackUI(pct);}
+    }else if(attempts>0){setTimeout(()=>tryDur(attempts-1),500);}
+  };
+  tryDur(10);
+}
+function onYTState(e){
+  const dot=document.getElementById('live-dot');
+  if(e.data===YT.PlayerState.PLAYING){dot.classList.add('active');startTracking();}
+  else{
+    dot.classList.remove('active');stopTracking();
+    if(e.data===YT.PlayerState.ENDED){if(totalDur>0)for(let i=0;i<=Math.floor(totalDur);i++)watchedSet.add(i);updateTrackUI(100);scheduleSave();}
+  }
+}
+function startTracking(){
+  stopTracking();
+  trackTimer=setInterval(()=>{
+    if(!ytPlayer||!ytPlayer.getCurrentTime)return;
+    if(totalDur===0){try{totalDur=ytPlayer.getDuration()||0;}catch(e){}if(totalDur===0)return;document.getElementById('trk-total').textContent=fmtTime(totalDur);}
+    const cur=Math.floor(ytPlayer.getCurrentTime());
+    if(lastPos>=0&&cur>lastPos&&cur-lastPos<=3){for(let i=lastPos;i<=cur;i++)watchedSet.add(i);}
+    else{watchedSet.add(cur);}
+    lastPos=cur;
+    try{const rate=ytPlayer.getPlaybackRate();if(rate>maxRateSeen)maxRateSeen=rate;}catch(e){}
+    const pct=Math.min(Math.round((watchedSet.size/totalDur)*100),100);
+    updateTrackUI(pct);scheduleSave();
+  },1000);
+}
+function stopTracking(){if(trackTimer){clearInterval(trackTimer);trackTimer=null;}}
+function scheduleSave(){
+  if(saveTimer)return;
+  saveTimer=setTimeout(async()=>{saveTimer=null;await doAutoSave();},2000);
+}
+async function doAutoSave(){
+  if(!currentVid||!session||totalDur===0)return;
+  const pct=Math.min(Math.round((watchedSet.size/totalDur)*100),100);
+  const curPct=getPct(session.id,currentVid);
+  const curPos=ytPlayer?Math.floor(ytPlayer.getCurrentTime()):0;
+  if(pct>0||curPct>0){await upsertProgress(session.id,currentVid,Math.max(pct,curPct),watchedSet.size,curPos,maxRateSeen);}
+}
+function updateTrackUI(pct){
+  document.getElementById('trk-pct').textContent=pct+'%';
+  document.getElementById('trk-watched').textContent=fmtTime(watchedSet.size);
+}
+async function closePlay(){
+  stopTracking();
+  if(saveTimer){clearTimeout(saveTimer);saveTimer=null;}
+  if(currentVid&&session&&totalDur>0){
+    const pct=Math.min(Math.round((watchedSet.size/totalDur)*100),100);
+    const curPct=getPct(session.id,currentVid);
+    const curPos=ytPlayer?Math.floor(ytPlayer.getCurrentTime()):0;
+    if(pct>=curPct)await upsertProgress(session.id,currentVid,pct,watchedSet.size,curPos,maxRateSeen);
+  }
+  if(ytPlayer){try{ytPlayer.stopVideo();ytPlayer.destroy();}catch(e){}ytPlayer=null;}
+  document.getElementById('yt-player').innerHTML='';
+  document.getElementById('modal-play').classList.remove('show');
+  currentVid=null;currentStartPos=0;watchedSet=new Set();lastPos=-1;totalDur=0;maxRateSeen=1;
+  if(session&&session.role==='student')renderLectures();
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closePlay();});
+document.getElementById('modal-play').addEventListener('click',e=>{if(e.target===e.currentTarget)closePlay();});
+
+/* ===================== 시작 ===================== */
+async function init(){
+  selectRole('teacher');
+  try{
+    await loadAll();
+    const saved=localStorage.getItem('sk_kr_sess');
+    if(saved){
+      const s=JSON.parse(saved);
+      const user=db.users.find(u=>u.id===s.id&&u.role===s.role&&u.status==='active');
+      if(user){session=user;user.role==='teacher'?launchTeacher():launchStudent();}
+      else{localStorage.removeItem('sk_kr_sess');showPage('page-login');}
+    }else{showPage('page-login');}
+  }catch(e){
+    showPage('page-login');
+    document.getElementById('login-err').textContent='서버 연결에 실패했습니다: '+e.message;
+  }finally{
+    hideLoading();
+  }
+}
+init();
+</script>
+</body>
+</html>

@@ -51,7 +51,7 @@ input,button,select,textarea{font-family:var(--font)}
 .login-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.75rem}
 .form-group{margin-bottom:.875rem}
 .form-group label{display:block;font-size:11px;font-weight:500;color:var(--text2);margin-bottom:5px;letter-spacing:.5px;text-transform:uppercase}
-.form-input,.form-select,textarea.form-input{width:100%;padding:9px 13px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:14px;transition:border-color .2s}
+.form-input,.form-select,textarea.form-input{width:100%;padding:9px 13px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:14px;transition:border-color .2s;resize:vertical}
 .form-input:focus,.form-select:focus{outline:none;border-color:var(--accent)}
 .form-input::placeholder{color:var(--text3)}
 .form-select{cursor:pointer}
@@ -66,7 +66,7 @@ input,button,select,textarea{font-family:var(--font)}
 .link-text span{color:var(--accent)}
 
 /* ---- app shell ---- */
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20;flex-wrap:wrap;gap:8px}
 .topbar-title{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px}
 .topbar-title .tb-icon{width:28px;height:28px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
 .topbar-right{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text2)}
@@ -77,9 +77,10 @@ input,button,select,textarea{font-family:var(--font)}
 .btn.green{background:var(--green);border-color:var(--green);color:#fff}
 .btn.red{background:var(--red);border-color:var(--red);color:#fff}
 .btn.sm{padding:5px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
 
-.tabnav{display:flex;gap:4px;padding:10px 20px 0;background:var(--bg2);border-bottom:1px solid var(--border)}
-.tabnav button{padding:10px 16px;background:none;border:none;color:var(--text2);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;font-weight:500}
+.tabnav{display:flex;gap:4px;padding:10px 20px 0;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto}
+.tabnav button{padding:10px 14px;background:none;border:none;color:var(--text2);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;white-space:nowrap}
 .tabnav button.active{color:var(--text);border-color:var(--accent)}
 
 .content{flex:1;padding:20px;max-width:920px;width:100%;margin:0 auto}
@@ -91,11 +92,12 @@ input,button,select,textarea{font-family:var(--font)}
 
 /* ---- cards / lists ---- */
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px}
-.row-between{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.pill{font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600}
+.row-between{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.pill{font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600;white-space:nowrap}
 .pill.amber{background:var(--amber-bg);color:var(--amber)}
 .pill.green{background:var(--green-bg);color:var(--green)}
 .pill.blue{background:rgba(79,124,255,.12);color:var(--accent)}
+.pill.red{background:var(--red-bg);color:var(--red)}
 
 .video-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
 .video-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color .15s}
@@ -114,6 +116,10 @@ table.simple{width:100%;border-collapse:collapse;font-size:13px}
 table.simple th{text-align:left;color:var(--text2);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--border)}
 table.simple td{padding:9px 10px;border-bottom:1px solid var(--border)}
 table.simple tr:last-child td{border-bottom:none}
+
+.exq-row{display:grid;grid-template-columns:36px 92px 64px 1fr 1fr 60px;gap:6px;align-items:center;margin-bottom:6px}
+@media(max-width:700px){.exq-row{grid-template-columns:1fr 1fr;grid-auto-rows:auto}}
+.reply-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-top:8px;font-size:13px}
 
 /* ---- modal ---- */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
@@ -180,29 +186,120 @@ table.simple tr:last-child td{border-bottom:none}
     <div class="topbar-right"><span id="teacher-name"></span><button class="btn sm" onclick="doLogout()">로그아웃</button></div>
   </div>
   <div class="tabnav">
-    <button class="active" data-t="t-students" onclick="switchTeacherTab('t-students')">학생 관리</button>
-    <button data-t="t-videos" onclick="switchTeacherTab('t-videos')">영상 관리</button>
+    <button class="active" data-t="t-students" onclick="switchTab('teacher','t-students')">학생 관리</button>
+    <button data-t="t-videos" onclick="switchTab('teacher','t-videos')">영상 관리</button>
+    <button data-t="t-access" onclick="switchTab('teacher','t-access')">복습 승인</button>
+    <button data-t="t-qa" onclick="switchTab('teacher','t-qa')">질문답변</button>
+    <button data-t="t-exams" onclick="switchTab('teacher','t-exams')">시험</button>
+    <button data-t="t-clinic" onclick="switchTab('teacher','t-clinic')">클리닉</button>
+    <button data-t="t-cert" onclick="switchTab('teacher','t-cert')">인증</button>
   </div>
   <div class="content">
+
     <div class="section active" id="t-students">
       <div class="section-head"><h2>가입 승인 대기</h2></div>
       <div id="pending-list"></div>
       <div class="section-head" style="margin-top:24px"><h2>학생 목록 &amp; 진도</h2></div>
       <div id="active-list"></div>
     </div>
+
     <div class="section" id="t-videos">
       <div class="section-head"><h2>새 영상 등록</h2></div>
       <div class="card">
         <div class="admin-form">
           <div class="full form-group"><label>제목</label><input class="form-input" id="v-title" placeholder="강의 제목"></div>
           <div class="full form-group"><label>유튜브 URL</label><input class="form-input" id="v-url" placeholder="https://youtu.be/..."></div>
-          <div class="full form-group"><label>설명 (선택)</label><input class="form-input" id="v-desc" placeholder="간단한 설명"></div>
+          <div class="form-group"><label>구분</label><select class="form-select" id="v-category"><option value="lecture">일반 강의</option><option value="review">복습 영상 (접근 승인 필요)</option></select></div>
+          <div class="form-group"><label>설명 (선택)</label><input class="form-input" id="v-desc" placeholder="간단한 설명"></div>
         </div>
         <button class="btn blue" style="margin-top:10px" onclick="addVideo()">영상 등록</button>
       </div>
       <div class="section-head" style="margin-top:24px"><h2>등록된 영상</h2></div>
       <div id="video-admin-list"></div>
     </div>
+
+    <div class="section" id="t-access">
+      <div class="section-head"><h2>복습영상 접근 신청</h2></div>
+      <div id="access-pending-list"></div>
+      <div class="section-head" style="margin-top:24px"><h2>처리 내역</h2></div>
+      <div id="access-history-list"></div>
+    </div>
+
+    <div class="section" id="t-qa">
+      <div class="section-head"><h2>학교/반 관리</h2></div>
+      <div class="card"><div style="display:flex;gap:8px"><input class="form-input" id="qa-school-name" placeholder="학교/반 이름" style="flex:1"><button class="btn blue sm" onclick="addQaSchool()">추가</button></div></div>
+      <div id="qa-school-list" style="margin:10px 0"></div>
+
+      <div class="section-head" style="margin-top:24px"><h2>주차 관리</h2></div>
+      <div class="card">
+        <div class="admin-form">
+          <div class="form-group"><label>학교/반</label><select class="form-select" id="qa-week-school"></select></div>
+          <div class="form-group"><label>주차 이름</label><input class="form-input" id="qa-week-name" placeholder="예: 3주차 모의고사"></div>
+          <div class="form-group full"><label>문제 수</label><input class="form-input" id="qa-week-count" type="number" value="20"></div>
+        </div>
+        <button class="btn blue sm" style="margin-top:8px" onclick="addQaWeek()">주차 추가</button>
+      </div>
+      <div id="qa-week-list" style="margin:10px 0"></div>
+
+      <div class="section-head" style="margin-top:24px"><h2>문항별 질문</h2></div>
+      <div class="form-group"><select class="form-select" id="qa-view-week" onchange="renderQaQuestions()"></select></div>
+      <div id="qa-question-list" style="margin-top:10px"></div>
+
+      <div class="section-head" style="margin-top:24px"><h2>자유 질문</h2></div>
+      <div id="qa-free-list"></div>
+    </div>
+
+    <div class="section" id="t-exams">
+      <div class="section-head"><h2>새 시험 만들기</h2></div>
+      <div class="card">
+        <div class="admin-form">
+          <div class="form-group"><label>시험 이름</label><input class="form-input" id="ex-name" placeholder="예: 3월 모의고사"></div>
+          <div class="form-group"><label>구분</label><select class="form-select" id="ex-category"><option value="school">내신</option><option value="mock">모의고사</option></select></div>
+        </div>
+        <div style="margin:12px 0 4px;font-size:11px;color:var(--text2)">번호 / 유형 / 배점 / 정답 / 해설(선택)</div>
+        <div id="ex-q-rows"></div>
+        <button class="btn sm" onclick="addExamQRow()">+ 문항 추가</button>
+        <button class="btn blue" style="margin-top:10px" onclick="saveExam()">시험 저장</button>
+      </div>
+      <div class="section-head" style="margin-top:24px"><h2>만든 시험 목록</h2></div>
+      <div id="exam-list"></div>
+      <div class="section-head" style="margin-top:24px"><h2>응시 결과</h2></div>
+      <div id="exam-results"><div class="empty-hint">시험 목록에서 "결과 보기"를 눌러주세요.</div></div>
+    </div>
+
+    <div class="section" id="t-clinic">
+      <div class="section-head"><h2>클리닉 슬롯 등록</h2></div>
+      <div class="card">
+        <div class="admin-form">
+          <div class="form-group"><label>이름</label><input class="form-input" id="cl-label" placeholder="예: 화요일 저녁반"></div>
+          <div class="form-group"><label>요일/날짜</label><input class="form-input" id="cl-date" placeholder="예: 매주 화 또는 2026-09-01"></div>
+          <div class="form-group"><label>시간</label><input class="form-input" id="cl-time" placeholder="예: 19:00"></div>
+          <div class="form-group"><label>정원</label><input class="form-input" id="cl-capacity" type="number" value="5"></div>
+        </div>
+        <button class="btn blue sm" style="margin-top:8px" onclick="addClinicSlot()">슬롯 추가</button>
+      </div>
+      <div class="section-head" style="margin-top:24px"><h2>슬롯 &amp; 예약 현황</h2></div>
+      <div id="clinic-slot-list"></div>
+    </div>
+
+    <div class="section" id="t-cert">
+      <div class="section-head"><h2>인증 주차 관리</h2></div>
+      <div class="card"><div style="display:flex;gap:8px"><input class="form-input" id="cw-name" placeholder="예: 8월 4주차" style="flex:1"><button class="btn blue sm" onclick="addCertWeek()">추가</button></div></div>
+      <div id="cert-week-list" style="margin:10px 0"></div>
+
+      <div class="section-head" style="margin-top:24px"><h2>인증 과제 등록</h2></div>
+      <div class="card">
+        <div class="admin-form">
+          <div class="form-group"><label>주차</label><select class="form-select" id="ci-week"></select></div>
+          <div class="form-group"><label>과제 제목</label><input class="form-input" id="ci-title" placeholder="예: 어휘 30개 암기 확인"></div>
+        </div>
+        <button class="btn blue sm" style="margin-top:8px" onclick="addCertItem()">과제 등록 (전체 학생 대상)</button>
+        <div style="font-size:11px;color:var(--text2);margin-top:6px">※ 사진 인증은 Supabase Storage 버킷 설정 후 추가할 수 있어요. 지금은 체크형(완료 확인)만 지원합니다.</div>
+      </div>
+      <div class="section-head" style="margin-top:24px"><h2>제출 현황</h2></div>
+      <div id="cert-submission-list"></div>
+    </div>
+
   </div>
 </div>
 
@@ -212,9 +309,73 @@ table.simple tr:last-child td{border-bottom:none}
     <div class="topbar-title"><div class="tb-icon">📚</div>정말 쏠쏠한 국어</div>
     <div class="topbar-right"><span id="student-name"></span><button class="btn sm" onclick="doLogout()">로그아웃</button></div>
   </div>
+  <div class="tabnav">
+    <button class="active" data-t="s-lectures" onclick="switchTab('student','s-lectures')">강의</button>
+    <button data-t="s-review" onclick="switchTab('student','s-review')">복습 영상</button>
+    <button data-t="s-qa" onclick="switchTab('student','s-qa')">질문답변</button>
+    <button data-t="s-exams" onclick="switchTab('student','s-exams')">시험</button>
+    <button data-t="s-clinic" onclick="switchTab('student','s-clinic')">클리닉</button>
+    <button data-t="s-cert" onclick="switchTab('student','s-cert')">인증</button>
+  </div>
   <div class="content">
-    <div class="section-head"><h2>강의 목록</h2></div>
-    <div class="video-grid" id="lecture-grid"></div>
+
+    <div class="section active" id="s-lectures">
+      <div class="section-head"><h2>강의 목록</h2></div>
+      <div class="video-grid" id="lecture-grid"></div>
+    </div>
+
+    <div class="section" id="s-review">
+      <div class="section-head"><h2>복습 영상</h2></div>
+      <div class="video-grid" id="review-grid"></div>
+    </div>
+
+    <div class="section" id="s-qa">
+      <div class="section-head"><h2>질문하기</h2></div>
+      <div class="card">
+        <div class="admin-form">
+          <div class="form-group"><label>학교/반</label><select class="form-select" id="sq-school" onchange="onSqSchoolChange()"></select></div>
+          <div class="form-group"><label>주차</label><select class="form-select" id="sq-week"></select></div>
+          <div class="form-group full"><label>문제 번호</label><input class="form-input" id="sq-prob" placeholder="예: 12"></div>
+        </div>
+        <div class="form-group" style="margin-top:6px"><textarea class="form-input" id="sq-text" rows="3" placeholder="질문 내용을 입력하세요"></textarea></div>
+        <button class="btn blue sm" onclick="submitQaQuestion()">질문 등록</button>
+      </div>
+      <div class="section-head" style="margin-top:24px"><h2>내 질문 내역</h2></div>
+      <div id="my-qa-list"></div>
+
+      <div class="section-head" style="margin-top:24px"><h2>자유 질문</h2></div>
+      <div class="card">
+        <textarea class="form-input" id="sq-free-text" rows="3" placeholder="주차와 상관없는 자유 질문 (다시 등록하면 이전 질문을 덮어써요)"></textarea>
+        <button class="btn blue sm" style="margin-top:8px" onclick="submitQaFree()">자유 질문 등록</button>
+      </div>
+      <div id="my-qa-free" style="margin-top:8px"></div>
+    </div>
+
+    <div class="section" id="s-exams">
+      <div class="section-head"><h2>시험 응시</h2></div>
+      <div class="card">
+        <div style="display:flex;gap:8px">
+          <input class="form-input" id="ex-code" placeholder="공유코드 8자리 입력" style="flex:1">
+          <button class="btn blue sm" onclick="loadExamByCode()">불러오기</button>
+        </div>
+      </div>
+      <div id="exam-take-area"></div>
+      <div class="section-head" style="margin-top:24px"><h2>내 응시 기록</h2></div>
+      <div id="my-exam-results"></div>
+    </div>
+
+    <div class="section" id="s-clinic">
+      <div class="section-head"><h2>클리닉 예약</h2></div>
+      <div id="clinic-book-list"></div>
+      <div class="section-head" style="margin-top:24px"><h2>내 예약</h2></div>
+      <div id="my-clinic-list"></div>
+    </div>
+
+    <div class="section" id="s-cert">
+      <div class="section-head"><h2>내 인증 과제</h2></div>
+      <div id="cert-my-items"></div>
+    </div>
+
   </div>
 </div>
 
@@ -244,13 +405,23 @@ const sb=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRef
 
 let currentRole='teacher';
 let session=null;
-let db={users:[],videos:[],progress:[]};
+const emptyDb=()=>({
+  users:[],videos:[],progress:[],
+  videoAccess:[],accessRequests:[],
+  qaSchools:[],qaWeeks:[],qaQuestions:[],
+  exams:[],examResponses:[],
+  clinicSlots:[],clinicRequests:[],
+  certWeeks:[],certItems:[],certSubmissions:[]
+});
+let db=emptyDb();
 
 let ytApiReady=false;
 window.onYouTubeIframeAPIReady=function(){ytApiReady=true;};
 let ytPlayer=null,currentVid=null,currentStartPos=0;
 let watchedSet=new Set(),lastPos=-1,totalDur=0,maxRateSeen=1;
 let trackTimer=null,saveTimer=null;
+let currentExamTaking=null; // exam object being taken by a student
+let examRowSeq=0;
 
 /* ===================== 유틸 ===================== */
 function ytId(url){if(!url)return null;const m=url.match(/(?:youtu\.be\/|v=|embed\/)([A-Za-z0-9_\-]{11})/);return m?m[1]:null;}
@@ -260,22 +431,46 @@ function notify(msg,type='info'){const n=document.getElementById('notif');n.text
 function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function hideLoading(){document.getElementById('loading-screen').classList.add('hide');}
 function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function uid(prefix){return prefix+Date.now()+Math.floor(Math.random()*1000);}
+function userName(id){const u=db.users.find(x=>x.id===id);return u?u.name:id;}
 function getPct(sid,vid){const r=db.progress.find(p=>p.student_id===sid&&p.video_id===vid);return r?Math.round(r.percent||0):0;}
 function getLastPos(sid,vid){const r=db.progress.find(p=>p.student_id===sid&&p.video_id===vid);return r?(r.last_position||0):0;}
 function getMaxRate(sid,vid){const r=db.progress.find(p=>p.student_id===sid&&p.video_id===vid);return r?(r.max_rate||1):1;}
+function switchTab(scope,id){
+  const root=scope==='teacher'?'#page-teacher':'#page-student';
+  document.querySelectorAll(root+' .tabnav button').forEach(b=>b.classList.toggle('active',b.dataset.t===id));
+  document.querySelectorAll(root+' .section').forEach(s=>s.classList.toggle('active',s.id===id));
+}
 
 /* ===================== DB ===================== */
 async function loadAll(attempt=0){
   try{
-    const [u,v,p]=await Promise.all([
+    const [u,v,p,va,ar,qs,qw,qq,ex,er,cs,cr,cw,ci,csu]=await Promise.all([
       sb.from('users').select('*'),
       sb.from('videos').select('*').order('created_at'),
-      sb.from('progress').select('*')
+      sb.from('progress').select('*'),
+      sb.from('video_access').select('*'),
+      sb.from('access_requests').select('*').order('created_at',{ascending:false}),
+      sb.from('qa_schools').select('*'),
+      sb.from('qa_weeks').select('*'),
+      sb.from('qa_questions').select('*').order('created_at',{ascending:false}),
+      sb.from('exams').select('*').order('created_at',{ascending:false}),
+      sb.from('exam_responses').select('*'),
+      sb.from('clinic_slots').select('*'),
+      sb.from('clinic_requests').select('*'),
+      sb.from('cert_weeks').select('*'),
+      sb.from('cert_items').select('*'),
+      sb.from('cert_submissions').select('*')
     ]);
     if(u.error)throw new Error(u.error.message);
     if(v.error)throw new Error(v.error.message);
     if(p.error)throw new Error(p.error.message);
     db.users=u.data||[];db.videos=v.data||[];db.progress=p.data||[];
+    db.videoAccess=(va.data)||[];db.accessRequests=(ar.data)||[];
+    db.qaSchools=(qs.data)||[];db.qaWeeks=(qw.data)||[];db.qaQuestions=(qq.data)||[];
+    db.exams=(ex.data)||[];db.examResponses=(er.data)||[];
+    db.clinicSlots=(cs.data)||[];db.clinicRequests=(cr.data)||[];
+    db.certWeeks=(cw.data)||[];db.certItems=(ci.data)||[];db.certSubmissions=(csu.data)||[];
   }catch(e){
     if(attempt<3){
       document.querySelector('.loading-text').textContent=`재연결 중... (${attempt+1}/3)`;
@@ -289,8 +484,8 @@ async function upsertProgress(sid,vid,pct,watchSec,lastPosition,maxRate){
   const payload={student_id:sid,video_id:vid,percent:Math.min(pct,100),watch_seconds:watchSec,last_position:lastPosition,max_rate:Math.max(maxRate||1,getMaxRate(sid,vid)),updated_at:new Date().toISOString()};
   const{error}=await sb.from('progress').upsert(payload,{onConflict:'student_id,video_id'});
   if(error){console.error('저장 실패:',error.message);return;}
-  const ex=db.progress.find(p=>p.student_id===sid&&p.video_id===vid);
-  if(ex)Object.assign(ex,payload);else db.progress.push(payload);
+  const ex2=db.progress.find(p=>p.student_id===sid&&p.video_id===vid);
+  if(ex2)Object.assign(ex2,payload);else db.progress.push(payload);
 }
 
 /* ===================== AUTH ===================== */
@@ -354,6 +549,7 @@ function doLogout(){
   document.getElementById('login-pw').value='';
   document.getElementById('login-err').textContent='';
   showLogin();selectRole('teacher');
+  db=emptyDb();
 }
 
 /* ===================== 강사 화면 ===================== */
@@ -361,10 +557,11 @@ function launchTeacher(){
   document.getElementById('teacher-name').textContent=session.name+' 선생님';
   showPage('page-teacher');
   renderPending();renderActive();renderVideoAdmin();
-}
-function switchTeacherTab(id){
-  document.querySelectorAll('.tabnav button').forEach(b=>b.classList.toggle('active',b.dataset.t===id));
-  document.querySelectorAll('#page-teacher .section').forEach(s=>s.classList.toggle('active',s.id===id));
+  renderAccessAdmin();
+  renderQaSchools();renderQaWeeks();renderQaQuestions();renderQaFreeAdmin();
+  renderExamAdmin();
+  renderClinicAdmin();
+  renderCertAdmin();
 }
 function renderPending(){
   const el=document.getElementById('pending-list');
@@ -423,12 +620,13 @@ async function addVideo(){
   const title=document.getElementById('v-title').value.trim();
   const url=document.getElementById('v-url').value.trim();
   const desc=document.getElementById('v-desc').value.trim();
+  const category=document.getElementById('v-category').value;
   if(!title||!url){notify('제목과 URL을 입력하세요.','error');return;}
   if(!ytId(url)){notify('유효한 유튜브 URL을 입력하세요.','error');return;}
-  const id='v'+Date.now();
-  const{error}=await sb.from('videos').insert({id,title,url,description:desc,category:'lecture'});
+  const id=uid('v');
+  const{error}=await sb.from('videos').insert({id,title,url,description:desc,category});
   if(error){notify('등록 실패: '+error.message,'error');return;}
-  db.videos.push({id,title,url,description:desc,category:'lecture',created_at:new Date().toISOString()});
+  db.videos.push({id,title,url,description:desc,category,created_at:new Date().toISOString()});
   ['v-title','v-url','v-desc'].forEach(i=>document.getElementById(i).value='');
   notify('강의가 등록되었습니다.','success');
   renderVideoAdmin();
@@ -440,7 +638,7 @@ function renderVideoAdmin(){
     <div class="card row-between">
       <div style="display:flex;gap:10px;align-items:center">
         <img src="${thumb(v.url)}" style="width:80px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;background:var(--bg3)" alt="">
-        <div><strong>${esc(v.title)}</strong><div style="color:var(--text2);font-size:12px">${esc(v.description||'')}</div></div>
+        <div><strong>${esc(v.title)}</strong> ${v.category==='review'?'<span class="pill amber">복습</span>':'<span class="pill blue">일반</span>'}<div style="color:var(--text2);font-size:12px">${esc(v.description||'')}</div></div>
       </div>
       <button class="btn red sm" onclick="deleteVideo('${esc(v.id)}')">삭제</button>
     </div>`).join('');
@@ -448,23 +646,76 @@ function renderVideoAdmin(){
 async function deleteVideo(id){
   if(!confirm('정말 삭제하시겠습니까?'))return;
   await sb.from('progress').delete().eq('video_id',id);
+  await sb.from('video_access').delete().eq('video_id',id);
+  await sb.from('access_requests').delete().eq('video_id',id);
   await sb.from('videos').delete().eq('id',id);
   db.videos=db.videos.filter(v=>v.id!==id);
   db.progress=db.progress.filter(p=>p.video_id!==id);
+  db.videoAccess=db.videoAccess.filter(a=>a.video_id!==id);
+  db.accessRequests=db.accessRequests.filter(a=>a.video_id!==id);
   renderVideoAdmin();
   notify('영상을 삭제했습니다.','info');
+}
+
+/* ===================== 복습영상 접근 승인 ===================== */
+function hasAccess(sid,vid){return db.videoAccess.some(a=>a.student_id===sid&&a.video_id===vid);}
+function accessReqStatus(sid,vid){
+  const reqs=db.accessRequests.filter(r=>r.student_id===sid&&r.video_id===vid);
+  if(!reqs.length)return null;
+  return reqs.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+}
+function renderAccessAdmin(){
+  const pendingEl=document.getElementById('access-pending-list');
+  const histEl=document.getElementById('access-history-list');
+  const pending=db.accessRequests.filter(r=>r.status==='pending');
+  const done=db.accessRequests.filter(r=>r.status!=='pending').slice(0,20);
+  pendingEl.innerHTML=pending.length?pending.map(r=>{
+    const v=db.videos.find(x=>x.id===r.video_id);
+    return `<div class="card row-between">
+      <div><strong>${esc(userName(r.student_id))}</strong> → ${esc(v?v.title:'(삭제된 영상)')}</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn green sm" onclick="approveAccessReq('${esc(r.id)}')">승인</button>
+        <button class="btn red sm" onclick="rejectAccessReq('${esc(r.id)}')">거절</button>
+      </div>
+    </div>`;
+  }).join(''):'<div class="empty-hint">대기 중인 신청이 없습니다.</div>';
+  histEl.innerHTML=done.length?done.map(r=>{
+    const v=db.videos.find(x=>x.id===r.video_id);
+    return `<div class="card row-between"><div>${esc(userName(r.student_id))} → ${esc(v?v.title:'(삭제된 영상)')}</div>${r.status==='approved'?'<span class="pill green">승인됨</span>':'<span class="pill red">거절됨</span>'}</div>`;
+  }).join(''):'<div class="empty-hint">처리 내역이 없습니다.</div>';
+}
+async function approveAccessReq(reqId){
+  const r=db.accessRequests.find(x=>x.id===reqId);if(!r)return;
+  const{error:e1}=await sb.from('video_access').insert({id:uid('ac'),student_id:r.student_id,video_id:r.video_id});
+  if(e1){notify('승인 실패: '+e1.message,'error');return;}
+  await sb.from('access_requests').update({status:'approved'}).eq('id',reqId);
+  db.videoAccess.push({id:uid('ac'),student_id:r.student_id,video_id:r.video_id});
+  r.status='approved';
+  renderAccessAdmin();
+  notify('접근을 승인했습니다.','success');
+}
+async function rejectAccessReq(reqId){
+  await sb.from('access_requests').update({status:'rejected'}).eq('id',reqId);
+  const r=db.accessRequests.find(x=>x.id===reqId);if(r)r.status='rejected';
+  renderAccessAdmin();
+  notify('신청을 거절했습니다.','info');
 }
 
 /* ===================== 학생 화면 ===================== */
 function launchStudent(){
   document.getElementById('student-name').textContent=session.name+' 학생';
   showPage('page-student');
-  renderLectures();
+  renderLectures();renderReviewGrid();
+  populateSqSelects();renderMyQa();renderMyQaFree();
+  renderMyExamResults();
+  renderClinicBook();renderMyClinic();
+  renderCertMy();
 }
 function renderLectures(){
   const el=document.getElementById('lecture-grid');
-  if(!db.videos.length){el.innerHTML='<div class="empty-hint">아직 등록된 강의가 없습니다.</div>';return;}
-  el.innerHTML=db.videos.map(v=>{
+  const list=db.videos.filter(v=>v.category!=='review');
+  if(!list.length){el.innerHTML='<div class="empty-hint">아직 등록된 강의가 없습니다.</div>';return;}
+  el.innerHTML=list.map(v=>{
     const pct=getPct(session.id,v.id);
     return `<div class="video-card" onclick="openPlay('${esc(v.id)}')">
       <img class="video-thumb" src="${thumb(v.url)}" alt="">
@@ -476,11 +727,44 @@ function renderLectures(){
     </div>`;
   }).join('');
 }
+function renderReviewGrid(){
+  const el=document.getElementById('review-grid');
+  const list=db.videos.filter(v=>v.category==='review');
+  if(!list.length){el.innerHTML='<div class="empty-hint">등록된 복습 영상이 없습니다.</div>';return;}
+  el.innerHTML=list.map(v=>{
+    const granted=hasAccess(session.id,v.id);
+    const req=accessReqStatus(session.id,v.id);
+    let badge='',clickable=false;
+    if(granted){badge='<span class="pill green">시청 가능</span>';clickable=true;}
+    else if(req&&req.status==='pending'){badge='<span class="pill amber">승인 대기중</span>';}
+    else{badge='<span class="pill blue">미신청</span>';}
+    const pct=granted?getPct(session.id,v.id):0;
+    return `<div class="video-card" onclick="${clickable?`openPlay('${esc(v.id)}')`:`requestVideoAccess('${esc(v.id)}')`}">
+      <img class="video-thumb" src="${thumb(v.url)}" alt="">
+      <div class="video-info">
+        <div class="vt">${esc(v.title)}</div>
+        ${granted?`<div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%"></div></div>`:''}
+        <div class="video-meta">${granted?pct+'% 시청':(req&&req.status==='pending'?'승인을 기다려주세요':'클릭해서 접근 신청')}${badge}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function requestVideoAccess(vid){
+  const req=accessReqStatus(session.id,vid);
+  if(req&&req.status==='pending'){notify('이미 신청했어요. 승인을 기다려주세요.','info');return;}
+  const row={id:uid('req'),student_id:session.id,video_id:vid,status:'pending'};
+  const{error}=await sb.from('access_requests').insert(row);
+  if(error){notify('신청 실패: '+error.message,'error');return;}
+  db.accessRequests.push(row);
+  renderReviewGrid();
+  notify('접근을 신청했습니다. 쏠T의 승인을 기다려주세요.','success');
+}
 
 /* ===================== 영상 재생 & 진도 추적 ===================== */
 function openPlay(vid){
   const v=db.videos.find(x=>x.id===vid);
   if(!v)return;
+  if(v.category==='review'&&!hasAccess(session.id,vid)){notify('아직 시청 권한이 없어요. 접근을 먼저 신청해주세요.','error');return;}
   currentVid=vid;
   currentStartPos=getLastPos(session.id,vid);
   const id=ytId(v.url);
@@ -568,10 +852,433 @@ async function closePlay(){
   document.getElementById('yt-player').innerHTML='';
   document.getElementById('modal-play').classList.remove('show');
   currentVid=null;currentStartPos=0;watchedSet=new Set();lastPos=-1;totalDur=0;maxRateSeen=1;
-  if(session&&session.role==='student')renderLectures();
+  if(session&&session.role==='student'){renderLectures();renderReviewGrid();}
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closePlay();});
 document.getElementById('modal-play').addEventListener('click',e=>{if(e.target===e.currentTarget)closePlay();});
+
+/* ===================== 질문답변 (QA) — 강사 ===================== */
+async function addQaSchool(){
+  const name=document.getElementById('qa-school-name').value.trim();
+  if(!name){notify('학교/반 이름을 입력하세요.','error');return;}
+  const row={id:uid('sc_'),name};
+  const{error}=await sb.from('qa_schools').insert(row);
+  if(error){notify('추가 실패: '+error.message,'error');return;}
+  db.qaSchools.push(row);
+  document.getElementById('qa-school-name').value='';
+  renderQaSchools();renderQaWeeks();populateSqSelects();
+  notify('학교/반이 추가되었습니다.','success');
+}
+function renderQaSchools(){
+  const el=document.getElementById('qa-school-list');
+  el.innerHTML=db.qaSchools.length?db.qaSchools.map(s=>`<div class="card row-between"><span>${esc(s.name)}</span></div>`).join(''):'<div class="empty-hint">등록된 학교/반이 없습니다.</div>';
+  const sel=document.getElementById('qa-week-school');
+  sel.innerHTML=db.qaSchools.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')||'<option value="">학교/반을 먼저 추가하세요</option>';
+}
+async function addQaWeek(){
+  const schoolId=document.getElementById('qa-week-school').value;
+  const name=document.getElementById('qa-week-name').value.trim();
+  const count=parseInt(document.getElementById('qa-week-count').value)||0;
+  if(!schoolId){notify('학교/반을 먼저 추가하세요.','error');return;}
+  if(!name){notify('주차 이름을 입력하세요.','error');return;}
+  const row={id:uid('w_'),school_id:schoolId,name,prob_count:count};
+  const{error}=await sb.from('qa_weeks').insert(row);
+  if(error){notify('추가 실패: '+error.message,'error');return;}
+  db.qaWeeks.push(row);
+  document.getElementById('qa-week-name').value='';
+  renderQaWeeks();populateSqSelects();
+  notify('주차가 추가되었습니다.','success');
+}
+function renderQaWeeks(){
+  const el=document.getElementById('qa-week-list');
+  el.innerHTML=db.qaWeeks.length?db.qaWeeks.map(w=>{
+    const sc=db.qaSchools.find(s=>s.id===w.school_id);
+    return `<div class="card row-between"><span>${esc(sc?sc.name:'?')} · ${esc(w.name)} (문제 ${w.prob_count||0}개)</span></div>`;
+  }).join(''):'<div class="empty-hint">등록된 주차가 없습니다.</div>';
+  const sel=document.getElementById('qa-view-week');
+  const prevVal=sel.value;
+  sel.innerHTML=db.qaWeeks.map(w=>{
+    const sc=db.qaSchools.find(s=>s.id===w.school_id);
+    return `<option value="${esc(w.id)}">${esc(sc?sc.name:'?')} · ${esc(w.name)}</option>`;
+  }).join('')||'<option value="">주차를 먼저 추가하세요</option>';
+  if(prevVal)sel.value=prevVal;
+}
+function renderQaQuestions(){
+  const el=document.getElementById('qa-question-list');
+  const weekId=document.getElementById('qa-view-week').value;
+  const list=db.qaQuestions.filter(q=>q.week_id===weekId&&q.category!=='free');
+  if(!weekId){el.innerHTML='<div class="empty-hint">주차를 선택하세요.</div>';return;}
+  if(!list.length){el.innerHTML='<div class="empty-hint">등록된 질문이 없습니다.</div>';return;}
+  el.innerHTML=list.map(q=>`
+    <div class="card">
+      <div class="row-between"><strong>${esc(q.prob_num)}번 · ${esc(q.student_name||userName(q.student_id))}</strong>${q.status==='answered'?'<span class="pill green">답변완료</span>':'<span class="pill amber">대기중</span>'}</div>
+      <div style="margin-top:6px">${esc(q.question)}</div>
+      ${q.teacher_reply?`<div class="reply-box">${esc(q.teacher_reply)}</div>`:''}
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <input class="form-input" id="reply-${esc(q.id)}" placeholder="답변 입력" value="${esc(q.teacher_reply||'')}">
+        <button class="btn blue sm" onclick="answerQaQuestion('${esc(q.id)}')">답변 등록</button>
+      </div>
+    </div>`).join('');
+}
+function renderQaFreeAdmin(){
+  const el=document.getElementById('qa-free-list');
+  const list=db.qaQuestions.filter(q=>q.category==='free');
+  if(!list.length){el.innerHTML='<div class="empty-hint">등록된 자유 질문이 없습니다.</div>';return;}
+  el.innerHTML=list.map(q=>`
+    <div class="card">
+      <div class="row-between"><strong>${esc(q.student_name||userName(q.student_id))}</strong>${q.status==='answered'?'<span class="pill green">답변완료</span>':'<span class="pill amber">대기중</span>'}</div>
+      <div style="margin-top:6px">${esc(q.question)}</div>
+      ${q.teacher_reply?`<div class="reply-box">${esc(q.teacher_reply)}</div>`:''}
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <input class="form-input" id="reply-${esc(q.id)}" placeholder="답변 입력" value="${esc(q.teacher_reply||'')}">
+        <button class="btn blue sm" onclick="answerQaQuestion('${esc(q.id)}')">답변 등록</button>
+      </div>
+    </div>`).join('');
+}
+async function answerQaQuestion(qid){
+  const val=document.getElementById('reply-'+qid).value.trim();
+  if(!val){notify('답변을 입력하세요.','error');return;}
+  const{error}=await sb.from('qa_questions').update({teacher_reply:val,status:'answered',badge:'teacher'}).eq('id',qid);
+  if(error){notify('저장 실패: '+error.message,'error');return;}
+  const q=db.qaQuestions.find(x=>x.id===qid);
+  if(q){q.teacher_reply=val;q.status='answered';q.badge='teacher';}
+  renderQaQuestions();renderQaFreeAdmin();
+  notify('답변을 등록했습니다.','success');
+}
+
+/* ===================== 질문답변 (QA) — 학생 ===================== */
+function populateSqSelects(){
+  const schoolSel=document.getElementById('sq-school');
+  schoolSel.innerHTML=db.qaSchools.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')||'<option value="">학교/반이 없습니다</option>';
+  onSqSchoolChange();
+}
+function onSqSchoolChange(){
+  const schoolId=document.getElementById('sq-school').value;
+  const weekSel=document.getElementById('sq-week');
+  weekSel.innerHTML=db.qaWeeks.filter(w=>w.school_id===schoolId).map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')||'<option value="">주차가 없습니다</option>';
+}
+async function submitQaQuestion(){
+  const weekId=document.getElementById('sq-week').value;
+  const probNum=document.getElementById('sq-prob').value.trim();
+  const text=document.getElementById('sq-text').value.trim();
+  const schoolId=document.getElementById('sq-school').value;
+  if(!weekId||!probNum||!text){notify('주차/문제번호/질문 내용을 모두 입력하세요.','error');return;}
+  const row={id:uid('q_'),school_id:schoolId,week_id:weekId,prob_num:probNum,student_id:session.id,student_name:session.name,question:text,status:'pending',badge:'pending'};
+  const{error}=await sb.from('qa_questions').upsert(row,{onConflict:'week_id,prob_num,student_id'});
+  if(error){notify('등록 실패: '+error.message,'error');return;}
+  const ex2=db.qaQuestions.find(q=>q.week_id===weekId&&q.prob_num===probNum&&q.student_id===session.id);
+  if(ex2)Object.assign(ex2,row);else db.qaQuestions.push(row);
+  document.getElementById('sq-prob').value='';document.getElementById('sq-text').value='';
+  renderMyQa();
+  notify('질문을 등록했습니다.','success');
+}
+function renderMyQa(){
+  const el=document.getElementById('my-qa-list');
+  const list=db.qaQuestions.filter(q=>q.student_id===session.id&&q.category!=='free');
+  if(!list.length){el.innerHTML='<div class="empty-hint">등록한 질문이 없습니다.</div>';return;}
+  el.innerHTML=list.map(q=>{
+    const w=db.qaWeeks.find(x=>x.id===q.week_id);
+    return `<div class="card">
+      <div class="row-between"><strong>${esc(w?w.name:'')} · ${esc(q.prob_num)}번</strong>${q.status==='answered'?'<span class="pill green">답변완료</span>':'<span class="pill amber">대기중</span>'}</div>
+      <div style="margin-top:6px">${esc(q.question)}</div>
+      ${q.teacher_reply?`<div class="reply-box">쏠T: ${esc(q.teacher_reply)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+async function submitQaFree(){
+  const text=document.getElementById('sq-free-text').value.trim();
+  if(!text){notify('질문 내용을 입력하세요.','error');return;}
+  const row={id:uid('q_'),school_id:null,week_id:'free',prob_num:'자유',student_id:session.id,student_name:session.name,question:text,status:'pending',badge:'pending',category:'free'};
+  const{error}=await sb.from('qa_questions').upsert(row,{onConflict:'week_id,prob_num,student_id'});
+  if(error){notify('등록 실패: '+error.message,'error');return;}
+  const ex2=db.qaQuestions.find(q=>q.week_id==='free'&&q.prob_num==='자유'&&q.student_id===session.id);
+  if(ex2)Object.assign(ex2,row);else db.qaQuestions.push(row);
+  renderMyQaFree();
+  notify('자유 질문을 등록했습니다.','success');
+}
+function renderMyQaFree(){
+  const el=document.getElementById('my-qa-free');
+  const q=db.qaQuestions.find(x=>x.student_id===session.id&&x.category==='free');
+  if(!q){el.innerHTML='';return;}
+  el.innerHTML=`<div class="card">
+    <div class="row-between"><strong>내 자유 질문</strong>${q.status==='answered'?'<span class="pill green">답변완료</span>':'<span class="pill amber">대기중</span>'}</div>
+    <div style="margin-top:6px">${esc(q.question)}</div>
+    ${q.teacher_reply?`<div class="reply-box">쏠T: ${esc(q.teacher_reply)}</div>`:''}
+  </div>`;
+}
+
+/* ===================== 시험 — 강사 ===================== */
+function addExamQRow(){
+  examRowSeq++;
+  const wrap=document.getElementById('ex-q-rows');
+  const div=document.createElement('div');
+  div.className='exq-row';
+  div.dataset.row=examRowSeq;
+  div.innerHTML=`
+    <div style="text-align:center;color:var(--text2)">${wrap.children.length+1}</div>
+    <select class="form-select exq-type"><option value="obj">객관식</option><option value="desc">주관식</option></select>
+    <input class="form-input exq-points" type="number" value="2">
+    <input class="form-input exq-answer" placeholder="정답">
+    <input class="form-input exq-expl" placeholder="해설(선택)">
+    <button class="btn red sm" type="button" onclick="this.closest('.exq-row').remove();renumberExamRows()">삭제</button>`;
+  wrap.appendChild(div);
+}
+function renumberExamRows(){
+  document.querySelectorAll('#ex-q-rows .exq-row').forEach((row,i)=>{row.firstElementChild.textContent=i+1;});
+}
+async function saveExam(){
+  const name=document.getElementById('ex-name').value.trim();
+  const category=document.getElementById('ex-category').value;
+  const rows=[...document.querySelectorAll('#ex-q-rows .exq-row')];
+  if(!name){notify('시험 이름을 입력하세요.','error');return;}
+  if(!rows.length){notify('문항을 1개 이상 추가하세요.','error');return;}
+  const questions=rows.map((row,i)=>({
+    num:i+1,
+    type:row.querySelector('.exq-type').value,
+    points:parseInt(row.querySelector('.exq-points').value)||0,
+    answer:row.querySelector('.exq-answer').value.trim(),
+    explanation:row.querySelector('.exq-expl').value.trim()
+  }));
+  const{data,error}=await sb.from('exams').insert({name,total_q:questions.length,questions,teacher_id:session.id,category}).select();
+  if(error){notify('저장 실패: '+error.message,'error');return;}
+  const saved=(data&&data[0])||{id:uid('ex_'),name,total_q:questions.length,questions,teacher_id:session.id,category,created_at:new Date().toISOString()};
+  db.exams.unshift(saved);
+  document.getElementById('ex-name').value='';
+  document.getElementById('ex-q-rows').innerHTML='';
+  renderExamAdmin();
+  notify('시험이 저장되었습니다. 공유코드: '+String(saved.id).slice(0,8).toUpperCase(),'success');
+}
+function renderExamAdmin(){
+  const el=document.getElementById('exam-list');
+  if(!db.exams.length){el.innerHTML='<div class="empty-hint">만든 시험이 없습니다.</div>';return;}
+  el.innerHTML=db.exams.map(ex=>{
+    const code=String(ex.id).slice(0,8).toUpperCase();
+    const cnt=db.examResponses.filter(r=>r.exam_id===ex.id).length;
+    return `<div class="card row-between">
+      <div><strong>${esc(ex.name)}</strong> <span style="color:var(--text2)">· 문항 ${ex.total_q}개 · 응시 ${cnt}명</span><div style="font-family:var(--mono);color:var(--accent);margin-top:4px">코드: ${code}</div></div>
+      <button class="btn sm" onclick="renderExamResults('${esc(ex.id)}')">결과 보기</button>
+    </div>`;
+  }).join('');
+}
+function renderExamResults(examId){
+  const el=document.getElementById('exam-results');
+  const ex=db.exams.find(x=>x.id===examId);
+  const list=db.examResponses.filter(r=>r.exam_id===examId);
+  if(!list.length){el.innerHTML='<div class="empty-hint">아직 응시한 학생이 없습니다.</div>';return;}
+  const rows=list.map(r=>`<tr><td>${esc(r.student_name)}</td><td>${r.correct_count}/${r.total_q}</td><td>${r.points_earned}/${r.points_total}점</td><td>${r.score}%</td></tr>`).join('');
+  el.innerHTML=`<div class="card"><strong>${esc(ex?ex.name:'')}</strong></div><table class="simple"><thead><tr><th>학생</th><th>정답수</th><th>점수</th><th>백분율</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/* ===================== 시험 — 학생 ===================== */
+function loadExamByCode(){
+  const code=document.getElementById('ex-code').value.trim().toUpperCase();
+  if(!code){notify('공유코드를 입력하세요.','error');return;}
+  const ex=db.exams.find(x=>String(x.id).slice(0,8).toUpperCase()===code);
+  if(!ex){notify('해당 코드의 시험을 찾을 수 없어요.','error');return;}
+  currentExamTaking=ex;
+  renderExamTake(ex);
+}
+function renderExamTake(ex){
+  const el=document.getElementById('exam-take-area');
+  const mine=db.examResponses.find(r=>r.exam_id===ex.id&&r.student_name===session.name);
+  const qs=(ex.questions||[]).map(q=>{
+    const prevAns=mine&&mine.answers?mine.answers[q.num]:'';
+    return `<div class="card">
+      <div class="row-between"><strong>${q.num}번</strong><span class="pill blue">${q.type==='obj'?'객관식':'주관식'} · ${q.points}점</span></div>
+      ${q.type==='obj'?`<input class="form-input" id="eqa-${q.num}" type="number" min="1" max="5" placeholder="정답(1~5)" value="${esc(prevAns||'')}" style="margin-top:8px">`:`<textarea class="form-input" id="eqa-${q.num}" rows="2" placeholder="답안 입력" style="margin-top:8px">${esc(prevAns||'')}</textarea>`}
+    </div>`;
+  }).join('');
+  el.innerHTML=`<div class="card"><strong>${esc(ex.name)}</strong> <span style="color:var(--text2)">· 총 ${ex.total_q}문항</span></div>${qs}<button class="btn blue" onclick="submitExam()">제출하기</button><div id="exam-result-box" style="margin-top:12px"></div>`;
+  if(mine)renderExamResultBox(ex,mine);
+}
+async function submitExam(){
+  const ex=currentExamTaking;if(!ex)return;
+  const answers={};let pointsEarned=0,pointsTotal=0,correctCount=0;
+  (ex.questions||[]).forEach(q=>{
+    const val=document.getElementById('eqa-'+q.num).value.trim();
+    answers[q.num]=val;
+    pointsTotal+=q.points||0;
+    if(q.type==='obj'&&val&&String(val).trim()===String(q.answer).trim()){pointsEarned+=q.points||0;correctCount++;}
+  });
+  const score=pointsTotal>0?Math.round((pointsEarned/pointsTotal)*100):0;
+  const payload={exam_id:ex.id,student_name:session.name,answers,score,correct_count:correctCount,total_q:ex.total_q,points_earned:pointsEarned,points_total:pointsTotal,submitted_at:new Date().toISOString()};
+  const{error}=await sb.from('exam_responses').upsert(payload,{onConflict:'exam_id,student_name'});
+  if(error){notify('제출 실패: '+error.message,'error');return;}
+  const exist=db.examResponses.find(r=>r.exam_id===ex.id&&r.student_name===session.name);
+  if(exist)Object.assign(exist,payload);else db.examResponses.push(payload);
+  renderExamResultBox(ex,payload);
+  renderMyExamResults();
+  notify('시험을 제출했습니다.','success');
+}
+function renderExamResultBox(ex,resp){
+  const box=document.getElementById('exam-result-box');
+  if(!box)return;
+  const wrongRows=(ex.questions||[]).filter(q=>q.type==='obj'&&String(resp.answers[q.num]||'').trim()!==String(q.answer).trim())
+    .map(q=>`<div class="card"><strong>${q.num}번</strong> 오답 · 정답 ${esc(q.answer)}${q.explanation?`<div style="color:var(--text2);margin-top:4px">${esc(q.explanation)}</div>`:''}</div>`).join('');
+  box.innerHTML=`<div class="card"><strong>채점 결과</strong> · ${resp.correct_count}/${resp.total_q} 정답 · ${resp.points_earned}/${resp.points_total}점 (${resp.score}%)</div>${wrongRows}`;
+}
+function renderMyExamResults(){
+  const el=document.getElementById('my-exam-results');
+  const list=db.examResponses.filter(r=>r.student_name===session.name);
+  if(!list.length){el.innerHTML='<div class="empty-hint">아직 응시한 시험이 없습니다.</div>';return;}
+  el.innerHTML=list.map(r=>{
+    const ex=db.exams.find(x=>x.id===r.exam_id);
+    return `<div class="card row-between"><span>${esc(ex?ex.name:'(삭제된 시험)')}</span><span>${r.correct_count}/${r.total_q} · ${r.score}%</span></div>`;
+  }).join('');
+}
+
+/* ===================== 클리닉 — 강사 ===================== */
+async function addClinicSlot(){
+  const label=document.getElementById('cl-label').value.trim();
+  const date=document.getElementById('cl-date').value.trim();
+  const time=document.getElementById('cl-time').value.trim();
+  const capacity=parseInt(document.getElementById('cl-capacity').value)||5;
+  if(!label){notify('슬롯 이름을 입력하세요.','error');return;}
+  const row={id:uid('slot_'),label,slot_date:date,start_time:time,capacity};
+  const{error}=await sb.from('clinic_slots').insert(row);
+  if(error){notify('등록 실패: '+error.message,'error');return;}
+  db.clinicSlots.push(row);
+  ['cl-label','cl-date','cl-time'].forEach(i=>document.getElementById(i).value='');
+  renderClinicAdmin();
+  notify('슬롯이 등록되었습니다.','success');
+}
+function renderClinicAdmin(){
+  const el=document.getElementById('clinic-slot-list');
+  if(!db.clinicSlots.length){el.innerHTML='<div class="empty-hint">등록된 슬롯이 없습니다.</div>';return;}
+  el.innerHTML=db.clinicSlots.map(s=>{
+    const booked=db.clinicRequests.filter(r=>r.slot_id===s.id&&r.status==='confirmed');
+    const names=booked.map(r=>esc(userName(r.student_id))).join(', ')||'-';
+    return `<div class="card row-between">
+      <div><strong>${esc(s.label)}</strong> <span style="color:var(--text2)">${esc(s.slot_date||'')} ${esc(s.start_time||'')}</span><div style="font-size:12px;color:var(--text2);margin-top:4px">예약: ${booked.length}/${s.capacity}명 (${names})</div></div>
+      <button class="btn red sm" onclick="deleteClinicSlot('${esc(s.id)}')">삭제</button>
+    </div>`;
+  }).join('');
+}
+async function deleteClinicSlot(id){
+  if(!confirm('슬롯을 삭제하시겠습니까? 관련 예약도 함께 삭제됩니다.'))return;
+  await sb.from('clinic_requests').delete().eq('slot_id',id);
+  await sb.from('clinic_slots').delete().eq('id',id);
+  db.clinicRequests=db.clinicRequests.filter(r=>r.slot_id!==id);
+  db.clinicSlots=db.clinicSlots.filter(s=>s.id!==id);
+  renderClinicAdmin();
+  notify('슬롯을 삭제했습니다.','info');
+}
+
+/* ===================== 클리닉 — 학생 ===================== */
+function renderClinicBook(){
+  const el=document.getElementById('clinic-book-list');
+  if(!db.clinicSlots.length){el.innerHTML='<div class="empty-hint">예약 가능한 슬롯이 없습니다.</div>';return;}
+  el.innerHTML=db.clinicSlots.map(s=>{
+    const booked=db.clinicRequests.filter(r=>r.slot_id===s.id&&r.status==='confirmed');
+    const mine=booked.some(r=>r.student_id===session.id);
+    const full=booked.length>=s.capacity;
+    return `<div class="card row-between">
+      <div><strong>${esc(s.label)}</strong> <span style="color:var(--text2)">${esc(s.slot_date||'')} ${esc(s.start_time||'')}</span><div style="font-size:12px;color:var(--text2);margin-top:4px">${booked.length}/${s.capacity}명</div></div>
+      ${mine?'<span class="pill green">예약됨</span>':full?'<span class="pill red">마감</span>':`<button class="btn blue sm" onclick="bookClinicSlot('${esc(s.id)}')">예약</button>`}
+    </div>`;
+  }).join('');
+}
+async function bookClinicSlot(slotId){
+  const s=db.clinicSlots.find(x=>x.id===slotId);if(!s)return;
+  const booked=db.clinicRequests.filter(r=>r.slot_id===slotId&&r.status==='confirmed');
+  if(booked.length>=s.capacity){notify('정원이 마감되었습니다.','error');return;}
+  const row={id:uid('cr_'),slot_id:slotId,student_id:session.id,status:'confirmed'};
+  const{error}=await sb.from('clinic_requests').insert(row);
+  if(error){notify('예약 실패: '+error.message,'error');return;}
+  db.clinicRequests.push(row);
+  renderClinicBook();renderMyClinic();
+  notify('예약되었습니다.','success');
+}
+function renderMyClinic(){
+  const el=document.getElementById('my-clinic-list');
+  const mine=db.clinicRequests.filter(r=>r.student_id===session.id&&r.status==='confirmed');
+  if(!mine.length){el.innerHTML='<div class="empty-hint">예약한 클리닉이 없습니다.</div>';return;}
+  el.innerHTML=mine.map(r=>{
+    const s=db.clinicSlots.find(x=>x.id===r.slot_id);
+    return `<div class="card row-between"><span>${esc(s?s.label:'(삭제된 슬롯)')}</span><button class="btn red sm" onclick="cancelClinicReq('${esc(r.id)}')">예약 취소</button></div>`;
+  }).join('');
+}
+async function cancelClinicReq(reqId){
+  await sb.from('clinic_requests').update({status:'cancelled'}).eq('id',reqId);
+  const r=db.clinicRequests.find(x=>x.id===reqId);if(r)r.status='cancelled';
+  renderClinicBook();renderMyClinic();
+  notify('예약을 취소했습니다.','info');
+}
+
+/* ===================== 인증 — 강사 ===================== */
+async function addCertWeek(){
+  const name=document.getElementById('cw-name').value.trim();
+  if(!name){notify('주차 이름을 입력하세요.','error');return;}
+  const row={id:uid('cw_'),name};
+  const{error}=await sb.from('cert_weeks').insert(row);
+  if(error){notify('추가 실패: '+error.message,'error');return;}
+  db.certWeeks.push(row);
+  document.getElementById('cw-name').value='';
+  renderCertAdmin();
+  notify('인증 주차가 추가되었습니다.','success');
+}
+function renderCertAdmin(){
+  const listEl=document.getElementById('cert-week-list');
+  listEl.innerHTML=db.certWeeks.length?db.certWeeks.map(w=>`<div class="card row-between"><span>${esc(w.name)}</span></div>`).join(''):'<div class="empty-hint">등록된 인증 주차가 없습니다.</div>';
+  const sel=document.getElementById('ci-week');
+  sel.innerHTML=db.certWeeks.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')||'<option value="">주차를 먼저 추가하세요</option>';
+  const subEl=document.getElementById('cert-submission-list');
+  if(!db.certItems.length){subEl.innerHTML='<div class="empty-hint">등록된 인증 과제가 없습니다.</div>';return;}
+  subEl.innerHTML=db.certItems.map(item=>{
+    const subs=db.certSubmissions.filter(s=>s.item_id===item.id);
+    const rows=subs.map(s=>`<div class="row-between" style="padding:6px 0;border-top:1px solid var(--border)">
+      <span>${esc(userName(s.student_id))}</span>
+      ${s.status==='approved'?'<span class="pill green">승인됨</span>':s.status==='rejected'?'<span class="pill red">거절됨</span>':`<div style="display:flex;gap:6px"><button class="btn green sm" onclick="setCertStatus('${esc(s.id)}','approved')">승인</button><button class="btn red sm" onclick="setCertStatus('${esc(s.id)}','rejected')">거절</button></div>`}
+    </div>`).join('')||'<div style="color:var(--text2);font-size:12px;padding:6px 0">아직 제출한 학생이 없습니다.</div>';
+    return `<div class="card"><strong>${esc(item.title)}</strong>${rows}</div>`;
+  }).join('');
+}
+async function addCertItem(){
+  const weekId=document.getElementById('ci-week').value;
+  const title=document.getElementById('ci-title').value.trim();
+  if(!weekId){notify('주차를 먼저 추가하세요.','error');return;}
+  if(!title){notify('과제 제목을 입력하세요.','error');return;}
+  const row={id:uid('ci_'),week_id:weekId,title,type:'check',targets:null};
+  const{error}=await sb.from('cert_items').insert(row);
+  if(error){notify('등록 실패: '+error.message,'error');return;}
+  db.certItems.push(row);
+  document.getElementById('ci-title').value='';
+  renderCertAdmin();
+  notify('인증 과제가 등록되었습니다.','success');
+}
+async function setCertStatus(subId,status){
+  await sb.from('cert_submissions').update({status}).eq('id',subId);
+  const s=db.certSubmissions.find(x=>x.id===subId);if(s)s.status=status;
+  renderCertAdmin();
+  notify(status==='approved'?'승인했습니다.':'거절했습니다.','info');
+}
+
+/* ===================== 인증 — 학생 ===================== */
+function renderCertMy(){
+  const el=document.getElementById('cert-my-items');
+  if(!db.certItems.length){el.innerHTML='<div class="empty-hint">등록된 인증 과제가 없습니다.</div>';return;}
+  el.innerHTML=db.certItems.map(item=>{
+    const w=db.certWeeks.find(x=>x.id===item.week_id);
+    const mySub=db.certSubmissions.find(s=>s.item_id===item.id&&s.student_id===session.id);
+    let statusHtml='<button class="btn blue sm" onclick="submitCertItem(\''+esc(item.id)+'\')">완료 체크</button>';
+    if(mySub){
+      if(mySub.status==='approved')statusHtml='<span class="pill green">승인됨</span>';
+      else if(mySub.status==='rejected')statusHtml='<span class="pill red">거절됨 (다시 제출해주세요)</span>';
+      else statusHtml='<span class="pill amber">확인 대기중</span>';
+    }
+    return `<div class="card row-between"><div><strong>${esc(item.title)}</strong><div style="font-size:12px;color:var(--text2)">${esc(w?w.name:'')}</div></div>${statusHtml}</div>`;
+  }).join('');
+}
+async function submitCertItem(itemId){
+  const existing=db.certSubmissions.find(s=>s.item_id===itemId&&s.student_id===session.id);
+  if(existing&&existing.status!=='rejected'){notify('이미 제출했어요.','info');return;}
+  const row={id:uid('cs_'),item_id:itemId,student_id:session.id,status:'pending',photo_url:null,submitted_at:new Date().toISOString()};
+  const{error}=await sb.from('cert_submissions').insert(row);
+  if(error){notify('제출 실패: '+error.message,'error');return;}
+  db.certSubmissions.push(row);
+  renderCertMy();
+  notify('제출했습니다. 쏠T의 확인을 기다려주세요.','success');
+}
 
 /* ===================== 시작 ===================== */
 async function init(){

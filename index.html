@@ -187,6 +187,10 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 .alert-card{border-color:rgba(239,68,68,.45);background:linear-gradient(180deg,var(--red-bg),var(--card))}
 .alert-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--border);flex-wrap:wrap}
 .alert-row:first-of-type{border-top:none}
+.qa-photo{display:block;max-width:100%;max-height:280px;border-radius:8px;border:1px solid var(--border);margin-top:8px;cursor:zoom-in;background:var(--bg2)}
+.ann-card.unread{border-color:var(--accent)}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none}
+.chk input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
 .date-in{padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--font);color-scheme:dark}
 </style>
 </head>
@@ -235,7 +239,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
   </div>
   <div class="tabnav">
     <button class="active" data-t="t-students" onclick="switchTab('teacher','t-students')">학생 관리</button>
-    <button data-t="t-videos" onclick="switchTab('teacher','t-videos')">영상 관리</button>
+    <button data-t="t-videos" onclick="switchTab('teacher','t-videos')">영상 관리<span id="video-tab-badge"></span></button>
     <button data-t="t-access" onclick="switchTab('teacher','t-access')">복습 승인</button>
     <button data-t="t-qa" onclick="switchTab('teacher','t-qa')">질문답변</button>
     <button data-t="t-exams" onclick="switchTab('teacher','t-exams')">시험</button>
@@ -256,6 +260,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     </div>
 
     <div class="section" id="t-videos">
+      <div id="video-alerts"></div>
       <div class="section-head"><h2>새 영상 등록</h2></div>
       <div class="card">
         <div class="admin-form">
@@ -268,6 +273,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       </div>
       <div class="section-head" style="margin-top:24px"><h2>등록된 영상</h2></div>
       <div id="video-admin-list"></div>
+      <div id="video-watch-detail" style="margin-top:12px"></div>
     </div>
 
     <div class="section" id="t-access">
@@ -393,6 +399,8 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div class="section-head"><h2>출석 체크</h2></div>
       <div class="card">
         <div class="form-group"><label>날짜</label><input class="form-input" id="att-date" type="date"></div>
+        <div class="row-between" style="margin-top:4px"><span id="att-saved-state" style="font-size:12px;color:var(--text2)"></span>
+          <div style="display:flex;gap:6px"><button class="btn sm" onclick="setAllAttendance('present')">모두 출석</button><button class="btn sm" onclick="setAllAttendance('absent')">모두 결석</button></div></div>
         <div id="att-student-rows" style="margin-top:8px"></div>
         <button class="btn blue" style="margin-top:8px" onclick="saveAttendance()">출석 저장</button>
       </div>
@@ -435,7 +443,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     <button data-t="s-clinic" onclick="switchTab('student','s-clinic')">클리닉</button>
     <button data-t="s-cert" onclick="switchTab('student','s-cert')">인증</button>
     <button data-t="s-attendance" onclick="switchTab('student','s-attendance')">출석</button>
-    <button data-t="s-announce" onclick="switchTab('student','s-announce')">공지사항</button>
+    <button data-t="s-announce" onclick="switchTab('student','s-announce')">공지사항<span id="ann-tab-badge"></span></button>
     <button data-t="s-report" onclick="switchTab('student','s-report')">성적표</button>
   </div>
   <div class="content">
@@ -458,8 +466,14 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
           <div class="form-group"><label>주차</label><select class="form-select" id="sq-week"></select></div>
           <div class="form-group full"><label>문제 번호</label><input class="form-input" id="sq-prob" placeholder="예: 12"></div>
         </div>
-        <div class="form-group" style="margin-top:6px"><textarea class="form-input" id="sq-text" rows="3" placeholder="질문 내용을 입력하세요"></textarea></div>
-        <button class="btn blue sm" onclick="submitQaQuestion()">질문 등록</button>
+        <div class="form-group" style="margin-top:6px">
+          <label>문제 사진 (필수)</label>
+          <div class="vhint">지문 · 문제 · 선지가 <b>모두 보이게</b> 찍어서 올려 주세요. 사진이 없으면 질문을 등록할 수 없어요.</div>
+          <input type="file" id="sq-photo" accept="image/*" onchange="previewPhoto('sq-photo','sq-photo-prev')">
+          <div id="sq-photo-prev"></div>
+        </div>
+        <div class="form-group"><label>질문 내용</label><textarea class="form-input" id="sq-text" rows="3" placeholder="어디가 헷갈렸는지 적어 주세요"></textarea></div>
+        <button class="btn blue sm" id="sq-submit" onclick="submitQaQuestion()">질문 등록</button>
       </div>
       <div class="section-head" style="margin-top:24px"><h2>내 질문 내역</h2></div>
       <div id="my-qa-list"></div>
@@ -467,7 +481,9 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div class="section-head" style="margin-top:24px"><h2>자유 질문</h2></div>
       <div class="card">
         <textarea class="form-input" id="sq-free-text" rows="3" placeholder="주차와 상관없는 자유 질문 (다시 등록하면 이전 질문을 덮어써요)"></textarea>
-        <button class="btn blue sm" style="margin-top:8px" onclick="submitQaFree()">자유 질문 등록</button>
+        <div class="form-group" style="margin-top:8px"><label>사진 (선택 · 문제에 대한 질문이면 지문·문제·선지가 보이게)</label>
+          <input type="file" id="sq-free-photo" accept="image/*" onchange="previewPhoto('sq-free-photo','sq-free-photo-prev')"><div id="sq-free-photo-prev"></div></div>
+        <button class="btn blue sm" id="sq-free-submit" onclick="submitQaFree()">자유 질문 등록</button>
       </div>
       <div id="my-qa-free" style="margin-top:8px"></div>
     </div>
@@ -567,6 +583,7 @@ window.onYouTubeIframeAPIReady=function(){ytApiReady=true;};
 let ytPlayer=null,currentVid=null,currentStartPos=0;
 let watchedSet=new Set(),lastPos=-1,totalDur=0,maxRateSeen=1;
 let trackTimer=null,saveTimer=null;
+let rateSec={},baseRateSec={}; // 배속별 시청 초 (이번 재생분 / 저장돼 있던 값)
 let currentExamTaking=null; // exam object being taken by a student
 let examRowSeq=0;
 
@@ -592,10 +609,11 @@ function switchTab(scope,id){
 
 /* ===================== DB ===================== */
 // Supabase는 한 번에 최대 1000줄만 돌려줘서, 많아질 수 있는 표는 나눠서 전부 가져와요
-async function selectAll(table){
+async function selectAll(table,orderCols=['id']){
   const out=[],step=1000;
   for(let from=0;;from+=step){
-    const r=await sb.from(table).select('*').order('id').range(from,from+step-1);
+    let q=sb.from(table).select('*');orderCols.forEach(c=>{q=q.order(c);});
+    const r=await q.range(from,from+step-1);
     if(r.error)return{data:out.length?out:null,error:r.error};
     out.push(...(r.data||[]));
     if(!r.data||r.data.length<step)break;
@@ -607,22 +625,22 @@ async function loadAll(attempt=0){
     const [u,v,p,va,ar,qs,qw,qq,ex,er,cs,cr,cw,ci,csu,att,an,arr,vs2,vw2,va2]=await Promise.all([
       sb.from('users').select('*'),
       sb.from('videos').select('*').order('created_at'),
-      sb.from('progress').select('*'),
+      selectAll('progress',['student_id','video_id']),
       sb.from('video_access').select('*'),
       sb.from('access_requests').select('*').order('created_at',{ascending:false}),
       sb.from('qa_schools').select('*'),
       sb.from('qa_weeks').select('*'),
       sb.from('qa_questions').select('*').order('created_at',{ascending:false}),
       sb.from('exams').select('*').order('created_at',{ascending:false}),
-      sb.from('exam_responses').select('*'),
+      selectAll('exam_responses'),
       sb.from('clinic_slots').select('*'),
       sb.from('clinic_requests').select('*'),
       sb.from('cert_weeks').select('*'),
       sb.from('cert_items').select('*'),
       sb.from('cert_submissions').select('*'),
-      sb.from('attendance').select('*'),
+      selectAll('attendance'),
       sb.from('announcements').select('*').order('created_at',{ascending:false}),
-      sb.from('announcement_reads').select('*'),
+      selectAll('announcement_reads'),
       sb.from('vocab_sets').select('*').order('created_at',{ascending:false}),
       selectAll('vocab_words'),
       selectAll('vocab_attempts')
@@ -647,9 +665,16 @@ async function loadAll(attempt=0){
     throw e;
   }
 }
-async function upsertProgress(sid,vid,pct,watchSec,lastPosition,maxRate){
-  const payload={student_id:sid,video_id:vid,percent:Math.min(pct,100),watch_seconds:watchSec,last_position:lastPosition,max_rate:Math.max(maxRate||1,getMaxRate(sid,vid)),updated_at:new Date().toISOString()};
-  const{error}=await sb.from('progress').upsert(payload,{onConflict:'student_id,video_id'});
+let progressExtrasOff=false; // schema_add5.sql 실행 전이면 새 칸 없이 저장
+async function upsertProgress(sid,vid,pct,watchSec,lastPosition,maxRate,extra){
+  let payload={student_id:sid,video_id:vid,percent:Math.min(pct,100),watch_seconds:watchSec,last_position:lastPosition,max_rate:Math.max(maxRate||1,getMaxRate(sid,vid)),updated_at:new Date().toISOString()};
+  if(extra&&!progressExtrasOff)payload=Object.assign(payload,extra);
+  let{error}=await sb.from('progress').upsert(payload,{onConflict:'student_id,video_id'});
+  if(error&&extra&&/watched_ranges|rate_seconds|duration|column/i.test(error.message)){
+    progressExtrasOff=true;
+    ['watched_ranges','duration','rate_seconds'].forEach(k=>delete payload[k]);
+    ({error}=await sb.from('progress').upsert(payload,{onConflict:'student_id,video_id'}));
+  }
   if(error){console.error('저장 실패:',error.message);return;}
   const ex2=db.progress.find(p=>p.student_id===sid&&p.video_id===vid);
   if(ex2)Object.assign(ex2,payload);else db.progress.push(payload);
@@ -699,6 +724,7 @@ async function doSignup(){
   try{
     await loadAll();
     if(db.users.find(u=>u.id===id)){err.textContent='이미 사용 중인 아이디입니다.';return;}
+    if(nameTaken(name)){err.textContent='같은 이름의 학생이 이미 있어요. 이름 뒤에 학교명이나 숫자를 붙여 주세요. 예) '+name+'(수지고), '+name+'2';return;}
     const{error}=await sb.from('users').insert({id,name,pw,role:'student',status:'pending'});
     if(error){err.textContent='가입 실패: '+error.message;return;}
     ['su-name','su-id','su-pw','su-pw2'].forEach(i=>document.getElementById(i).value='');
@@ -707,6 +733,8 @@ async function doSignup(){
   }catch(e){err.textContent='오류: '+e.message;}
   finally{btn.disabled=false;btn.textContent='가입 신청';}
 }
+function normName(n){return String(n||'').replace(/\s+/g,'').toLowerCase();}
+function nameTaken(name,exceptId){return db.users.some(u=>u.id!==exceptId&&normName(u.name)===normName(name));}
 function doLogout(){
   closePlay();
   session=null;
@@ -732,9 +760,10 @@ function launchTeacher(){
   renderAttendanceForm();
   renderAnnounceAdmin();
   renderReportSelect();
-  renderVocabAdmin();
-  const n=vocabAlerts().filter(a=>a.urgent).length;
-  if(n)setTimeout(()=>notify(`어휘 미션이 밀린 학생이 ${n}명 있어요. 어휘 탭에서 확인하세요.`,'error'),600);
+  renderVocabAdmin();renderVideoAlerts();
+  const n=vocabAlerts().filter(a=>a.urgent).length,nv=videoAlerts().length;
+  const msg=[n?`어휘 미션이 밀린 학생 ${n}명`:'',nv?`영상 배속·건너뛰기 확인 ${nv}건`:''].filter(Boolean).join(', ');
+  if(msg)setTimeout(()=>notify(msg+'이 있어요.','error'),600);
 }
 function renderPending(){
   const el=document.getElementById('pending-list');
@@ -742,8 +771,9 @@ function renderPending(){
   if(!pending.length){el.innerHTML='<div class="empty-hint">대기 중인 가입 신청이 없습니다.</div>';return;}
   el.innerHTML=pending.map(u=>`
     <div class="card row-between">
-      <div><strong>${esc(u.name)}</strong> <span style="color:var(--text2)">(${esc(u.id)})</span></div>
+      <div><strong>${esc(u.name)}</strong> <span style="color:var(--text2)">(${esc(u.id)})</span>${nameTaken(u.name,u.id)?' <span class="pill red">동명이인</span>':''}</div>
       <div style="display:flex;gap:6px">
+        <button class="btn sm" onclick="renameStudent('${esc(u.id)}')">이름 수정</button>
         <button class="btn green sm" onclick="approveStudent('${esc(u.id)}')">승인</button>
         <button class="btn red sm" onclick="rejectStudent('${esc(u.id)}')">거절</button>
       </div>
@@ -757,14 +787,36 @@ function renderActive(){
     const myProg=db.progress.filter(p=>p.student_id===u.id);
     const watched=myProg.length;
     const avg=watched?Math.round(myProg.reduce((a,p)=>a+(p.percent||0),0)/watched):0;
+    const flags=videoFlagsFor(u.id);
+    const fast=flags.filter(f=>f.fast).length,skip=flags.filter(f=>f.skip).length;
     return `<tr>
-      <td>${esc(u.name)}</td><td style="color:var(--text2)">${esc(u.id)}</td>
+      <td>${esc(u.name)}${nameTaken(u.name,u.id)?' <span class="pill red">동명이인</span>':''}</td><td style="color:var(--text2)">${esc(u.id)}</td>
       <td>${watched} / ${db.videos.length}개 시청</td>
       <td>${avg}%</td>
-      <td><button class="btn red sm" onclick="removeStudent('${esc(u.id)}')">삭제</button></td>
+      <td>${fast?`<span class="pill amber">배속 ${fast}</span> `:''}${skip?`<span class="pill red">건너뜀 ${skip}</span>`:''}${!fast&&!skip?'<span style="color:var(--text3)">-</span>':''}</td>
+      <td style="white-space:nowrap"><button class="btn sm" onclick="renameStudent('${esc(u.id)}')">이름 수정</button> <button class="btn red sm" onclick="removeStudent('${esc(u.id)}')">삭제</button></td>
     </tr>`;
   }).join('');
-  el.innerHTML=`<table class="simple"><thead><tr><th>이름</th><th>아이디</th><th>시청 현황</th><th>평균 진도</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  el.innerHTML=`<div style="overflow-x:auto"><table class="simple" style="min-width:620px"><thead><tr><th>이름</th><th>아이디</th><th>시청 현황</th><th>평균 진도</th><th>영상 확인</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+async function renameStudent(id){
+  const u=db.users.find(x=>x.id===id);if(!u)return;
+  const nn=(prompt('새 이름을 입력하세요 (동명이인이면 학교명이나 숫자를 붙여 주세요. 예: 김민준(수지고))',u.name)||'').trim();
+  if(!nn||nn===u.name)return;
+  if(nameTaken(nn,id)){notify('같은 이름의 학생이 이미 있어요. 다른 이름을 써 주세요.','error');return;}
+  const old=u.name;
+  const{error}=await sb.from('users').update({name:nn}).eq('id',id);
+  if(error){notify('이름 변경 실패: '+error.message,'error');return;}
+  // 시험 기록은 이름으로 저장돼 있어서 같이 바꿔 줌 (같은 이름이 둘이던 경우는 원래 기록을 나눌 수 없어 그대로 둠)
+  if(!db.users.some(x=>x.id!==id&&x.name===old)){
+    await sb.from('exam_responses').update({student_name:nn}).eq('student_name',old);
+    db.examResponses.forEach(r=>{if(r.student_name===old)r.student_name=nn;});
+  }
+  await sb.from('qa_questions').update({student_name:nn}).eq('student_id',id);
+  db.qaQuestions.forEach(q=>{if(q.student_id===id)q.student_name=nn;});
+  u.name=nn;
+  renderPending();renderActive();renderReportSelect();renderAttendanceForm();renderQaQuestions();renderQaFreeAdmin();
+  notify(`이름을 "${nn}"(으)로 바꿨습니다.`,'success');
 }
 async function approveStudent(id){
   const{error}=await sb.from('users').update({status:'active'}).eq('id',id);
@@ -781,13 +833,27 @@ async function rejectStudent(id){
   notify('가입 신청을 거절했습니다.','info');
 }
 async function removeStudent(id){
-  if(!confirm('정말 이 학생을 삭제하시겠습니까? 진도 기록도 함께 삭제됩니다.'))return;
-  await sb.from('progress').delete().eq('student_id',id);
-  await sb.from('users').delete().eq('id',id);
-  db.progress=db.progress.filter(p=>p.student_id!==id);
-  db.users=db.users.filter(u=>u.id!==id);
-  renderActive();
-  notify('학생을 삭제했습니다.','info');
+  const u=db.users.find(x=>x.id===id);if(!u)return;
+  if(!confirm(`${u.name} 학생을 삭제할까요?\n\n영상 진도, 복습 신청, 질문과 사진, 시험, 어휘 미션, 클리닉 예약, 인증 제출과 사진, 출석, 공지 확인 기록까지 모두 지워지고 되돌릴 수 없어요.`))return;
+  const sameName=db.users.some(x=>x.id!==id&&x.name===u.name);
+  const jobs=[['progress','student_id',id],['video_access','student_id',id],['access_requests','student_id',id],['qa_questions','student_id',id],['clinic_requests','student_id',id],['cert_submissions','student_id',id],['attendance','student_id',id],['announcement_reads','student_id',id],['vocab_attempts','student_id',id]];
+  if(!sameName)jobs.push(['exam_responses','student_name',u.name]); // 동명이인이 있으면 시험 기록은 구분할 수 없어 남김
+  const fails=[];
+  for(const [t,c,v] of jobs){const{error}=await sb.from(t).delete().eq(c,v);if(error)fails.push(t);}
+  for(const b of ['qa-photos','cert-photos']){
+    try{const{data}=await sb.storage.from(b).list(id,{limit:1000});if(data&&data.length)await sb.storage.from(b).remove(data.map(f=>id+'/'+f.name));}catch(e){}
+  }
+  const{error}=await sb.from('users').delete().eq('id',id);
+  if(error){notify('학생 삭제 실패: '+error.message,'error');return;}
+  const keep=r=>r.student_id!==id;
+  db.progress=db.progress.filter(keep);db.videoAccess=db.videoAccess.filter(keep);db.accessRequests=db.accessRequests.filter(keep);
+  db.qaQuestions=db.qaQuestions.filter(keep);db.clinicRequests=db.clinicRequests.filter(keep);db.certSubmissions=db.certSubmissions.filter(keep);
+  db.attendance=db.attendance.filter(keep);db.announcementReads=db.announcementReads.filter(keep);db.vocabAttempts=db.vocabAttempts.filter(keep);
+  if(!sameName)db.examResponses=db.examResponses.filter(r=>r.student_name!==u.name);
+  db.users=db.users.filter(x=>x.id!==id);
+  renderActive();renderAccessAdmin();renderQaQuestions();renderQaFreeAdmin();renderExamAdmin();renderClinicAdmin();renderCertAdmin();
+  renderAttendanceForm();renderAnnounceAdmin();renderReportSelect();renderVocabAdmin();renderVideoAlerts();
+  notify(fails.length?`삭제했지만 일부 기록은 지우지 못했어요: ${fails.join(', ')}`:`${u.name} 학생과 모든 기록을 삭제했습니다.`,fails.length?'error':'info');
 }
 async function addVideo(){
   const title=document.getElementById('v-title').value.trim();
@@ -813,8 +879,73 @@ function renderVideoAdmin(){
         <img src="${thumb(v.url)}" style="width:80px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;background:var(--bg3)" alt="">
         <div><strong>${esc(v.title)}</strong> ${v.category==='review'?'<span class="pill amber">복습</span>':'<span class="pill blue">일반</span>'}<div style="color:var(--text2);font-size:12px">${esc(v.description||'')}</div></div>
       </div>
-      <button class="btn red sm" onclick="deleteVideo('${esc(v.id)}')">삭제</button>
+      <div style="display:flex;gap:6px"><button class="btn sm" onclick="renderVideoWatchDetail('${esc(v.id)}')">시청 기록</button><button class="btn red sm" onclick="deleteVideo('${esc(v.id)}')">삭제</button></div>
     </div>`).join('');
+  renderVideoAlerts();
+}
+/* ---- 영상 시청 분석: 배속 · 건너뛴 구간 ---- */
+const FAST_RATE=1.5;      // 이 배속 이상으로 본 시간을 확인
+const FAST_ALERT_SEC=10;  // 1.5배 이상으로 10초 넘게 보면 알림
+const SKIP_ALERT_SEC=30;  // 건너뛴 구간이 합쳐서 30초 넘으면 알림
+function fmtClock(sec){sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s2=sec%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s2).padStart(2,'0');}
+function watchInfo(p){
+  if(!p)return null;
+  const rates=p.rate_seconds||{};
+  const fastSec=Object.entries(rates).filter(([k])=>parseFloat(k)>=FAST_RATE).reduce((n,[,v])=>n+v,0);
+  const maxRate=p.max_rate||1;
+  const info={maxRate,fastSec,rates,skips:[],skipTotal:0,hasRanges:false,remaining:0,pct:Math.round(p.percent||0)};
+  const R=Array.isArray(p.watched_ranges)?p.watched_ranges.slice().sort((a,b)=>a[0]-b[0]):null;
+  if(R&&R.length){
+    info.hasRanges=true;
+    if(R[0][0]>3)info.skips.push([0,R[0][0]-1]);
+    for(let i=1;i<R.length;i++){const gap=R[i][0]-R[i-1][1]-1;if(gap>2)info.skips.push([R[i-1][1]+1,R[i][0]-1]);}
+    info.skipTotal=info.skips.reduce((n,[a,b])=>n+b-a+1,0);
+    const far=R[R.length-1][1];info.remaining=p.duration?Math.max(0,p.duration-far-1):0;
+  }
+  info.fast=fastSec>=FAST_ALERT_SEC;info.skip=info.skipTotal>=SKIP_ALERT_SEC;
+  return info;
+}
+function videoFlagsFor(sid){
+  return db.progress.filter(p=>p.student_id===sid).map(p=>Object.assign({p},watchInfo(p))).filter(f=>f.fast||f.skip);
+}
+function ratesText(rates){
+  const e=Object.entries(rates||{}).filter(([,v])=>v>0).sort((a,b)=>parseFloat(a[0])-parseFloat(b[0]));
+  return e.length?e.map(([k,v])=>`${k}배 ${fmtTime(v)}`).join(' · '):'-';
+}
+function videoAckKey(f){return [f.p.student_id,f.p.video_id,f.maxRate,Math.floor(f.fastSec/10),f.skipTotal].join('|');}
+function getVideoAcks(){try{return JSON.parse(localStorage.getItem('sk_video_ack')||'[]');}catch(e){return[];}}
+function ackVideoAlert(key){try{const a=getVideoAcks();a.push(key);localStorage.setItem('sk_video_ack',JSON.stringify(a.slice(-500)));}catch(e){}renderVideoAlerts();}
+function videoAlerts(){
+  const acks=new Set(getVideoAcks());
+  const active=new Set(db.users.filter(u=>u.role==='student').map(u=>u.id));
+  return db.progress.filter(p=>active.has(p.student_id)).map(p=>Object.assign({p},watchInfo(p))).filter(f=>(f.fast||f.skip)&&!acks.has(videoAckKey(f)))
+    .sort((a,b)=>new Date(b.p.updated_at||0)-new Date(a.p.updated_at||0));
+}
+function renderVideoAlerts(){
+  const el=document.getElementById('video-alerts');const badge=document.getElementById('video-tab-badge');
+  if(!el)return;
+  const list=videoAlerts();
+  if(badge)badge.innerHTML=list.length?`<span class="tab-badge">${list.length}</span>`:'';
+  if(!list.length){el.innerHTML='';return;}
+  el.innerHTML=`<div class="card alert-card" style="margin-bottom:18px">
+    <div class="row-between" style="margin-bottom:4px"><strong>🔔 영상 시청 확인 필요 ${list.length}건</strong><span style="font-size:11px;color:var(--text3)">${FAST_RATE}배 이상 ${FAST_ALERT_SEC}초 넘게 · 건너뛴 구간 ${SKIP_ALERT_SEC}초 이상</span></div>
+    ${list.map(f=>{const v=db.videos.find(x=>x.id===f.p.video_id);return `<div class="alert-row"><div><strong>${esc(userName(f.p.student_id))}</strong> <span style="font-size:12px;color:var(--text2)">${esc(v?v.title:'(삭제된 영상)')}</span>
+      <div style="margin-top:2px;font-size:12px">${f.fast?`<span class="pill amber">최고 ${f.maxRate}배 · ${FAST_RATE}배 이상 ${fmtTime(f.fastSec)}</span> `:''}${f.skip?`<span class="pill red">건너뜀 ${fmtTime(f.skipTotal)}</span> <span style="color:var(--text2)">${f.skips.slice(0,4).map(([a,b])=>fmtClock(a)+'~'+fmtClock(b)).join(', ')}${f.skips.length>4?' 외':''}</span>`:''}</div></div>
+      <div style="display:flex;gap:6px;align-items:center"><span style="font-size:12px;color:var(--text2)">${f.p.updated_at?fmtMD(ymd(new Date(f.p.updated_at))):''}</span><button class="btn sm" onclick="ackVideoAlert('${esc(videoAckKey(f))}')">확인함</button></div></div>`;}).join('')}
+  </div>`;
+}
+function renderVideoWatchDetail(vid){
+  const el=document.getElementById('video-watch-detail');const v=db.videos.find(x=>x.id===vid);
+  const students=db.users.filter(u=>u.role==='student'&&u.status==='active');
+  const rows=students.map(u=>{const p=db.progress.find(x=>x.student_id===u.id&&x.video_id===vid);const f=watchInfo(p);
+    if(!f)return `<tr><td>${esc(u.name)}</td><td colspan="4" style="color:var(--text3)">아직 안 봄</td></tr>`;
+    const skipTxt=!f.hasRanges?'<span style="color:var(--text3)">기록 없음</span>':f.skips.length?`<span style="color:${f.skip?'var(--red)':'var(--text2)'}">${fmtTime(f.skipTotal)}</span><div style="font-size:11px;color:var(--text2)">${f.skips.map(([a,b])=>fmtClock(a)+'~'+fmtClock(b)).join(', ')}</div>`:'없음';
+    return `<tr><td>${esc(u.name)}</td><td>${f.pct}%${f.remaining>5?`<div style="font-size:11px;color:var(--text3)">남은 ${fmtTime(f.remaining)}</div>`:''}</td>
+      <td><span style="color:${f.fast?'var(--amber)':'inherit'}">최고 ${f.maxRate}배</span><div style="font-size:11px;color:var(--text2)">${ratesText(f.rates)}</div></td>
+      <td>${skipTxt}</td><td style="font-size:12px;color:var(--text2)">${p.updated_at?fmtMD(ymd(new Date(p.updated_at))):''}</td></tr>`;}).join('');
+  el.innerHTML=`<div class="card"><strong>${esc(v?v.title:'')}</strong> <span style="color:var(--text2)">시청 기록</span><div class="vhint" style="margin:4px 0 0">건너뛴 구간 = 앞까지 봤는데 중간에 안 본 부분이에요. 아직 끝까지 안 본 뒷부분은 "남은 시간"으로 따로 보여요.</div></div>
+    <div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple" style="min-width:560px"><thead><tr><th>학생</th><th>진도</th><th>배속</th><th>건너뛴 구간</th><th>최근</th></tr></thead><tbody>${rows||'<tr><td colspan="5">학생이 없습니다</td></tr>'}</tbody></table></div>`;
+  el.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 async function deleteVideo(id){
   if(!confirm('정말 삭제하시겠습니까?'))return;
@@ -944,6 +1075,8 @@ function openPlay(vid){
   if(v.category==='review'&&!hasAccess(session.id,vid)){notify('아직 시청 권한이 없어요. 접근을 먼저 신청해주세요.','error');return;}
   currentVid=vid;
   currentStartPos=getLastPos(session.id,vid);
+  const prog=db.progress.find(p=>p.student_id===session.id&&p.video_id===vid);
+  baseRateSec=Object.assign({},(prog&&prog.rate_seconds)||{});rateSec={};
   const id=ytId(v.url);
   if(!id){notify('유효하지 않은 유튜브 URL입니다.','error');return;}
   document.getElementById('play-title').textContent=v.title;
@@ -972,8 +1105,14 @@ function onYTReady(e){
       totalDur=dur;
       document.getElementById('trk-total').textContent=fmtTime(totalDur);
       if(!currentVid||!session)return;
-      const pct=getPct(session.id,currentVid);
-      if(pct>0){const ws=Math.floor((pct/100)*totalDur);for(let i=0;i<ws;i++)watchedSet.add(i);updateTrackUI(pct);}
+      const prog=db.progress.find(p=>p.student_id===session.id&&p.video_id===currentVid);
+      if(prog&&Array.isArray(prog.watched_ranges)&&prog.watched_ranges.length){
+        prog.watched_ranges.forEach(([a,b])=>{for(let i=a;i<=b;i++)watchedSet.add(i);});
+        updateTrackUI(Math.min(Math.round(watchedSet.size/totalDur*100),100));
+      }else{
+        const pct=getPct(session.id,currentVid);
+        if(pct>0){const ws=Math.floor((pct/100)*totalDur);for(let i=0;i<ws;i++)watchedSet.add(i);updateTrackUI(pct);}
+      }
     }else if(attempts>0){setTimeout(()=>tryDur(attempts-1),500);}
   };
   tryDur(10);
@@ -995,7 +1134,7 @@ function startTracking(){
     if(lastPos>=0&&cur>lastPos&&cur-lastPos<=3){for(let i=lastPos;i<=cur;i++)watchedSet.add(i);}
     else{watchedSet.add(cur);}
     lastPos=cur;
-    try{const rate=ytPlayer.getPlaybackRate();if(rate>maxRateSeen)maxRateSeen=rate;}catch(e){}
+    try{const rate=ytPlayer.getPlaybackRate();if(rate>maxRateSeen)maxRateSeen=rate;const k=String(rate);rateSec[k]=(rateSec[k]||0)+1;}catch(e){}
     const pct=Math.min(Math.round((watchedSet.size/totalDur)*100),100);
     updateTrackUI(pct);scheduleSave();
   },1000);
@@ -1010,7 +1149,17 @@ async function doAutoSave(){
   const pct=Math.min(Math.round((watchedSet.size/totalDur)*100),100);
   const curPct=getPct(session.id,currentVid);
   const curPos=ytPlayer?Math.floor(ytPlayer.getCurrentTime()):0;
-  if(pct>0||curPct>0){await upsertProgress(session.id,currentVid,Math.max(pct,curPct),watchedSet.size,curPos,maxRateSeen);}
+  if(pct>0||curPct>0){await upsertProgress(session.id,currentVid,Math.max(pct,curPct),watchedSet.size,curPos,maxRateSeen,progressExtra());}
+}
+function toRanges(set){
+  const xs=[...set].sort((a,b)=>a-b);const out=[];
+  xs.forEach(x=>{const last=out[out.length-1];if(last&&x<=last[1]+1)last[1]=Math.max(last[1],x);else out.push([x,x]);});
+  return out;
+}
+function progressExtra(){
+  const merged=Object.assign({},baseRateSec);
+  Object.entries(rateSec).forEach(([k,v])=>{merged[k]=(merged[k]||0)+v;});
+  return{watched_ranges:toRanges(watchedSet),duration:Math.round(totalDur),rate_seconds:merged};
 }
 function updateTrackUI(pct){
   document.getElementById('trk-pct').textContent=pct+'%';
@@ -1023,12 +1172,12 @@ async function closePlay(){
     const pct=Math.min(Math.round((watchedSet.size/totalDur)*100),100);
     const curPct=getPct(session.id,currentVid);
     const curPos=ytPlayer?Math.floor(ytPlayer.getCurrentTime()):0;
-    if(pct>=curPct)await upsertProgress(session.id,currentVid,pct,watchedSet.size,curPos,maxRateSeen);
+    if(pct>=curPct||Object.keys(rateSec).length)await upsertProgress(session.id,currentVid,Math.max(pct,curPct),watchedSet.size,curPos,maxRateSeen,progressExtra());
   }
   if(ytPlayer){try{ytPlayer.stopVideo();ytPlayer.destroy();}catch(e){}ytPlayer=null;}
   document.getElementById('yt-player').innerHTML='';
   document.getElementById('modal-play').classList.remove('show');
-  currentVid=null;currentStartPos=0;watchedSet=new Set();lastPos=-1;totalDur=0;maxRateSeen=1;
+  currentVid=null;currentStartPos=0;watchedSet=new Set();lastPos=-1;totalDur=0;maxRateSeen=1;rateSec={};baseRateSec={};
   if(session&&session.role==='student'){renderLectures();renderReviewGrid();}
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closePlay();});
@@ -1089,6 +1238,7 @@ function renderQaQuestions(){
   el.innerHTML=list.map(q=>`
     <div class="card">
       <div class="row-between"><strong>${esc(q.prob_num)}번 · ${esc(q.student_name||userName(q.student_id))}</strong>${q.status==='answered'?'<span class="pill green">답변완료</span>':'<span class="pill amber">대기중</span>'}</div>
+      ${photoHtml(q.photo_url)}
       <div style="margin-top:6px">${esc(q.question)}</div>
       ${q.teacher_reply?`<div class="reply-box">${esc(q.teacher_reply)}</div>`:''}
       <div style="display:flex;gap:6px;margin-top:8px">
@@ -1104,6 +1254,7 @@ function renderQaFreeAdmin(){
   el.innerHTML=list.map(q=>`
     <div class="card">
       <div class="row-between"><strong>${esc(q.student_name||userName(q.student_id))}</strong>${q.status==='answered'?'<span class="pill green">답변완료</span>':'<span class="pill amber">대기중</span>'}</div>
+      ${photoHtml(q.photo_url)}
       <div style="margin-top:6px">${esc(q.question)}</div>
       ${q.teacher_reply?`<div class="reply-box">${esc(q.teacher_reply)}</div>`:''}
       <div style="display:flex;gap:6px;margin-top:8px">
@@ -1123,6 +1274,34 @@ async function answerQaQuestion(qid){
   notify('답변을 등록했습니다.','success');
 }
 
+/* ===================== 사진 올리기 공통 ===================== */
+// 휴대폰 사진은 크기가 커서 긴 변 1600px JPEG로 줄여서 올려요 (줄일 수 없는 형식이면 원본 그대로)
+async function shrinkImage(file,maxSide=1600,quality=0.82){
+  try{
+    const bmp=await createImageBitmap(file);
+    const k=Math.min(1,maxSide/Math.max(bmp.width,bmp.height));
+    const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+    c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',quality));
+    return blob||file;
+  }catch(e){return file;}
+}
+async function uploadPhoto(bucket,file){
+  if(!file.type||!file.type.startsWith('image/'))throw new Error('사진 파일만 올릴 수 있어요.');
+  const blob=await shrinkImage(file);
+  const ext=blob===file?((file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg'):'jpg';
+  const path=`${session.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+  const{error}=await sb.storage.from(bucket).upload(path,blob,{contentType:blob.type||file.type,upsert:false});
+  if(error)throw new Error('사진 업로드 실패: '+error.message+' (schema_add5.sql을 실행했는지 확인해주세요)');
+  return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+function previewPhoto(inputId,boxId){
+  const f=document.getElementById(inputId).files[0];const box=document.getElementById(boxId);
+  if(!f){box.innerHTML='';return;}
+  box.innerHTML=`<img class="qa-photo" src="${URL.createObjectURL(f)}" alt="선택한 사진">`;
+}
+function photoHtml(url){return url?`<a href="${esc(url)}" target="_blank" rel="noopener"><img class="qa-photo" src="${esc(url)}" alt="문제 사진" loading="lazy"></a>`:'';}
+
 /* ===================== 질문답변 (QA) — 학생 ===================== */
 function populateSqSelects(){
   const schoolSel=document.getElementById('sq-school');
@@ -1139,10 +1318,17 @@ async function submitQaQuestion(){
   const probNum=document.getElementById('sq-prob').value.trim();
   const text=document.getElementById('sq-text').value.trim();
   const schoolId=document.getElementById('sq-school').value;
+  const file=document.getElementById('sq-photo').files[0];
   if(!weekId||!probNum||!text){notify('주차/문제번호/질문 내용을 모두 입력하세요.','error');return;}
-  const row={id:uid('q_'),school_id:schoolId,week_id:weekId,prob_num:probNum,student_id:session.id,student_name:session.name,question:text,status:'pending',badge:'pending'};
+  if(!file){notify('지문·문제·선지가 모두 보이는 사진을 올려 주세요.','error');return;}
+  const btn=document.getElementById('sq-submit');btn.disabled=true;btn.textContent='사진 올리는 중...';
+  let photoUrl;
+  try{photoUrl=await uploadPhoto('qa-photos',file);}catch(e){notify(e.message,'error');btn.disabled=false;btn.textContent='질문 등록';return;}
+  const row={id:uid('q_'),school_id:schoolId,week_id:weekId,prob_num:probNum,student_id:session.id,student_name:session.name,question:text,status:'pending',badge:'pending',photo_url:photoUrl,teacher_reply:null};
   const{error}=await sb.from('qa_questions').upsert(row,{onConflict:'week_id,prob_num,student_id'});
-  if(error){notify('등록 실패: '+error.message,'error');return;}
+  btn.disabled=false;btn.textContent='질문 등록';
+  if(error){notify('등록 실패: '+error.message+(/photo_url/.test(error.message)?' (schema_add5.sql을 실행했는지 확인해주세요)':''),'error');return;}
+  document.getElementById('sq-photo').value='';document.getElementById('sq-photo-prev').innerHTML='';
   const ex2=db.qaQuestions.find(q=>q.week_id===weekId&&q.prob_num===probNum&&q.student_id===session.id);
   if(ex2)Object.assign(ex2,row);else db.qaQuestions.push(row);
   document.getElementById('sq-prob').value='';document.getElementById('sq-text').value='';
@@ -1157,6 +1343,7 @@ function renderMyQa(){
     const w=db.qaWeeks.find(x=>x.id===q.week_id);
     return `<div class="card">
       <div class="row-between"><strong>${esc(w?w.name:'')} · ${esc(q.prob_num)}번</strong>${q.status==='answered'?'<span class="pill green">답변완료</span>':'<span class="pill amber">대기중</span>'}</div>
+      ${photoHtml(q.photo_url)}
       <div style="margin-top:6px">${esc(q.question)}</div>
       ${q.teacher_reply?`<div class="reply-box">쏠T: ${esc(q.teacher_reply)}</div>`:''}
     </div>`;
@@ -1165,9 +1352,16 @@ function renderMyQa(){
 async function submitQaFree(){
   const text=document.getElementById('sq-free-text').value.trim();
   if(!text){notify('질문 내용을 입력하세요.','error');return;}
-  const row={id:uid('q_'),school_id:null,week_id:'free',prob_num:'자유',student_id:session.id,student_name:session.name,question:text,status:'pending',badge:'pending',category:'free'};
-  const{error}=await sb.from('qa_questions').upsert(row,{onConflict:'week_id,prob_num,student_id'});
+  const file=document.getElementById('sq-free-photo').files[0];
+  const btn=document.getElementById('sq-free-submit');btn.disabled=true;
+  let photoUrl=null;
+  if(file){btn.textContent='사진 올리는 중...';try{photoUrl=await uploadPhoto('qa-photos',file);}catch(e){notify(e.message,'error');btn.disabled=false;btn.textContent='자유 질문 등록';return;}}
+  const row={id:uid('q_'),school_id:null,week_id:'free',prob_num:'자유',student_id:session.id,student_name:session.name,question:text,status:'pending',badge:'pending',category:'free',teacher_reply:null,photo_url:photoUrl};
+  let{error}=await sb.from('qa_questions').upsert(row,{onConflict:'week_id,prob_num,student_id'});
+  if(error&&!photoUrl&&/photo_url/.test(error.message)){delete row.photo_url;({error}=await sb.from('qa_questions').upsert(row,{onConflict:'week_id,prob_num,student_id'}));}
+  btn.disabled=false;btn.textContent='자유 질문 등록';
   if(error){notify('등록 실패: '+error.message,'error');return;}
+  document.getElementById('sq-free-text').value='';document.getElementById('sq-free-photo').value='';document.getElementById('sq-free-photo-prev').innerHTML='';
   const ex2=db.qaQuestions.find(q=>q.week_id==='free'&&q.prob_num==='자유'&&q.student_id===session.id);
   if(ex2)Object.assign(ex2,row);else db.qaQuestions.push(row);
   renderMyQaFree();
@@ -1179,6 +1373,7 @@ function renderMyQaFree(){
   if(!q){el.innerHTML='';return;}
   el.innerHTML=`<div class="card">
     <div class="row-between"><strong>내 자유 질문</strong>${q.status==='answered'?'<span class="pill green">답변완료</span>':'<span class="pill amber">대기중</span>'}</div>
+    ${photoHtml(q.photo_url)}
     <div style="margin-top:6px">${esc(q.question)}</div>
     ${q.teacher_reply?`<div class="reply-box">쏠T: ${esc(q.teacher_reply)}</div>`:''}
   </div>`;
@@ -1486,7 +1681,7 @@ function renderAttendanceForm(){
   const rows=document.getElementById('att-student-rows');
   rows.innerHTML=active.map(u=>{
     const rec=db.attendance.find(a=>a.student_id===u.id&&a.date===date);
-    const st=rec?rec.status:'present';
+    const st=rec?rec.status:'absent'; // 저장된 기록이 없으면 결석으로 시작
     return `<div class="row-between" style="padding:6px 0;border-top:1px solid var(--border)">
       <span>${esc(u.name)}</span>
       <select class="form-select att-sel" data-sid="${esc(u.id)}" style="width:110px">
@@ -1496,8 +1691,12 @@ function renderAttendanceForm(){
       </select>
     </div>`;
   }).join('')||'<div class="empty-hint">등록된 학생이 없습니다.</div>';
+  const saved=db.attendance.some(a=>a.date===date);
+  const st=document.getElementById('att-saved-state');
+  if(st)st.innerHTML=saved?'<span class="pill green">이 날짜는 저장됨</span>':'<span class="pill amber">아직 저장 안 함 · 기본값 결석</span>';
   renderAttendanceHistory();
 }
+function setAllAttendance(v){document.querySelectorAll('.att-sel').forEach(sel=>{sel.value=v;});}
 async function saveAttendance(){
   const date=document.getElementById('att-date').value||todayStr();
   const sels=[...document.querySelectorAll('.att-sel')];
@@ -1509,7 +1708,7 @@ async function saveAttendance(){
     if(ex2)Object.assign(ex2,row);else db.attendance.push(row);
   }
   notify('출석을 저장했습니다.','success');
-  renderAttendanceHistory();
+  renderAttendanceForm();
 }
 function renderAttendanceHistory(){
   const el=document.getElementById('att-history');
@@ -1552,27 +1751,36 @@ function renderAnnounceAdmin(){
   const el=document.getElementById('announce-admin-list');
   if(!db.announcements.length){el.innerHTML='<div class="empty-hint">등록된 공지가 없습니다.</div>';return;}
   el.innerHTML=db.announcements.map(a=>{
-    const readCount=db.announcementReads.filter(r=>r.announcement_id===a.id).length;
-    const activeStudents=db.users.filter(u=>u.role==='student'&&u.status==='active').length;
-    return `<div class="card"><div class="row-between"><strong>${esc(a.title)}</strong><span style="color:var(--text2);font-size:12px">읽음 ${readCount}/${activeStudents}</span></div><div style="margin-top:6px;color:var(--text2)">${esc(a.content||'')}</div></div>`;
+    const students=db.users.filter(u=>u.role==='student'&&u.status==='active');
+    const readIds=new Set(db.announcementReads.filter(r=>r.announcement_id===a.id).map(r=>r.student_id));
+    const readN=students.filter(u=>readIds.has(u.id)).length;
+    const unread=students.filter(u=>!readIds.has(u.id));
+    return `<div class="card"><div class="row-between"><strong>${esc(a.title)}</strong><span class="pill ${unread.length?'amber':'green'}">확인 ${readN}/${students.length}</span></div><div style="margin-top:6px;color:var(--text2);white-space:pre-wrap">${esc(a.content||'')}</div>
+      ${unread.length?`<div style="margin-top:8px;font-size:12px;color:var(--text2)">아직 확인 안 한 학생: ${unread.map(u=>esc(u.name)).join(', ')}</div>`:''}</div>`;
   }).join('');
 }
 
 /* ===================== 공지사항 — 학생 ===================== */
 function renderMyAnnounce(){
-  const el=document.getElementById('announce-my-list');
+  const el=document.getElementById('announce-my-list');const badge=document.getElementById('ann-tab-badge');
+  const isRead=a=>db.announcementReads.some(r=>r.announcement_id===a.id&&r.student_id===session.id);
+  const unreadN=db.announcements.filter(a=>!isRead(a)).length;
+  if(badge)badge.innerHTML=unreadN?`<span class="tab-badge">${unreadN}</span>`:'';
   if(!db.announcements.length){el.innerHTML='<div class="empty-hint">등록된 공지가 없습니다.</div>';return;}
   el.innerHTML=db.announcements.map(a=>{
-    const read=db.announcementReads.some(r=>r.announcement_id===a.id&&r.student_id===session.id);
-    if(!read)markAnnouncementRead(a.id);
-    return `<div class="card"><strong>${esc(a.title)}</strong><div style="margin-top:6px;color:var(--text2)">${esc(a.content||'')}</div></div>`;
+    const read=isRead(a);
+    return `<div class="card ann-card${read?'':' unread'}"><div class="row-between"><strong>${esc(a.title)}</strong>${read?'':'<span class="pill blue">새 공지</span>'}</div>
+      <div style="margin-top:6px;color:var(--text2);white-space:pre-wrap">${esc(a.content||'')}</div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">${read?'<span class="pill green">✓ 확인했어요</span>':`<label class="chk"><input type="checkbox" onchange="markAnnouncementRead('${esc(a.id)}',this)"> 공지를 읽었어요</label>`}</div></div>`;
   }).join('');
 }
-async function markAnnouncementRead(annId){
+async function markAnnouncementRead(annId,box){
+  if(box)box.disabled=true;
   const row={id:uid('ar_'),announcement_id:annId,student_id:session.id};
-  db.announcementReads.push(row);
   const{error}=await sb.from('announcement_reads').upsert(row,{onConflict:'announcement_id,student_id'});
-  if(error)db.announcementReads=db.announcementReads.filter(r=>r!==row);
+  if(error){notify('저장 실패: '+error.message,'error');if(box){box.checked=false;box.disabled=false;}return;}
+  db.announcementReads.push(row);
+  renderMyAnnounce();
 }
 
 /* ===================== 성적표 ===================== */

@@ -319,7 +319,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div class="section-head"><h2 id="ex-form-title">새 시험 만들기</h2></div>
       <div class="card">
         <div class="admin-form">
-          <div class="form-group"><label>시험 이름</label><input class="form-input" id="ex-name" placeholder="예: 3월 모의고사"></div>
+          <div class="form-group"><label>시험 이름</label><input class="form-input" id="ex-name" placeholder="예: 1학기 중간 대비 1회"></div>
           <div class="form-group"><label>구분</label><select class="form-select" id="ex-category"><option value="school">내신</option><option value="regular">정규</option></select></div>
           <div class="form-group"><label>제한시간 (분, 비우면 제한 없음)</label><input class="form-input" id="ex-time" type="number" min="0" placeholder="예: 50"></div>
         </div>
@@ -1553,9 +1553,9 @@ function renderExamAdmin(){
     const done=list.filter(isSubmitted).length,doing=list.length-done;
     const pend=list.filter(r=>isSubmitted(r)&&descPending(ex,r)).length;
     return `<div class="card">
-      <div class="row-between"><div><span class="pill ${ex.category==='school'?'blue':'green'}">${examCatLabel(ex.category)}</span> <strong>${esc(ex.name)}</strong> <span style="color:var(--text2)">· 문항 ${ex.total_q}개 · 제출 ${done}명${doing?` · 응시 중 ${doing}명`:''}</span>${pend?` <span class="pill amber">주관식 채점 대기 ${pend}</span>`:''}
+      <div class="row-between"><div><span class="pill ${ex.category==='school'?'blue':'green'}">${examCatLabel(ex.category)}</span> <strong>${esc(ex.name)}</strong> <span style="color:var(--text2)">· 문항 ${ex.total_q}개 · 제출 ${done}명${doing?` · 응시 중 ${doing}명`:''}</span>${pend?` <span class="pill amber">주관식 채점 대기 ${pend}</span>`:''}${ex.answers_revealed?' <span class="pill green">정답 공개됨</span>':' <span class="pill red">정답 비공개</span>'}
         <div style="font-family:var(--mono);color:var(--accent);margin-top:4px">코드: ${code}</div></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" onclick="renderExamResults('${esc(ex.id)}')">결과 보기</button><button class="btn sm" onclick="editExam('${esc(ex.id)}')">수정</button><button class="btn red sm" onclick="deleteExam('${esc(ex.id)}')">삭제</button></div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" onclick="renderExamResults('${esc(ex.id)}')">결과 보기</button><button class="btn sm ${ex.answers_revealed?'':'green'}" onclick="toggleRevealAnswers('${esc(ex.id)}')">${ex.answers_revealed?'정답 공개 취소':'정답 공개'}</button><button class="btn sm" onclick="editExam('${esc(ex.id)}')">수정</button><button class="btn red sm" onclick="deleteExam('${esc(ex.id)}')">삭제</button></div></div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--text2);flex-wrap:wrap">제한시간
         <input type="number" min="0" class="date-in" style="width:70px" id="extime-${esc(ex.id)}" value="${ex.time_limit||''}" placeholder="없음"> 분
         <button class="btn sm" onclick="setExamTimeLimit('${esc(ex.id)}')">적용</button>
@@ -1736,9 +1736,26 @@ async function submitExam(auto){
 function renderExamResultBox(ex,resp){
   const box=document.getElementById('exam-result-box');
   if(!box)return;
-  const wrongRows=(ex.questions||[]).filter(q=>q.type==='obj'&&String(resp.answers[q.num]||'').trim()!==String(q.answer).trim())
-    .map(q=>`<div class="card"><strong>${q.num}번</strong> 오답 · 정답 ${esc(q.answer)}${q.explanation?`<div style="color:var(--text2);margin-top:4px">${esc(q.explanation)}</div>`:''}</div>`).join('');
-  box.innerHTML=`<div class="card"><strong>채점 결과</strong> · 객관식 ${resp.correct_count}개 정답 · ${examScoreText(ex,resp)}${resp.thoughts&&resp.thoughts.__autoSubmitted?' <span class="pill amber">시간 종료 자동 제출</span>':''}</div>${wrongRows}`;
+  // 정답·해설은 쏠T가 "정답 공개"를 눌러야 보여요
+  const wrong=(ex.questions||[]).filter(q=>q.type==='obj'&&String(resp.answers[q.num]||'').trim()!==String(q.answer).trim());
+  const detail=ex.answers_revealed
+    ?(wrong.length?wrong.map(q=>`<div class="card"><strong>${q.num}번</strong> 오답 · 내 답 ${esc(resp.answers[q.num]||'-')} · 정답 ${esc(q.answer)}${q.explanation?`<div style="color:var(--text2);margin-top:4px">${esc(q.explanation)}</div>`:''}</div>`).join(''):'<div class="empty-hint">객관식을 모두 맞혔어요!</div>')
+    :'<div class="empty-hint">정답과 해설은 쏠T가 공개하면 볼 수 있어요.</div>';
+  box.innerHTML=`<div class="card"><strong>채점 결과</strong> · ${examScoreText(ex,resp)}${resp.thoughts&&resp.thoughts.__autoSubmitted?' <span class="pill amber">시간 종료 자동 제출</span>':''}</div>${detail}`;
+}
+function viewMyExam(examId){
+  const ex=db.exams.find(x=>x.id===examId);if(!ex)return;
+  stopExamTimers();currentExamTaking=ex;renderExamTake(ex,true);
+  document.getElementById('exam-take-area').scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function toggleRevealAnswers(id){
+  const ex=db.exams.find(x=>x.id===id);if(!ex)return;
+  const v=!ex.answers_revealed;
+  if(v&&!confirm(`"${ex.name}" 정답과 해설을 학생들에게 공개할까요?\n이미 제출한 학생은 바로 볼 수 있어요.`))return;
+  const{error}=await sb.from('exams').update({answers_revealed:v}).eq('id',id);
+  if(error){notify('저장 실패: '+error.message+(/answers_revealed/.test(error.message)?' (schema_add7.sql을 실행해주세요)':''),'error');return;}
+  ex.answers_revealed=v;renderExamAdmin();
+  notify(v?'정답을 공개했어요.':'정답 공개를 취소했어요.','success');
 }
 function renderMyExamResults(){
   const el=document.getElementById('my-exam-results');
@@ -1746,7 +1763,7 @@ function renderMyExamResults(){
   if(!list.length){el.innerHTML='<div class="empty-hint">아직 응시한 시험이 없습니다.</div>';return;}
   el.innerHTML=list.map(r=>{
     const ex=db.exams.find(x=>x.id===r.exam_id);
-    return `<div class="card row-between"><span>${esc(ex?ex.name:'(삭제된 시험)')}</span><span>${ex?examScoreText(ex,r):r.score+'%'}</span></div>`;
+    return `<div class="card row-between"><span>${esc(ex?ex.name:'(삭제된 시험)')}</span><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">${ex?examScoreText(ex,r):r.score+'%'}${ex&&ex.answers_revealed?` <button class="btn sm" onclick="viewMyExam('${esc(ex.id)}')">정답 보기</button>`:''}</span></div>`;
   }).join('');
 }
 

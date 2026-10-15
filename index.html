@@ -140,6 +140,50 @@ table.simple tr:last-child td{border-bottom:none}
 .notif.error{border-color:var(--red)}
 
 @media(max-width:640px){.admin-form{grid-template-columns:1fr}}
+
+/* ---- 어휘 미션 ---- */
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:5px 12px;border-radius:99px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;font-family:var(--font)}
+.chip.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.vhint{font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.55}
+.m-hero{background:linear-gradient(135deg,rgba(79,124,255,.20),rgba(34,197,94,.08));border:1px solid var(--border2);border-radius:var(--radius);padding:18px;margin:12px 0 14px}
+.m-hero .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:1.5px;color:var(--text2)}
+.m-hero .big{font-size:22px;font-weight:700;letter-spacing:-.4px;margin-top:2px}
+.m-hero .next{margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--border)}
+.m-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.m-tile{position:relative;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;min-height:122px;display:flex;flex-direction:column;gap:3px;text-align:left;color:var(--text);font-family:var(--font);cursor:pointer;transition:transform .12s,border-color .12s}
+.m-tile:hover:not(.locked){transform:translateY(-2px);border-color:var(--border2)}
+.m-tile .m-no{font-family:var(--mono);font-size:11px;color:var(--text2);letter-spacing:1px}
+.m-tile .m-cat{font-size:11px;color:var(--text3)}
+.m-tile .m-title{font-size:13px;font-weight:600;line-height:1.35}
+.m-tile .m-foot{margin-top:auto;font-size:12px;color:var(--text2)}
+.m-tile.cleared{border-color:rgba(34,197,94,.5);background:linear-gradient(180deg,var(--green-bg),var(--card))}
+.m-tile.cleared .m-no{color:var(--green)}
+.m-tile.open{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,124,255,.18)}
+.m-tile.open .m-no{color:var(--accent)}
+.m-tile.tried{border-color:rgba(245,158,11,.5)}
+.m-tile.locked{opacity:.42;cursor:not-allowed}
+.stars{color:var(--amber);letter-spacing:1px}
+.stars .off{color:var(--text3)}
+.q-wrap{max-width:580px;margin:0 auto}
+.q-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.q-type{font-size:11px;font-weight:600;color:var(--accent);letter-spacing:.5px}
+.q-prompt{font-size:24px;font-weight:700;margin:6px 0 2px;line-height:1.35;letter-spacing:-.3px}
+.q-prompt.long{font-size:16px;font-weight:600;line-height:1.55;letter-spacing:0}
+.q-hanja{font-size:14px;color:var(--text2);font-weight:400;margin-left:6px}
+.q-choice{display:block;width:100%;text-align:left;padding:12px 14px;margin-top:8px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg2);color:var(--text);font-size:14px;cursor:pointer;font-family:var(--font);line-height:1.45}
+.q-choice:hover:not(:disabled){border-color:var(--accent)}
+.q-choice.correct{border-color:var(--green);background:var(--green-bg)}
+.q-choice.wrong{border-color:var(--red);background:var(--red-bg)}
+.q-choice:disabled{cursor:default}
+.q-feedback{margin-top:12px;padding:12px 14px;border-radius:var(--radius-sm);background:var(--bg2);border:1px solid var(--border);font-size:13px;line-height:1.6}
+mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding:0 2px}
+.clear-banner{text-align:center;padding:22px 12px 8px}
+.clear-banner .t{font-size:28px;font-weight:800;letter-spacing:-.5px}
+.clear-banner .stars{font-size:32px;margin:6px 0}
+.mtable{min-width:600px}
+.mtable td:nth-child(2){min-width:200px}
+.date-in{padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--font);color-scheme:dark}
 </style>
 </head>
 <body>
@@ -272,22 +316,38 @@ table.simple tr:last-child td{border-bottom:none}
     </div>
 
     <div class="section" id="t-vocab">
-      <div class="section-head"><h2>어휘 세트 만들기</h2></div>
+      <div class="section-head"><h2>어휘 미션</h2><div id="vt-track-chips" class="chips"></div></div>
+      <div id="vocab-mission-admin"></div>
+      <div class="section-head" style="margin-top:24px"><h2>학생별 진행</h2></div>
+      <div id="vocab-student-board"></div>
+      <div id="vocab-results" style="margin-top:12px"></div>
+
+      <div class="section-head" style="margin-top:28px"><h2>엑셀로 단어 추가</h2></div>
       <div class="card">
-        <div class="form-group"><label>세트 이름</label><input class="form-input" id="vs-name" placeholder="예: 3주차 어휘"></div>
+        <div class="vhint">열 이름이 <b>교재 · 강 · 강 제목 · 단어 · 한자 · 뜻 · 예문</b>인 엑셀을 그대로 올리세요. <b>단어</b>와 <b>뜻</b>만 꼭 있으면 되고 나머지는 없어도 돼요.<br>
+        같은 교재·같은 강이 이미 있으면 <b>새 단어만</b> 그 미션에 추가되고, 새로운 강이면 미션이 새로 생겨요.</div>
+        <input type="file" id="vx-file" accept=".xlsx,.xls,.csv,.txt">
+        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn sm" onclick="previewVocabFile()">미리보기</button>
+          <button class="btn blue sm" onclick="importVocabFile()">미션으로 저장</button>
+        </div>
+        <div id="vx-preview" style="margin-top:8px"></div>
+      </div>
+
+      <div class="section-head" style="margin-top:24px"><h2>몇 단어만 직접 추가</h2></div>
+      <div class="card">
+        <div class="form-group"><label>추가할 곳</label><select class="form-select" id="vs-target" onchange="onVocabTargetChange()"></select></div>
+        <div class="form-group" id="vs-name-wrap"><label>새 세트 이름</label><input class="form-input" id="vs-name" placeholder="예: 10월 보충 어휘"></div>
         <div class="form-group">
           <label>단어 목록 붙여넣기</label>
-          <textarea class="form-input" id="vs-paste" rows="6" placeholder="엑셀에서 단어, 뜻, 예문 3개 열을 복사해서 그대로 붙여넣으세요 (예문은 없어도 돼요)&#10;예)&#10;고즈넉하다	조용하고 호젓하다	고즈넉한 산사의 풍경이 마음을 편안하게 했다"></textarea>
+          <textarea class="form-input" id="vs-paste" rows="5" placeholder="한 줄에 하나씩: 단어, 뜻, 예문 (예문은 없어도 돼요)&#10;엑셀에서 단어·뜻·예문 3개 열을 복사해 붙여넣어도 돼요&#10;예) 고즈넉하다	조용하고 호젓하다	고즈넉한 산사의 풍경이 마음을 편안하게 했다"></textarea>
         </div>
-        <div class="form-group"><label>또는 파일 업로드 (.csv, .txt)</label><input type="file" id="vs-file" accept=".csv,.txt"></div>
         <button class="btn sm" onclick="previewVocabParse()">미리보기</button>
         <div id="vs-preview" style="margin-top:8px"></div>
-        <button class="btn blue" style="margin-top:10px" onclick="saveVocabSet()">어휘 세트 저장</button>
+        <button class="btn blue" style="margin-top:10px" onclick="saveVocabSet()">저장</button>
       </div>
-      <div class="section-head" style="margin-top:24px"><h2>만든 어휘 세트</h2></div>
+      <div class="section-head" style="margin-top:24px"><h2>자유 세트 (미션 외)</h2></div>
       <div id="vocab-set-list"></div>
-      <div class="section-head" style="margin-top:24px"><h2>응시 결과</h2></div>
-      <div id="vocab-results"><div class="empty-hint">세트 목록에서 "결과 보기"를 눌러주세요.</div></div>
     </div>
 
     <div class="section" id="t-clinic">
@@ -421,11 +481,12 @@ table.simple tr:last-child td{border-bottom:none}
     </div>
 
     <div class="section" id="s-vocab">
-      <div class="section-head"><h2>어휘 테스트</h2></div>
-      <div id="vocab-set-pick"></div>
-      <div id="vocab-take-area" style="margin-top:12px"></div>
-      <div class="section-head" style="margin-top:24px"><h2>내 결과</h2></div>
-      <div id="my-vocab-results"></div>
+      <div id="vocab-home">
+        <div class="section-head"><h2>어휘 미션</h2><div id="vs-track-chips" class="chips"></div></div>
+        <div id="vocab-set-pick"></div>
+        <div id="my-vocab-results"></div>
+      </div>
+      <div id="vocab-take-area"></div>
     </div>
 
     <div class="section" id="s-clinic">
@@ -512,7 +573,8 @@ function notify(msg,type='info'){const n=document.getElementById('notif');n.text
 function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function hideLoading(){document.getElementById('loading-screen').classList.add('hide');}
 function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function uid(prefix){return prefix+Date.now()+Math.floor(Math.random()*1000);}
+let uidSeq=0;
+function uid(prefix){uidSeq=(uidSeq+1)%46656;return prefix+Date.now()+'_'+uidSeq.toString(36)+Math.random().toString(36).slice(2,7);}
 function userName(id){const u=db.users.find(x=>x.id===id);return u?u.name:id;}
 function getPct(sid,vid){const r=db.progress.find(p=>p.student_id===sid&&p.video_id===vid);return r?Math.round(r.percent||0):0;}
 function getLastPos(sid,vid){const r=db.progress.find(p=>p.student_id===sid&&p.video_id===vid);return r?(r.last_position||0):0;}
@@ -524,6 +586,17 @@ function switchTab(scope,id){
 }
 
 /* ===================== DB ===================== */
+// Supabase는 한 번에 최대 1000줄만 돌려줘서, 많아질 수 있는 표는 나눠서 전부 가져와요
+async function selectAll(table){
+  const out=[],step=1000;
+  for(let from=0;;from+=step){
+    const r=await sb.from(table).select('*').order('id').range(from,from+step-1);
+    if(r.error)return{data:out.length?out:null,error:r.error};
+    out.push(...(r.data||[]));
+    if(!r.data||r.data.length<step)break;
+  }
+  return{data:out,error:null};
+}
 async function loadAll(attempt=0){
   try{
     const [u,v,p,va,ar,qs,qw,qq,ex,er,cs,cr,cw,ci,csu,att,an,arr,vs2,vw2,va2]=await Promise.all([
@@ -546,8 +619,8 @@ async function loadAll(attempt=0){
       sb.from('announcements').select('*').order('created_at',{ascending:false}),
       sb.from('announcement_reads').select('*'),
       sb.from('vocab_sets').select('*').order('created_at',{ascending:false}),
-      sb.from('vocab_words').select('*'),
-      sb.from('vocab_attempts').select('*')
+      selectAll('vocab_words'),
+      selectAll('vocab_attempts')
     ]);
     if(u.error)throw new Error(u.error.message);
     if(v.error)throw new Error(v.error.message);
@@ -1581,161 +1654,550 @@ async function submitCertItem(itemId){
   notify('제출했습니다. 쏠T의 확인을 기다려주세요.','success');
 }
 
-/* ===================== 어휘 테스트 — 강사 ===================== */
-async function getVocabRows(){
-  const fileEl=document.getElementById('vs-file');
-  let text='';
-  if(fileEl&&fileEl.files&&fileEl.files[0]){
-    text=await fileEl.files[0].text();
-  }else{
-    text=document.getElementById('vs-paste').value;
+/* ===================== 어휘 미션 — 공통 ===================== */
+const VOCAB_PASS=0.8;            // 80% 이상 맞히면 미션 클리어
+const TRACK_ORDER=['중학','수능'];
+let vocabTrackSel=null;          // 화면에서 고른 교재(트랙)
+let currentVocabQuiz=null;
+
+function shuffle(arr){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function todayStr(){return ymd(new Date());}
+function addDays(dateStr,n){const [y,m,d]=dateStr.split('-').map(Number);return ymd(new Date(y,m-1,d+n));}
+function mondayOf(dateStr){const [y,m,d]=dateStr.split('-').map(Number);const dt=new Date(y,m-1,d);const wd=(dt.getDay()+6)%7;return ymd(new Date(y,m-1,d-wd));}
+function daysUntil(dateStr){const [y,m,d]=dateStr.split('-').map(Number);const t=new Date();const a=new Date(t.getFullYear(),t.getMonth(),t.getDate());return Math.round((new Date(y,m-1,d)-a)/86400000);}
+function fmtMD(dateStr){if(!dateStr)return'';const [,m,d]=dateStr.split('-').map(Number);return `${m}/${d}`;}
+function pad2(n){return String(n).padStart(2,'0');}
+function splitTitle(t){t=t||'';const i=t.indexOf('|');return i>=0?{cat:t.slice(0,i).trim(),title:t.slice(i+1).trim()}:{cat:'',title:t.trim()};}
+
+function vocabTracks(){
+  const ts=[...new Set(db.vocabSets.filter(s=>s.track).map(s=>s.track))];
+  return ts.sort((a,b)=>{const ia=TRACK_ORDER.indexOf(a),ib=TRACK_ORDER.indexOf(b);return((ia<0?99:ia)-(ib<0?99:ib))||a.localeCompare(b);});
+}
+function missionsOf(track){return db.vocabSets.filter(s=>s.track===track).sort((a,b)=>(a.lesson_no||0)-(b.lesson_no||0));}
+function wordsOf(setId){return db.vocabWords.filter(w=>w.set_id===setId).sort((a,b)=>(a.sort_no||0)-(b.sort_no||0));}
+function ratio(a){return a&&a.total>0?a.score/a.total:0;}
+function bestAttempt(setId,sid){let best=null;db.vocabAttempts.forEach(a=>{if(a.set_id===setId&&a.student_id===sid&&a.total>0&&(!best||ratio(a)>ratio(best)))best=a;});return best;}
+function isCleared(a){return !!a&&ratio(a)>=VOCAB_PASS;}
+function starsOf(a){const r=ratio(a);return r>=1?3:r>=0.9?2:r>=VOCAB_PASS?1:0;}
+function starsHtml(n){return `<span class="stars">${'★'.repeat(n)}<span class="off">${'★'.repeat(3-n)}</span></span>`;}
+function missionLabel(set){
+  const ms=set.track?missionsOf(set.track):[];const i=ms.findIndex(s=>s.id===set.id);
+  return i>=0?`MISSION ${pad2(i+1)}`:'자유 세트';
+}
+// 학생 한 명 기준 미션 상태: cleared(클리어) / open(도전 가능) / date(오픈 전) / prev(이전 미션 먼저)
+function missionStates(track,sid){
+  const today=todayStr();let prevCleared=true;
+  return missionsOf(track).map((s,i)=>{
+    const best=bestAttempt(s.id,sid);const cleared=isCleared(best);
+    const dateOpen=!s.open_date||s.open_date<=today;
+    const state=cleared?'cleared':!dateOpen?'date':!prevCleared?'prev':'open';
+    prevCleared=cleared;
+    return{set:s,no:i+1,best,cleared,state,stars:starsOf(best),tries:db.vocabAttempts.filter(a=>a.set_id===s.id&&a.student_id===sid).length};
+  });
+}
+function pickDefaultTrack(sid){
+  const ts=vocabTracks();if(!ts.length)return null;
+  if(vocabTrackSel&&ts.includes(vocabTrackSel))return vocabTrackSel;
+  try{const saved=localStorage.getItem('sk_vocab_track');if(saved&&ts.includes(saved))return saved;}catch(e){}
+  if(sid){ // 이미 많이 푼 쪽을 먼저 보여줌
+    let best=ts[0],bc=-1;ts.forEach(t=>{const c=missionStates(t,sid).filter(m=>m.tries>0).length;if(c>bc){bc=c;best=t;}});return best;
   }
-  return parseVocabText(text);
+  return ts[0];
 }
-function parseVocabText(text){
-  return text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(line=>{
-    let parts=line.includes('\t')?line.split('\t'):line.split(',');
-    parts=parts.map(p=>p.trim());
-    return{word:parts[0]||'',meaning:parts[1]||'',example:parts[2]||''};
-  }).filter(r=>r.word&&r.meaning);
+function selectVocabTrack(t){
+  vocabTrackSel=t;try{localStorage.setItem('sk_vocab_track',t);}catch(e){}
+  if(session&&session.role==='teacher'){renderVocabAdmin();}else{renderVocabPick();}
 }
-async function previewVocabParse(){
-  const rows=await getVocabRows();
-  const el=document.getElementById('vs-preview');
-  if(!rows.length){el.innerHTML='<div class="empty-hint">파싱된 단어가 없습니다. "단어[탭/쉼표]뜻[탭/쉼표]예문" 형식인지 확인해주세요.</div>';return;}
-  el.innerHTML=`<div class="card">${rows.length}개 단어 인식됨<table class="simple" style="margin-top:8px"><thead><tr><th>단어</th><th>뜻</th><th>예문</th></tr></thead><tbody>${rows.slice(0,5).map(r=>`<tr><td>${esc(r.word)}</td><td>${esc(r.meaning)}</td><td>${esc(r.example||'')}</td></tr>`).join('')}</tbody></table>${rows.length>5?`<div style="color:var(--text2);font-size:12px;margin-top:6px">...외 ${rows.length-5}개</div>`:''}</div>`;
+function trackChipsHtml(sel){
+  const ts=vocabTracks();if(ts.length<2)return'';
+  return ts.map(t=>`<button class="chip${t===sel?' active':''}" onclick="selectVocabTrack('${esc(t)}')">${esc(t)}</button>`).join('');
 }
-async function saveVocabSet(){
-  const name=document.getElementById('vs-name').value.trim();
-  if(!name){notify('세트 이름을 입력하세요.','error');return;}
-  const rows=await getVocabRows();
-  if(rows.length<2){notify('단어를 2개 이상 입력하세요 (4지선다를 만들려면 여러 개 필요해요).','error');return;}
-  const setRow={id:uid('vs_'),name};
-  const{error:e1}=await sb.from('vocab_sets').insert(setRow);
-  if(e1){notify('저장 실패: '+e1.message+' (schema_add3.sql을 실행하셨는지 확인해주세요)','error');return;}
-  const wordRows=rows.map(r=>({id:uid('vw_'),set_id:setRow.id,word:r.word,meaning:r.meaning,example:r.example||null}));
-  const{error:e2}=await sb.from('vocab_words').insert(wordRows);
-  if(e2){notify('단어 저장 실패: '+e2.message,'error');return;}
-  db.vocabSets.unshift(setRow);
-  db.vocabWords.push(...wordRows);
-  document.getElementById('vs-name').value='';
-  document.getElementById('vs-paste').value='';
-  document.getElementById('vs-file').value='';
-  document.getElementById('vs-preview').innerHTML='';
-  renderVocabAdmin();
-  notify(`어휘 세트를 저장했습니다 (${wordRows.length}개 단어).`,'success');
-}
+
+/* ===================== 어휘 미션 — 강사 ===================== */
 function renderVocabAdmin(){
-  const el=document.getElementById('vocab-set-list');
-  if(!el)return;
-  if(!db.vocabSets.length){el.innerHTML='<div class="empty-hint">만든 어휘 세트가 없습니다.</div>';return;}
-  el.innerHTML=db.vocabSets.map(s=>{
+  const adminEl=document.getElementById('vocab-mission-admin');
+  if(!adminEl)return;
+  const track=pickDefaultTrack(null);vocabTrackSel=track;
+  document.getElementById('vt-track-chips').innerHTML=trackChipsHtml(track);
+  renderVocabTargetOptions();
+  // 자유 세트 목록
+  const listEl=document.getElementById('vocab-set-list');
+  const free=db.vocabSets.filter(s=>!s.track);
+  listEl.innerHTML=free.length?free.map(s=>{
     const cnt=db.vocabWords.filter(w=>w.set_id===s.id).length;
-    const attemptCnt=db.vocabAttempts.filter(a=>a.set_id===s.id).length;
+    const attemptCnt=new Set(db.vocabAttempts.filter(a=>a.set_id===s.id).map(a=>a.student_id)).size;
     return `<div class="card row-between">
       <div><strong>${esc(s.name)}</strong> <span style="color:var(--text2)">· 단어 ${cnt}개 · 응시 ${attemptCnt}명</span></div>
       <div style="display:flex;gap:6px">
         <button class="btn sm" onclick="renderVocabResults('${esc(s.id)}')">결과 보기</button>
         <button class="btn red sm" onclick="deleteVocabSet('${esc(s.id)}')">삭제</button>
-      </div>
-    </div>`;
+      </div></div>`;
+  }).join(''):'<div class="empty-hint">미션에 속하지 않은 자유 세트가 없습니다.</div>';
+
+  if(!track){
+    adminEl.innerHTML='<div class="empty-hint">아직 미션이 없어요. 아래 "엑셀로 단어 추가"에서 단어장을 올리면 강마다 미션이 만들어져요.</div>';
+    document.getElementById('vocab-student-board').innerHTML='';
+    return;
+  }
+  const ms=missionsOf(track);
+  const students=db.users.filter(u=>u.role==='student'&&u.status==='active');
+  const start=ms[0]&&ms[0].open_date?ms[0].open_date:mondayOf(todayStr());
+  const today=todayStr();
+  const rows=ms.map((s,i)=>{
+    const{cat,title}=splitTitle(s.lesson_title||s.name);
+    const wc=db.vocabWords.filter(w=>w.set_id===s.id).length;
+    const clearCnt=students.filter(u=>isCleared(bestAttempt(s.id,u.id))).length;
+    const isNow=s.open_date&&s.open_date<=today&&(!ms[i+1]||!ms[i+1].open_date||ms[i+1].open_date>today);
+    return `<tr${isNow?' style="background:rgba(79,124,255,.08)"':''}>
+      <td style="font-family:var(--mono);font-size:12px;white-space:nowrap">${pad2(i+1)}${isNow?' <span class="pill blue">이번 주</span>':''}</td>
+      <td><div style="font-weight:600">${s.lesson_no?esc(s.lesson_no)+'강 · ':''}${esc(title)}</div><div style="font-size:11px;color:var(--text3)">${esc(cat)} · 단어 ${wc}개</div></td>
+      <td><input type="date" class="date-in" value="${esc(s.open_date||'')}" onchange="setMissionDate('${esc(s.id)}',this.value)"></td>
+      <td style="white-space:nowrap">${clearCnt}/${students.length}명</td>
+      <td style="white-space:nowrap"><button class="btn sm" onclick="renderVocabResults('${esc(s.id)}')">결과</button> <button class="btn red sm" onclick="deleteVocabSet('${esc(s.id)}')">삭제</button></td>
+    </tr>`;
   }).join('');
+  adminEl.innerHTML=`
+    <div class="card">
+      <div class="row-between">
+        <div><strong>${esc(track)}</strong> <span style="color:var(--text2)">· 미션 ${ms.length}개 · 단어 ${ms.reduce((n,s)=>n+db.vocabWords.filter(w=>w.set_id===s.id).length,0)}개</span></div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--text2)">첫 미션 오픈일</span>
+          <input type="date" class="date-in" id="vt-start" value="${esc(start)}">
+          <button class="btn sm blue" onclick="rescheduleTrack()">일주일에 하나씩 일정 짜기</button>
+        </div>
+      </div>
+      <div class="vhint" style="margin:8px 0 0">학생은 오픈일이 지난 미션을 <b>순서대로</b> 풀 수 있고, ${Math.round(VOCAB_PASS*100)}% 이상 맞히면 클리어돼 다음 미션이 열려요. 오픈일은 표에서 하나씩 바꿀 수도 있어요.</div>
+    </div>
+    <div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple mtable"><thead><tr><th>#</th><th>미션</th><th>오픈일</th><th>클리어</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+
+  // 학생별 진행
+  const boardEl=document.getElementById('vocab-student-board');
+  if(!students.length){boardEl.innerHTML='<div class="empty-hint">승인된 학생이 없습니다.</div>';return;}
+  const brows=students.map(u=>{
+    const st=missionStates(track,u.id);
+    const cleared=st.filter(m=>m.cleared).length;
+    const stars=st.reduce((n,m)=>n+m.stars,0);
+    const cur=st.find(m=>!m.cleared);
+    const last=db.vocabAttempts.filter(a=>a.student_id===u.id&&ms.some(s=>s.id===a.set_id)).sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0];
+    const pct=ms.length?Math.round(cleared/ms.length*100):0;
+    const curTxt=!cur?'<span class="pill green">전부 클리어</span>':cur.state==='date'?`${pad2(cur.no)} 오픈 대기`:cur.state==='prev'?`${pad2(cur.no-1)} 미클리어`:`${pad2(cur.no)} 도전 중`;
+    return `<tr><td>${esc(u.name)}</td>
+      <td style="min-width:120px"><div style="font-size:12px">${cleared}/${ms.length} · ★${stars}</div><div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%"></div></div></td>
+      <td style="font-size:12px;white-space:nowrap">${curTxt}</td>
+      <td style="font-size:12px;color:var(--text2);white-space:nowrap">${last?fmtMD(ymd(new Date(last.submitted_at))):'-'}</td></tr>`;
+  }).join('');
+  boardEl.innerHTML=`<div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple"><thead><tr><th>학생</th><th>진행</th><th>현재</th><th>최근</th></tr></thead><tbody>${brows}</tbody></table></div>`;
 }
-async function deleteVocabSet(setId){
-  if(!confirm('이 어휘 세트를 삭제하시겠습니까? 단어와 응시 기록도 함께 삭제됩니다.'))return;
-  await sb.from('vocab_attempts').delete().eq('set_id',setId);
-  await sb.from('vocab_words').delete().eq('set_id',setId);
-  await sb.from('vocab_sets').delete().eq('id',setId);
-  db.vocabAttempts=db.vocabAttempts.filter(a=>a.set_id!==setId);
-  db.vocabWords=db.vocabWords.filter(w=>w.set_id!==setId);
-  db.vocabSets=db.vocabSets.filter(s=>s.id!==setId);
+async function setMissionDate(setId,val){
+  const s=db.vocabSets.find(x=>x.id===setId);if(!s)return;
+  const{error}=await sb.from('vocab_sets').update({open_date:val||null}).eq('id',setId);
+  if(error){notify('저장 실패: '+error.message,'error');return;}
+  s.open_date=val||null;renderVocabAdmin();notify('오픈일을 바꿨습니다.','success');
+}
+async function rescheduleTrack(){
+  const track=vocabTrackSel;const start=document.getElementById('vt-start').value;
+  if(!track||!start){notify('첫 미션 오픈일을 골라주세요.','error');return;}
+  const ms=missionsOf(track);
+  if(!confirm(`${track} 미션 ${ms.length}개를 ${fmtMD(start)}부터 일주일에 하나씩 열리도록 바꿀까요?`))return;
+  const results=await Promise.all(ms.map((s,i)=>sb.from('vocab_sets').update({open_date:addDays(start,7*i)}).eq('id',s.id)));
+  const err=results.find(r=>r.error);
+  if(err){notify('일부 저장 실패: '+err.error.message,'error');}
+  ms.forEach((s,i)=>{if(!results[i].error)s.open_date=addDays(start,7*i);});
   renderVocabAdmin();
-  notify('어휘 세트를 삭제했습니다.','info');
+  if(!err)notify(`일정을 짰어요. 마지막 미션은 ${fmtMD(addDays(start,7*(ms.length-1)))}에 열려요.`,'success');
 }
 function renderVocabResults(setId){
   const el=document.getElementById('vocab-results');
   const set=db.vocabSets.find(s=>s.id===setId);
   const list=db.vocabAttempts.filter(a=>a.set_id===setId);
-  if(!list.length){el.innerHTML='<div class="empty-hint">아직 응시한 학생이 없습니다.</div>';return;}
-  const rows=list.map(a=>`<tr><td>${esc(userName(a.student_id))}</td><td>${a.score}/${a.total}</td></tr>`).join('');
-  el.innerHTML=`<div class="card"><strong>${esc(set?set.name:'')}</strong></div><table class="simple"><thead><tr><th>학생</th><th>점수</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const head=`<div class="card"><strong>${esc(set?(set.track?missionLabel(set)+' · ':'')+set.name:'')}</strong> <span style="color:var(--text2)">응시 결과</span></div>`;
+  if(!list.length){el.innerHTML=head+'<div class="empty-hint">아직 응시한 학생이 없습니다.</div>';el.scrollIntoView({behavior:'smooth',block:'nearest'});return;}
+  const bySt={};list.forEach(a=>{(bySt[a.student_id]=bySt[a.student_id]||[]).push(a);});
+  const wrongCount={};list.forEach(a=>(a.wrong_words||[]).forEach(w=>{wrongCount[w.word]=(wrongCount[w.word]||0)+1;}));
+  const topWrong=Object.entries(wrongCount).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const rows=Object.entries(bySt).map(([sid,arr])=>{const best=arr.reduce((b,a)=>ratio(a)>ratio(b)?a:b,arr[0]);
+    return `<tr><td>${esc(userName(sid))}</td><td>${best.score}/${best.total} ${starsHtml(starsOf(best))}</td><td>${arr.length}회</td><td>${isCleared(best)?'<span class="pill green">클리어</span>':'<span class="pill amber">미클리어</span>'}</td></tr>`;}).join('');
+  el.innerHTML=head+`<div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple"><thead><tr><th>학생</th><th>최고 점수</th><th>시도</th><th>상태</th></tr></thead><tbody>${rows}</tbody></table></div>`+
+    (topWrong.length?`<div class="card"><div style="font-size:12px;color:var(--text2);margin-bottom:4px">많이 틀린 단어</div>${topWrong.map(([w,c])=>`<span class="pill red" style="margin:2px">${esc(w)} ${c}</span>`).join('')}</div>`:'');
+  el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+async function deleteVocabSet(setId){
+  if(!confirm('이 미션(세트)을 삭제하시겠습니까? 단어와 응시 기록도 함께 삭제됩니다.'))return;
+  await sb.from('vocab_attempts').delete().eq('set_id',setId);
+  await sb.from('vocab_words').delete().eq('set_id',setId);
+  const{error}=await sb.from('vocab_sets').delete().eq('id',setId);
+  if(error){notify('삭제 실패: '+error.message,'error');return;}
+  db.vocabAttempts=db.vocabAttempts.filter(a=>a.set_id!==setId);
+  db.vocabWords=db.vocabWords.filter(w=>w.set_id!==setId);
+  db.vocabSets=db.vocabSets.filter(s=>s.id!==setId);
+  document.getElementById('vocab-results').innerHTML='';
+  renderVocabAdmin();
+  notify('삭제했습니다.','info');
 }
 
-/* ===================== 어휘 테스트 — 학생 ===================== */
+/* --- 엑셀/CSV 업로드 --- */
+let xlsxLoading=null;
+function loadXlsxLib(){
+  if(window.XLSX)return Promise.resolve();
+  if(xlsxLoading)return xlsxLoading;
+  xlsxLoading=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';s.onload=()=>res();s.onerror=()=>{xlsxLoading=null;rej(new Error('엑셀 읽기 도구를 불러오지 못했어요. 인터넷 연결을 확인해주세요.'));};document.head.appendChild(s);});
+  return xlsxLoading;
+}
+function splitCsvLine(line,delim){
+  if(delim==='\t')return line.split('\t');
+  const out=[];let cur='',q=false;
+  for(let i=0;i<line.length;i++){const c=line[i];
+    if(q){if(c==='"'&&line[i+1]==='"'){cur+='"';i++;}else if(c==='"')q=false;else cur+=c;}
+    else if(c==='"')q=true;else if(c===delim){out.push(cur);cur='';}else cur+=c;}
+  out.push(cur);return out;
+}
+const COLS={track:['교재','트랙','과정','구분','책'],lesson:['강','회차','단원','강 번호','강번호'],title:['강 제목','강제목','제목','단원명'],word:['단어','어휘','낱말'],hanja:['한자'],meaning:['뜻','의미','뜻풀이'],example:['예문','예시','예문(선택)']};
+function parseVocabSheets(sheets,fallbackTitle){
+  const out=[];const seen=new Set();let hasLesson=false;
+  sheets.forEach(rows=>{
+    rows=rows.map(r=>(r||[]).map(c=>c==null?'':String(c).trim()));
+    let hi=-1,map={};
+    for(let i=0;i<Math.min(rows.length,6);i++){
+      const m={};rows[i].forEach((h,ci)=>{Object.entries(COLS).forEach(([k,names])=>{if(m[k]==null&&names.includes(h.replace(/\s+/g,' ')))m[k]=ci;});});
+      if(m.word!=null&&m.meaning!=null){hi=i;map=m;break;}
+    }
+    if(hi<0)return;
+    if(map.lesson!=null)hasLesson=true;
+    rows.slice(hi+1).forEach(r=>{
+      const g=k=>map[k]!=null?(r[map[k]]||''):'';
+      const word=g('word'),meaning=g('meaning');if(!word||!meaning)return;
+      const track=g('track')||'기본';const ln=parseInt(g('lesson'),10);
+      const lesson=isNaN(ln)?null:ln;
+      const key=track+'|'+(lesson==null?'-':lesson)+'|'+word;
+      if(seen.has(key))return;seen.add(key); // 같은 단어가 여러 시트에 있어도 한 번만
+      out.push({track,lesson,title:g('title')||'',word,hanja:g('hanja')||null,meaning,example:g('example')||null});
+    });
+  });
+  // 강 번호가 없는 파일은 통째로 새 미션 하나로
+  out.forEach(r=>{if(r.lesson==null){r.title=r.title||fallbackTitle;}});
+  return{rows:out,hasLesson};
+}
+async function readVocabFile(){
+  const f=document.getElementById('vx-file').files[0];
+  if(!f)throw new Error('파일을 먼저 골라주세요.');
+  let sheets;
+  if(/\.(csv|txt)$/i.test(f.name)){
+    const text=(await f.text()).replace(/^﻿/,'');
+    const lines=text.split(/\r?\n/).filter(l=>l.trim());
+    const delim=lines[0]&&lines[0].includes('\t')?'\t':',';
+    sheets=[lines.map(l=>splitCsvLine(l,delim))];
+  }else{
+    await loadXlsxLib();
+    const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+    sheets=wb.SheetNames.map(n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:'',raw:false}));
+  }
+  return parseVocabSheets(sheets,f.name.replace(/\.[^.]+$/,''));
+}
+function groupVocabRows(rows){
+  const groups=new Map();
+  rows.forEach(r=>{const k=r.track+'|'+(r.lesson==null?'-':r.lesson);if(!groups.has(k))groups.set(k,{track:r.track,lesson:r.lesson,title:r.title,rows:[]});const g=groups.get(k);if(!g.title&&r.title)g.title=r.title;g.rows.push(r);});
+  return[...groups.values()];
+}
+// 업로드 내용을 기존 미션과 비교해서 "새 미션 / 기존 미션에 추가 / 이미 있음" 계획을 세움
+function planVocabImport(rows){
+  return groupVocabRows(rows).map(g=>{
+    const existing=g.lesson!=null?db.vocabSets.find(s=>s.track===g.track&&s.lesson_no===g.lesson):null;
+    const have=new Set(existing?db.vocabWords.filter(w=>w.set_id===existing.id).map(w=>w.word):[]);
+    const fresh=g.rows.filter(r=>!have.has(r.word));
+    return{...g,existing,fresh,dup:g.rows.length-fresh.length};
+  });
+}
+async function previewVocabFile(){
+  const el=document.getElementById('vx-preview');
+  try{
+    const{rows}=await readVocabFile();
+    if(!rows.length){el.innerHTML='<div class="empty-hint">단어를 찾지 못했어요. 첫 줄에 "단어", "뜻" 열 이름이 있는지 확인해주세요.</div>';return;}
+    const plan=planVocabImport(rows);
+    const newM=plan.filter(p=>!p.existing&&p.fresh.length),addM=plan.filter(p=>p.existing&&p.fresh.length);
+    const freshTotal=plan.reduce((n,p)=>n+p.fresh.length,0),dupTotal=plan.reduce((n,p)=>n+p.dup,0);
+    el.innerHTML=`<div class="card"><div>단어 <b>${rows.length}</b>개 인식 → 새로 저장할 단어 <b>${freshTotal}</b>개${dupTotal?` (이미 있는 ${dupTotal}개는 건너뜀)`:''}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px">새 미션 ${newM.length}개 · 기존 미션에 추가 ${addM.length}개</div>
+      <table class="simple" style="margin-top:8px"><thead><tr><th>교재</th><th>강</th><th>제목</th><th>새 단어</th></tr></thead><tbody>
+      ${plan.slice(0,8).map(p=>`<tr><td>${esc(p.track)}</td><td>${p.lesson==null?'-':p.lesson}</td><td>${esc(splitTitle(p.title).title)}</td><td>${p.fresh.length}${p.existing?' <span class="pill blue">추가</span>':''}</td></tr>`).join('')}
+      </tbody></table>${plan.length>8?`<div style="font-size:12px;color:var(--text2);margin-top:6px">...외 ${plan.length-8}개 강</div>`:''}</div>`;
+  }catch(e){el.innerHTML=`<div class="empty-hint">${esc(e.message)}</div>`;}
+}
+async function importVocabFile(){
+  let parsed;try{parsed=await readVocabFile();}catch(e){notify(e.message,'error');return;}
+  const btns=document.querySelectorAll('#t-vocab button');btns.forEach(b=>b.disabled=true);
+  try{
+    const r=await importVocabRows(parsed.rows);
+    if(!r.words){notify('새로 저장할 단어가 없어요 (전부 이미 있음).','info');return;}
+    document.getElementById('vx-file').value='';document.getElementById('vx-preview').innerHTML='';
+    renderVocabAdmin();
+    notify(`저장했어요: 새 미션 ${r.sets}개, 단어 ${r.words}개`,'success');
+  }catch(e){notify(e.message,'error');}
+  finally{btns.forEach(b=>b.disabled=false);}
+}
+// rows: [{track,lesson,title,word,hanja,meaning,example}] → 미션/단어 저장. 저장한 개수를 돌려줌
+async function importVocabRows(rows){
+  const plan=planVocabImport(rows).filter(p=>p.fresh.length);
+  if(!plan.length)return{sets:0,words:0};
+  {
+    const newSets=[],newWords=[];const touchedTracks=new Set();
+    plan.forEach(p=>{
+      let setId;
+      if(p.existing){setId=p.existing.id;}
+      else{
+        let lesson=p.lesson;
+        if(lesson==null){const ms=missionsOf(p.track).concat(newSets.filter(s=>s.track===p.track));lesson=ms.reduce((m,s)=>Math.max(m,s.lesson_no||0),0)+1;}
+        const{title}=splitTitle(p.title);
+        const s={id:uid('vs_'),name:`${p.track} ${lesson}강${title?' · '+title:''}`,track:p.track,lesson_no:lesson,lesson_title:p.title||null,open_date:null};
+        newSets.push(s);setId=s.id;touchedTracks.add(p.track);
+      }
+      const base=db.vocabWords.filter(w=>w.set_id===setId).reduce((m,w)=>Math.max(m,w.sort_no||0),0);
+      p.fresh.forEach((r,i)=>newWords.push({id:uid('vw_')+'_'+newWords.length,set_id:setId,word:r.word,hanja:r.hanja,meaning:r.meaning,example:r.example,sort_no:base+i+1}));
+    });
+    // 새 미션 오픈일: 그 교재의 기존 일정을 이어서, 없으면 이번 주 월요일부터 일주일 간격
+    touchedTracks.forEach(t=>{
+      const all=missionsOf(t).concat(newSets.filter(s=>s.track===t)).sort((a,b)=>a.lesson_no-b.lesson_no);
+      const first=all.find(s=>s.open_date);const firstIdx=first?all.indexOf(first):0;
+      const start=first?addDays(first.open_date,-7*firstIdx):mondayOf(todayStr());
+      all.forEach((s,i)=>{if(!s.open_date&&newSets.includes(s))s.open_date=addDays(start,7*i);});
+    });
+    if(newSets.length){const{error}=await sb.from('vocab_sets').insert(newSets);if(error)throw new Error(error.message+' (schema_add4.sql을 실행했는지 확인해주세요)');db.vocabSets.push(...newSets);}
+    for(let i=0;i<newWords.length;i+=200){const chunk=newWords.slice(i,i+200);const{error}=await sb.from('vocab_words').insert(chunk);if(error)throw new Error('단어 저장 실패: '+error.message+' — 다시 올리면 빠진 단어만 이어서 저장돼요.');db.vocabWords.push(...chunk);}
+    if(newSets.length)vocabTrackSel=newSets[0].track;
+    return{sets:newSets.length,words:newWords.length};
+  }
+}
+
+/* --- 몇 단어 직접 추가 --- */
+function renderVocabTargetOptions(){
+  const sel=document.getElementById('vs-target');if(!sel)return;
+  const cur=sel.value;
+  let html='<option value="">새 자유 세트 만들기</option>';
+  vocabTracks().forEach(t=>{html+=`<optgroup label="${esc(t)}">`+missionsOf(t).map((s,i)=>`<option value="${esc(s.id)}">${pad2(i+1)} · ${esc(s.name)}</option>`).join('')+'</optgroup>';});
+  const free=db.vocabSets.filter(s=>!s.track);
+  if(free.length)html+='<optgroup label="자유 세트">'+free.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')+'</optgroup>';
+  sel.innerHTML=html;
+  if([...sel.options].some(o=>o.value===cur))sel.value=cur;
+  onVocabTargetChange();
+}
+function onVocabTargetChange(){
+  const sel=document.getElementById('vs-target');const wrap=document.getElementById('vs-name-wrap');
+  if(sel&&wrap)wrap.style.display=sel.value?'none':'';
+}
+function parseVocabText(text){
+  return text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(line=>{
+    const parts=splitCsvLine(line,line.includes('\t')?'\t':',').map(p=>p.trim());
+    return{word:parts[0]||'',meaning:parts[1]||'',example:parts.slice(2).join(', ')||''};
+  }).filter(r=>r.word&&r.meaning&&!(r.word==='단어'&&r.meaning==='뜻'));
+}
+async function getVocabRows(){return parseVocabText(document.getElementById('vs-paste').value);}
+async function previewVocabParse(){
+  const rows=await getVocabRows();
+  const el=document.getElementById('vs-preview');
+  if(!rows.length){el.innerHTML='<div class="empty-hint">인식된 단어가 없습니다. "단어, 뜻, 예문" 형식인지 확인해주세요.</div>';return;}
+  el.innerHTML=`<div class="card">${rows.length}개 단어 인식됨<table class="simple" style="margin-top:8px"><thead><tr><th>단어</th><th>뜻</th><th>예문</th></tr></thead><tbody>${rows.slice(0,5).map(r=>`<tr><td>${esc(r.word)}</td><td>${esc(r.meaning)}</td><td>${esc(r.example||'')}</td></tr>`).join('')}</tbody></table>${rows.length>5?`<div style="color:var(--text2);font-size:12px;margin-top:6px">...외 ${rows.length-5}개</div>`:''}</div>`;
+}
+async function saveVocabSet(){
+  const target=document.getElementById('vs-target').value;
+  const rows=await getVocabRows();
+  if(!rows.length){notify('단어를 입력하세요.','error');return;}
+  let setId=target,created=null;
+  if(!target){
+    const name=document.getElementById('vs-name').value.trim();
+    if(!name){notify('새 세트 이름을 입력하세요.','error');return;}
+    if(rows.length<4){notify('새 세트는 단어가 4개 이상 있어야 4지선다를 만들 수 있어요.','error');return;}
+    created={id:uid('vs_'),name};
+    const{error:e1}=await sb.from('vocab_sets').insert(created);
+    if(e1){notify('저장 실패: '+e1.message,'error');return;}
+    setId=created.id;
+  }
+  const have=new Set(db.vocabWords.filter(w=>w.set_id===setId).map(w=>w.word));
+  const fresh=rows.filter(r=>!have.has(r.word));
+  if(!fresh.length){notify('이미 들어 있는 단어들이에요.','info');return;}
+  const base=db.vocabWords.filter(w=>w.set_id===setId).reduce((m,w)=>Math.max(m,w.sort_no||0),0);
+  const wordRows=fresh.map((r,i)=>({id:uid('vw_')+'_'+i,set_id:setId,word:r.word,meaning:r.meaning,example:r.example||null,sort_no:base+i+1}));
+  const{error:e2}=await sb.from('vocab_words').insert(wordRows);
+  if(e2){notify('단어 저장 실패: '+e2.message,'error');return;}
+  if(created)db.vocabSets.unshift(created);
+  db.vocabWords.push(...wordRows);
+  document.getElementById('vs-name').value='';document.getElementById('vs-paste').value='';document.getElementById('vs-preview').innerHTML='';
+  renderVocabAdmin();
+  notify(`단어 ${wordRows.length}개를 저장했습니다${rows.length>fresh.length?` (중복 ${rows.length-fresh.length}개 제외)`:''}.`,'success');
+}
+
+/* ===================== 어휘 미션 — 학생 ===================== */
 function renderVocabPick(){
   const el=document.getElementById('vocab-set-pick');
-  if(!el)return;
-  if(!db.vocabSets.length){el.innerHTML='<div class="empty-hint">등록된 어휘 세트가 없습니다.</div>';return;}
-  el.innerHTML=db.vocabSets.map(s=>{
-    const cnt=db.vocabWords.filter(w=>w.set_id===s.id).length;
-    const mine=db.vocabAttempts.filter(a=>a.set_id===s.id&&a.student_id===session.id).sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0];
-    return `<div class="card row-between">
-      <div><strong>${esc(s.name)}</strong> <span style="color:var(--text2)">· 단어 ${cnt}개</span>${mine?` <span class="pill green">최근 ${mine.score}/${mine.total}</span>`:''}</div>
-      <button class="btn blue sm" onclick="startVocabTest('${esc(s.id)}')">${mine?'다시 풀기':'시작'}</button>
-    </div>`;
-  }).join('');
+  if(!el||!session)return;
+  const track=pickDefaultTrack(session.id);vocabTrackSel=track;
+  document.getElementById('vs-track-chips').innerHTML=trackChipsHtml(track);
+  let html='';
+  if(track){
+    const st=missionStates(track,session.id);
+    const cleared=st.filter(m=>m.cleared).length,stars=st.reduce((n,m)=>n+m.stars,0);
+    const pct=st.length?Math.round(cleared/st.length*100):0;
+    const cur=st.find(m=>m.state==='open');
+    const nextLocked=st.find(m=>m.state==='date');
+    let nextHtml;
+    if(cur){const{title}=splitTitle(cur.set.lesson_title||cur.set.name);
+      nextHtml=`<div><div style="font-size:12px;color:var(--text2)">지금 도전할 미션</div><div style="font-weight:700">MISSION ${pad2(cur.no)} · ${esc(title)}</div></div><button class="btn blue" onclick="startVocabTest('${esc(cur.set.id)}')">${cur.tries?'재도전':'도전하기'} ▶</button>`;}
+    else if(cleared===st.length&&st.length){nextHtml=`<div style="font-weight:700">🏆 모든 미션을 클리어했어요!</div>`;}
+    else if(nextLocked){const d=daysUntil(nextLocked.set.open_date);nextHtml=`<div><div style="font-size:12px;color:var(--text2)">다음 미션</div><div style="font-weight:700">MISSION ${pad2(nextLocked.no)} · ${fmtMD(nextLocked.set.open_date)} 오픈 (D-${d})</div></div><span class="pill green">이번 주 미션 완료</span>`;}
+    else nextHtml='';
+    html+=`<div class="m-hero">
+      <div class="eyebrow">${esc(track)} 어휘 미션</div>
+      <div class="big">${cleared} / ${st.length} 클리어 <span class="stars" style="font-size:16px;margin-left:6px">★ ${stars}</span></div>
+      <div class="progress-bar" style="height:7px;margin-top:8px"><div class="progress-bar-fill" style="width:${pct}%;background:var(--green)"></div></div>
+      ${nextHtml?`<div class="next">${nextHtml}</div>`:''}
+    </div>
+    <div class="m-grid">${st.map(m=>missionTileHtml(m)).join('')}</div>`;
+  }
+  const free=db.vocabSets.filter(s=>!s.track);
+  if(free.length){
+    html+=`<div class="section-head" style="margin-top:24px"><h2>자유 테스트</h2></div>`+free.map(s=>{
+      const cnt=db.vocabWords.filter(w=>w.set_id===s.id).length;const best=bestAttempt(s.id,session.id);
+      return `<div class="card row-between"><div><strong>${esc(s.name)}</strong> <span style="color:var(--text2)">· 단어 ${cnt}개</span>${best?` <span class="pill green">최고 ${best.score}/${best.total}</span>`:''}</div><button class="btn blue sm" onclick="startVocabTest('${esc(s.id)}')">${best?'다시 풀기':'시작'}</button></div>`;
+    }).join('');
+  }
+  el.innerHTML=html||'<div class="empty-hint">아직 열린 어휘 미션이 없어요.</div>';
 }
-let currentVocabQuiz=null;
-function shuffle(arr){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
-function startVocabTest(setId){
-  const words=db.vocabWords.filter(w=>w.set_id===setId);
-  if(words.length<2){notify('단어가 부족합니다.','error');return;}
-  const questions=shuffle(words).map(w=>{
-    const distractors=shuffle(words.filter(x=>x.id!==w.id)).slice(0,3).map(x=>x.meaning);
-    const choices=shuffle([w.meaning,...distractors]);
-    return{wordId:w.id,word:w.word,meaning:w.meaning,example:w.example,choices};
-  });
-  currentVocabQuiz={setId,questions,answers:{}};
-  renderVocabTake();
-}
-function renderVocabTake(){
-  const el=document.getElementById('vocab-take-area');
-  const q=currentVocabQuiz;
-  if(!q){el.innerHTML='';return;}
-  el.innerHTML=`<div class="card"><strong>어휘 테스트</strong> <span style="color:var(--text2)">· 총 ${q.questions.length}문항</span></div>`+
-    q.questions.map((item,i)=>`
-      <div class="card">
-        <div class="row-between"><strong>${i+1}. ${esc(item.word)}</strong></div>
-        <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
-          ${item.choices.map(c=>`<button type="button" class="btn" data-qi="${i}" data-val="${esc(c)}" onclick="pickVocabChoice(${i},this)" style="text-align:left">${esc(c)}</button>`).join('')}
-        </div>
-      </div>`).join('')+
-    `<button class="btn blue" onclick="submitVocabTest()">제출하기</button><div id="vocab-result-box" style="margin-top:12px"></div>`;
-}
-function pickVocabChoice(qi,btn){
-  currentVocabQuiz.answers[qi]=btn.dataset.val;
-  [...btn.parentElement.children].forEach(b=>b.classList.remove('blue'));
-  btn.classList.add('blue');
-}
-async function submitVocabTest(){
-  const q=currentVocabQuiz;if(!q)return;
-  const unanswered=q.questions.some((_,i)=>q.answers[i]==null);
-  if(unanswered){notify('모든 문항에 답해주세요.','error');return;}
-  let score=0;const wrongWords=[];
-  q.questions.forEach((item,i)=>{
-    if(q.answers[i]===item.meaning)score++;
-    else wrongWords.push({word:item.word,meaning:item.meaning,example:item.example,picked:q.answers[i]});
-  });
-  const row={id:uid('va_'),set_id:q.setId,student_id:session.id,score,total:q.questions.length,wrong_words:wrongWords,submitted_at:new Date().toISOString()};
-  const{error}=await sb.from('vocab_attempts').insert(row);
-  if(error){notify('제출 실패: '+error.message+' (schema_add3.sql을 실행하셨는지 확인해주세요)','error');return;}
-  db.vocabAttempts.push(row);
-  const box=document.getElementById('vocab-result-box');
-  const wrongHtml=wrongWords.length?wrongWords.map(w=>`<div class="card"><strong>${esc(w.word)}</strong> → 정답 ${esc(w.meaning)}${w.example?`<div style="color:var(--text2);margin-top:4px">${esc(w.example)}</div>`:''}</div>`).join(''):'<div class="empty-hint">모두 정답입니다! 🎉</div>';
-  box.innerHTML=`<div class="card"><strong>채점 결과</strong> · ${score}/${q.questions.length} 정답</div>${wrongHtml}`;
-  currentVocabQuiz=null;
-  renderVocabPick();renderMyVocabResults();
-  notify('어휘 테스트를 제출했습니다.','success');
+function missionTileHtml(m){
+  const{cat,title}=splitTitle(m.set.lesson_title||m.set.name);
+  let cls='m-tile',foot,click=`onclick="startVocabTest('${esc(m.set.id)}')"`;
+  if(m.state==='cleared'){cls+=' cleared';foot=`${starsHtml(m.stars)} <span style="margin-left:4px">${m.best.score}/${m.best.total}</span>`;}
+  else if(m.state==='open'){cls+=m.tries?' open tried':' open';foot=m.tries?`<span style="color:var(--amber)">최고 ${m.best?m.best.score+'/'+m.best.total:'-'} · 재도전!</span>`:'<span style="color:var(--accent);font-weight:600">도전하기 ▶</span>';}
+  else if(m.state==='date'){cls+=' locked';click=`onclick="notify('${fmtMD(m.set.open_date)}에 열려요.','info')"`;foot=`🔒 ${fmtMD(m.set.open_date)} 오픈`;}
+  else{cls+=' locked';click=`onclick="notify('앞 미션을 먼저 클리어해야 열려요.','info')"`;foot='🔒 앞 미션 클리어 필요';}
+  return `<button type="button" class="${cls}" ${click}>
+    <div class="m-no">${m.state==='cleared'?'✓ ':''}MISSION ${pad2(m.no)}</div>
+    ${cat?`<div class="m-cat">${esc(cat)}</div>`:''}
+    <div class="m-title">${esc(title)}</div>
+    <div class="m-foot">${foot}</div></button>`;
 }
 function renderMyVocabResults(){
   const el=document.getElementById('my-vocab-results');
-  if(!el)return;
-  const mine=db.vocabAttempts.filter(a=>a.student_id===session.id).sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at));
-  if(!mine.length){el.innerHTML='<div class="empty-hint">아직 응시한 어휘 테스트가 없습니다.</div>';return;}
-  el.innerHTML=mine.map(a=>{
+  if(!el||!session)return;
+  const mine=db.vocabAttempts.filter(a=>a.student_id===session.id).sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at)).slice(0,5);
+  if(!mine.length){el.innerHTML='';return;}
+  el.innerHTML='<div class="section-head" style="margin-top:24px"><h2>최근 기록</h2></div>'+mine.map(a=>{
     const set=db.vocabSets.find(s=>s.id===a.set_id);
-    return `<div class="card row-between"><span>${esc(set?set.name:'(삭제된 세트)')}</span><span>${a.score}/${a.total}</span></div>`;
+    return `<div class="card row-between"><span>${set?(set.track?esc(set.track)+' '+missionLabel(set)+' · ':'')+esc(splitTitle(set.lesson_title||set.name).title):'(삭제된 세트)'}</span><span>${a.score}/${a.total} ${isCleared(a)?'<span class="pill green">클리어</span>':''}</span></div>`;
   }).join('');
+}
+
+/* --- 문제 풀기: 한 문제씩, 바로 정답 확인 --- */
+function buildVocabQuestions(set){
+  const words=wordsOf(set.id);
+  let pool=words;
+  if(pool.length<4){ // 단어가 적은 세트는 같은 교재의 다른 단어로 오답 보기를 채움
+    const sameTrack=new Set(set.track?missionsOf(set.track).map(s=>s.id):[]);
+    pool=words.concat(db.vocabWords.filter(w=>w.set_id!==set.id&&sameTrack.has(w.set_id)));
+  }
+  return shuffle(words).map((w,i)=>{
+    const type=i%2===0?'meaning':'word'; // 뜻 고르기 / 단어 고르기 번갈아
+    const key=type==='meaning'?'meaning':'word';
+    const seen=new Set([w[key]]),ds=[];
+    for(const o of shuffle(pool)){if(o.id===w.id||seen.has(o[key]))continue;seen.add(o[key]);ds.push(o[key]);if(ds.length>=3)break;}
+    return{type,w,choices:shuffle([{text:w[key],correct:true},...ds.map(t=>({text:t,correct:false}))])};
+  });
+}
+function startVocabTest(setId){
+  const set=db.vocabSets.find(s=>s.id===setId);if(!set)return;
+  if(set.track){const m=missionStates(set.track,session.id).find(x=>x.set.id===setId);if(m&&(m.state==='date'||m.state==='prev')){notify('아직 열리지 않은 미션이에요.','info');return;}}
+  const words=wordsOf(setId);
+  if(words.length<2){notify('단어가 부족합니다.','error');return;}
+  currentVocabQuiz={setId,set,questions:buildVocabQuestions(set),idx:0,picks:[],done:false};
+  renderVocabTake();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function highlightExample(ex,word){
+  const e=esc(ex);const stem=word.replace(/(하다|되다|시키다|스럽다|롭다|다)$/,'');
+  if(stem.length<1)return e;const s=esc(stem);const i=e.indexOf(s);
+  return i<0?e:e.slice(0,i)+'<mark>'+s+'</mark>'+e.slice(i+s.length);
+}
+function renderVocabTake(){
+  const el=document.getElementById('vocab-take-area');const home=document.getElementById('vocab-home');
+  const q=currentVocabQuiz;
+  if(!q){el.innerHTML='';home.style.display='';return;}
+  home.style.display='none';
+  if(q.done){el.innerHTML=q.resultHtml;return;}
+  const item=q.questions[q.idx];const picked=q.picks[q.idx];const answered=picked!=null;
+  const total=q.questions.length;const w=item.w;
+  const prompt=item.type==='meaning'
+    ?`<div class="q-prompt">${esc(w.word)}${w.hanja?`<span class="q-hanja">${esc(w.hanja)}</span>`:''}</div>`
+    :`<div class="q-prompt long">${esc(w.meaning)}</div>`;
+  const choices=item.choices.map((c,ci)=>{
+    let cls='q-choice';if(answered){if(c.correct)cls+=' correct';else if(ci===picked)cls+=' wrong';}
+    return `<button type="button" class="${cls}" ${answered?'disabled':''} onclick="pickVocabChoice(${ci})">${esc(c.text)}</button>`;
+  }).join('');
+  const ok=answered&&item.choices[picked].correct;
+  const feedback=answered?`<div class="q-feedback">
+      <div style="font-weight:700;color:${ok?'var(--green)':'var(--red)'}">${ok?'정답!':'아쉬워요'}</div>
+      <div style="margin-top:4px"><b>${esc(w.word)}</b>${w.hanja?` (${esc(w.hanja)})`:''} — ${esc(w.meaning)}</div>
+      ${w.example?`<div style="color:var(--text2);margin-top:4px">예) ${highlightExample(w.example,w.word)}</div>`:''}
+    </div>
+    <button class="btn blue" style="margin-top:12px;width:100%" onclick="nextVocabQ()">${q.idx+1<total?'다음 문제 ▶':'결과 보기'}</button>`:'';
+  const correctSoFar=q.picks.filter((p,i)=>p!=null&&q.questions[i].choices[p].correct).length;
+  el.innerHTML=`<div class="q-wrap">
+    <div class="q-top"><div><span style="font-family:var(--mono);font-size:12px;color:var(--text2)">${esc(q.set.track?missionLabel(q.set):'자유 테스트')}</span> <strong style="margin-left:4px">${esc(splitTitle(q.set.lesson_title||q.set.name).title)}</strong></div>
+      <button class="btn sm" onclick="quitVocabTest()">그만하기</button></div>
+    <div class="row-between" style="font-size:12px;color:var(--text2)"><span>${q.idx+1} / ${total}</span><span>맞힘 ${correctSoFar}</span></div>
+    <div class="progress-bar" style="height:6px;margin:4px 0 14px"><div class="progress-bar-fill" style="width:${Math.round((q.idx+(answered?1:0))/total*100)}%"></div></div>
+    <div class="card">
+      <div class="q-type">${item.type==='meaning'?'알맞은 뜻을 고르세요':'이 뜻에 맞는 단어를 고르세요'}</div>
+      ${prompt}
+      ${choices}
+      ${feedback}
+    </div></div>`;
+}
+function pickVocabChoice(ci){
+  const q=currentVocabQuiz;if(!q||q.picks[q.idx]!=null)return;
+  q.picks[q.idx]=ci;renderVocabTake();
+}
+function nextVocabQ(){
+  const q=currentVocabQuiz;if(!q)return;
+  if(q.idx+1<q.questions.length){q.idx++;renderVocabTake();}
+  else submitVocabTest();
+}
+function quitVocabTest(){
+  if(currentVocabQuiz&&!currentVocabQuiz.done&&currentVocabQuiz.picks.length&&!confirm('그만두면 이번 도전은 기록되지 않아요. 그만할까요?'))return;
+  currentVocabQuiz=null;renderVocabTake();renderVocabPick();renderMyVocabResults();
+}
+async function submitVocabTest(){
+  const q=currentVocabQuiz;if(!q||q.done)return;
+  let score=0;const wrongWords=[];
+  q.questions.forEach((item,i)=>{
+    const p=q.picks[i];const c=p!=null&&item.choices[p].correct;
+    if(c)score++;else wrongWords.push({word:item.w.word,meaning:item.w.meaning,example:item.w.example,type:item.type,picked:p!=null?item.choices[p].text:null});
+  });
+  const total=q.questions.length;
+  const before=q.set.track?missionStates(q.set.track,session.id).find(m=>m.set.id===q.setId):null;
+  const row={id:uid('va_'),set_id:q.setId,student_id:session.id,score,total,wrong_words:wrongWords,submitted_at:new Date().toISOString()};
+  const{error}=await sb.from('vocab_attempts').insert(row);
+  if(error){notify('기록 저장 실패: '+error.message,'error');}
+  else db.vocabAttempts.push(row);
+  const r=score/total;const pass=r>=VOCAB_PASS;const stars=starsOf(row);
+  const firstClear=pass&&before&&!before.cleared;
+  let nextBtn='';
+  if(pass&&q.set.track){
+    const nxt=missionStates(q.set.track,session.id).find(m=>m.state==='open');
+    if(nxt&&nxt.set.id!==q.setId)nextBtn=`<button class="btn blue" onclick="startVocabTest('${esc(nxt.set.id)}')">다음 미션 ▶</button>`;
+    else{const lk=missionStates(q.set.track,session.id).find(m=>m.state==='date');if(lk)nextBtn=`<span class="pill blue" style="align-self:center">다음 미션은 ${fmtMD(lk.set.open_date)}에 열려요</span>`;}
+  }
+  const wrongHtml=wrongWords.length?`<div class="section-head" style="margin-top:18px"><h2>틀린 단어 다시 보기</h2></div>`+wrongWords.map(w=>`<div class="card"><strong>${esc(w.word)}</strong> — ${esc(w.meaning)}${w.example?`<div style="color:var(--text2);margin-top:4px;font-size:13px">예) ${highlightExample(w.example,w.word)}</div>`:''}</div>`).join(''):'';
+  q.done=true;
+  q.resultHtml=`<div class="q-wrap"><div class="card clear-banner">
+      <div style="font-family:var(--mono);font-size:12px;color:var(--text2);letter-spacing:1px">${esc(q.set.track?missionLabel(q.set):'자유 테스트')}</div>
+      <div class="t" style="color:${pass?'var(--green)':'var(--text)'}">${pass?(firstClear?'MISSION CLEAR!':'CLEAR!'):'조금만 더!'}</div>
+      ${q.set.track||pass?`<div class="stars">${'★'.repeat(stars)}<span class="off">${'★'.repeat(3-stars)}</span></div>`:''}
+      <div style="font-size:15px">${total}문제 중 <b>${score}</b>개 정답 (${Math.round(r*100)}%)</div>
+      ${pass?'':`<div style="font-size:12px;color:var(--text2);margin-top:4px">${Math.ceil(total*VOCAB_PASS)}개 이상 맞히면 클리어예요</div>`}
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap">
+        <button class="btn" onclick="startVocabTest('${esc(q.setId)}')">${pass?(stars===3?'다시 풀기':'★ 더 받기 재도전'):'다시 도전'}</button>
+        ${nextBtn}
+        <button class="btn" onclick="quitVocabTest()">미션 맵으로</button>
+      </div></div>${wrongHtml}</div>`;
+  renderVocabTake();
 }
 
 /* ===================== 시작 ===================== */

@@ -889,14 +889,14 @@ function renderVideoAdmin(){
   renderVideoAlerts();
 }
 /* ---- 영상 시청 분석: 배속 · 건너뛴 구간 ---- */
-const FAST_RATE=1.5;      // 이 배속 이상으로 본 시간을 확인
+const FAST_RATE=1.5;      // 정상 속도는 1.5배까지 허용, 그보다 빠르게 본 시간을 확인
 const FAST_ALERT_SEC=10;  // 1.5배 이상으로 10초 넘게 보면 알림
 const SKIP_ALERT_SEC=30;  // 건너뛴 구간이 합쳐서 30초 넘으면 알림
 function fmtClock(sec){sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s2=sec%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s2).padStart(2,'0');}
 function watchInfo(p){
   if(!p)return null;
   const rates=p.rate_seconds||{};
-  const fastSec=Object.entries(rates).filter(([k])=>parseFloat(k)>=FAST_RATE).reduce((n,[,v])=>n+v,0);
+  const fastSec=Object.entries(rates).filter(([k])=>parseFloat(k)>FAST_RATE).reduce((n,[,v])=>n+v,0);
   const maxRate=p.max_rate||1;
   const info={maxRate,fastSec,rates,skips:[],skipTotal:0,hasRanges:false,remaining:0,pct:Math.round(p.percent||0)};
   const R=Array.isArray(p.watched_ranges)?p.watched_ranges.slice().sort((a,b)=>a[0]-b[0]):null;
@@ -933,9 +933,9 @@ function renderVideoAlerts(){
   if(badge)badge.innerHTML=list.length?`<span class="tab-badge">${list.length}</span>`:'';
   if(!list.length){el.innerHTML='';return;}
   el.innerHTML=`<div class="card alert-card" style="margin-bottom:18px">
-    <div class="row-between" style="margin-bottom:4px"><strong>🔔 영상 시청 확인 필요 ${list.length}건</strong><span style="font-size:11px;color:var(--text3)">${FAST_RATE}배 이상 ${FAST_ALERT_SEC}초 넘게 · 건너뛴 구간 ${SKIP_ALERT_SEC}초 이상</span></div>
+    <div class="row-between" style="margin-bottom:4px"><strong>🔔 영상 시청 확인 필요 ${list.length}건</strong><span style="font-size:11px;color:var(--text3)">${FAST_RATE}배 초과 ${FAST_ALERT_SEC}초 넘게 · 건너뛴 구간 ${SKIP_ALERT_SEC}초 이상</span></div>
     ${list.map(f=>{const v=db.videos.find(x=>x.id===f.p.video_id);return `<div class="alert-row"><div><strong>${esc(userName(f.p.student_id))}</strong> <span style="font-size:12px;color:var(--text2)">${esc(v?v.title:'(삭제된 영상)')}</span>
-      <div style="margin-top:2px;font-size:12px">${f.fast?`<span class="pill amber">최고 ${f.maxRate}배 · ${FAST_RATE}배 이상 ${fmtTime(f.fastSec)}</span> `:''}${f.skip?`<span class="pill red">건너뜀 ${fmtTime(f.skipTotal)}</span> <span style="color:var(--text2)">${f.skips.slice(0,4).map(([a,b])=>fmtClock(a)+'~'+fmtClock(b)).join(', ')}${f.skips.length>4?' 외':''}</span>`:''}</div></div>
+      <div style="margin-top:2px;font-size:12px">${f.fast?`<span class="pill amber">최고 ${f.maxRate}배 · ${FAST_RATE}배 초과 ${fmtTime(f.fastSec)}</span> `:''}${f.skip?`<span class="pill red">건너뜀 ${fmtTime(f.skipTotal)}</span> <span style="color:var(--text2)">${f.skips.slice(0,4).map(([a,b])=>fmtClock(a)+'~'+fmtClock(b)).join(', ')}${f.skips.length>4?' 외':''}</span>`:''}</div></div>
       <div style="display:flex;gap:6px;align-items:center"><span style="font-size:12px;color:var(--text2)">${f.p.updated_at?fmtMD(ymd(new Date(f.p.updated_at))):''}</span><button class="btn sm" onclick="ackVideoAlert('${esc(videoAckKey(f))}')">확인함</button></div></div>`;}).join('')}
   </div>`;
 }
@@ -1178,11 +1178,11 @@ function checkPlayWarnings(rate){
   const el=document.getElementById('play-warn');
   if(!el||!session||session.role!=='student'||!currentVid)return;
   const parts=[];
-  if(rate>=STU_FAST_WARN)parts.push(`<div class="w"><span>⚠️ 지금 <b>${rate}배속</b>으로 보고 있어요. 배속 기록은 쏠T 선생님께 전달돼요. 내용을 놓치지 않게 속도를 낮춰 주세요.</span></div>`);
+  if(rate>=STU_FAST_WARN)parts.push(`<div class="w"><span>⚠️ 지금 <b>${rate}배속</b>으로 보고 있습니다. <b>1.5배 이하로 낮추지 않으면 영상 시청 안 함으로 부모님께 보고되며, 학원에 나와서 다시 영상을 봐야 합니다.</b></span></div>`);
   const sk=skippedNow();const total=sk.reduce((n,[a,b])=>n+b-a+1,0);
   if(total>=STU_SKIP_WARN&&total>skipWarnDismissed){
     const links=sk.slice(0,4).map(([a,b])=>`<span class="seek" onclick="seekPlay(${a})">${fmtClock(a)}~${fmtClock(b)}</span>`).join(', ')+(sk.length>4?' 외':'');
-    parts.push(`<div class="w amber"><span>⏭ 건너뛴 구간이 <b>${fmtTime(total)}</b>예요: ${links}<br>건너뛴 기록은 쏠T 선생님께 전달돼요. 구간을 누르면 그 부분부터 볼 수 있어요.</span><button title="닫기" onclick="dismissSkipWarn(${total})">✕</button></div>`);
+    parts.push(`<div class="w"><span>⚠️ 건너뛴 구간이 있습니다: ${links} (총 ${fmtTime(total)})<br><b>건너뛴 구간으로 돌아가 다시 보지 않으면 영상 시청 안 함으로 부모님께 보고되며, 학원에 나와서 다시 영상을 봐야 합니다.</b><br><span style="font-size:12px;opacity:.8">구간을 누르면 그 부분부터 재생돼요.</span></span></div>`);
   }
   el.innerHTML=parts.join('');el.style.display=parts.length?'flex':'none';
 }

@@ -77,6 +77,7 @@ input,button,select,textarea{font-family:var(--font)}
 .btn.green{background:var(--green);border-color:var(--green);color:#fff}
 .btn.red{background:var(--red);border-color:var(--red);color:#fff}
 .btn.sm{padding:5px 10px;font-size:12px}
+a.btn{text-decoration:none;display:inline-block}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 
 .tabnav{display:flex;gap:4px;padding:10px 20px 0;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto}
@@ -432,14 +433,20 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div class="section-head"><h2>학생별 성적표</h2></div>
       <div class="form-group"><select class="form-select" id="report-student-sel" onchange="renderReportCard()"></select></div>
       <div class="card" style="margin-top:12px">
-        <div style="font-weight:600;margin-bottom:4px">학부모님께 PDF로 보내기</div>
-        <div class="vhint">지금까지의 강의 시청(배속·건너뛴 구간 포함), 출석, 어휘 미션, 시험 성적이 A4 PDF로 만들어지고, 문자로 보낼 수 있는 링크가 생겨요. 만든 날 기준으로 고정돼요.</div>
-        <div class="form-group"><label>쏠T 선생님 한마디 (선택)</label><textarea class="form-input" id="pr-note" rows="3" placeholder="예: 이번 달 어휘 미션을 꾸준히 잘하고 있어요. 영상은 배속 없이 보도록 지도 부탁드려요."></textarea></div>
-        <button class="btn blue" id="pr-make-btn" onclick="makeParentReport()">학부모용 PDF 만들기</button>
+        <div style="font-weight:600;margin-bottom:4px">주간 성적표 (학부모님께 PDF로 보내기)</div>
+        <div class="vhint">고른 기간의 <b>출석(날짜별)</b>, <b>어휘 미션</b>, <b>시험 성적</b>이 들어가요. 보충 강의는 그 기간에 본 학생만 들어가요. 아래 미리보기 모양 그대로 PDF가 돼요.</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+          <input type="date" class="date-in" id="rp-start" onchange="renderReportCard()"> ~ <input type="date" class="date-in" id="rp-end" onchange="renderReportCard()">
+          <button class="btn sm" onclick="setReportRange('last7')">최근 7일</button><button class="btn sm" onclick="setReportRange('thisweek')">이번 주</button><button class="btn sm" onclick="setReportRange('lastweek')">지난주</button>
+        </div>
+        <div class="form-group"><label>쏠T 선생님 한마디 (선택)</label><textarea class="form-input" id="pr-note" rows="3" oninput="renderReportPreview()" placeholder="예: 이번 주 어휘 미션을 모두 완료했어요. 다음 주 시험 대비로 지문 복습 부탁드려요."></textarea></div>
+        <button class="btn blue" id="pr-make-btn" onclick="makeParentReport()">이 내용으로 PDF 만들기</button>
         <div id="pr-result" style="margin-top:10px"></div>
         <div id="pr-list"></div>
       </div>
-      <div id="report-card-area" style="margin-top:12px"></div>
+      <div class="section-head" style="margin-top:20px"><h2>미리보기</h2></div>
+      <div id="rp-preview" style="overflow:hidden;border-radius:12px;background:#fff"></div>
+      <div id="report-card-area" style="display:none"></div>
     </div>
 
   </div>
@@ -622,7 +629,9 @@ function switchTab(scope,id){
   const root=scope==='teacher'?'#page-teacher':'#page-student';
   document.querySelectorAll(root+' .tabnav button').forEach(b=>b.classList.toggle('active',b.dataset.t===id));
   document.querySelectorAll(root+' .section').forEach(s=>s.classList.toggle('active',s.id===id));
+  if(id==='t-report')renderReportPreview(); // 보이는 상태에서 크기를 다시 맞춤
 }
+window.addEventListener('resize',()=>{const t=document.getElementById('t-report');if(t&&t.classList.contains('active'))renderReportPreview();});
 
 /* ===================== DB ===================== */
 // Supabase는 한 번에 최대 1000줄만 돌려줘서, 많아질 수 있는 표는 나눠서 전부 가져와요
@@ -2101,7 +2110,8 @@ function renderReportCard(){
   const sid=document.getElementById('report-student-sel').value;
   const el=document.getElementById('report-card-area');
   if(!sid){el.innerHTML='<div class="empty-hint">학생을 선택하세요.</div>';return;}
-  el.innerHTML=renderReportCardHTML(buildReportData(sid));
+  el.innerHTML='';
+  renderReportPreview();
   renderParentReports();
 }
 function renderMyReportCard(){
@@ -2122,59 +2132,106 @@ function loadPdfLibs(){
   return pdfLibLoading;
 }
 function koDate(d){const [y,m,dd]=d.split('-').map(Number);return `${y}년 ${m}월 ${dd}일`;}
-// 학부모용 A4 성적표 (밝은 화면, PDF로 바뀌는 부분)
-function parentReportHTML(sid,note){
-  const d=buildReportData(sid);const u=d.student;
+// 주간 성적표 데이터: start~end(포함) 기간의 출석·보충 강의·어휘 미션·시험
+function inRange(iso,start,end){if(!iso)return false;const d=ymd(new Date(iso));return d>=start&&d<=end;}
+function weeklyReportData(sid,start,end){
+  const u=db.users.find(x=>x.id===sid);
+  // 출석: 기간 안의 날짜별 기록
+  const att=db.attendance.filter(a=>a.student_id===sid&&a.date>=start&&a.date<=end).sort((a,b)=>a.date.localeCompare(b.date));
+  // 보충 강의: 기간 안에 시청 기록이 있는 강의만
+  const vids=db.progress.filter(p=>p.student_id===sid&&inRange(p.updated_at,start,end)).map(p=>({p,v:db.videos.find(x=>x.id===p.video_id),f:watchInfo(p)})).filter(x=>x.v);
+  // 어휘: 기간 안에 열린 미션 (없으면 기간 끝 기준 진행 중이던 미션)
+  const endTs=new Date(end+'T23:59:59').getTime();
+  const bestBy=(setId)=>{let b=null;db.vocabAttempts.forEach(a=>{if(a.set_id===setId&&a.student_id===sid&&a.total>0&&new Date(a.submitted_at).getTime()<=endTs&&(!b||ratio(a)>ratio(b)))b=a;});return b;};
+  const triesBy=setId=>db.vocabAttempts.filter(a=>a.set_id===setId&&a.student_id===sid&&new Date(a.submitted_at).getTime()<=endTs).length;
+  const myTrack=studentVocabTrack(sid);
+  const vocab=(myTrack?[myTrack]:vocabTracks()).map(track=>{
+    const ms=missionsOf(track);
+    let picked=ms.map((s,i)=>({s,no:i+1})).filter(x=>x.s.open_date&&x.s.open_date>=start&&x.s.open_date<=end);
+    if(!picked.length){const cur=ms.map((s,i)=>({s,no:i+1})).filter(x=>x.s.open_date&&x.s.open_date<=end).pop();if(cur)picked=[cur];}
+    const items=picked.map(x=>{const b=bestBy(x.s.id);return{...x,best:b,cleared:isCleared(b),tries:triesBy(x.s.id),stars:starsOf(b)};});
+    const opened=ms.filter(s=>s.open_date&&s.open_date<=end);
+    const clearedAll=opened.filter(s=>isCleared(bestBy(s.id))).length;
+    const overdue=opened.filter(s=>addDays(s.open_date,7)<=end&&!isCleared(bestBy(s.id))).length;
+    const next=ms.find(s=>s.open_date&&s.open_date>end);
+    return{track,items,clearedAll,openedN:opened.length,total:ms.length,overdue,next};
+  });
+  // 시험: 기간 안에 제출한 시험
+  const exams=db.examResponses.filter(r=>u&&r.student_name===u.name&&isSubmitted(r)&&inRange(r.submitted_at,start,end)).map(r=>({r,ex:db.exams.find(x=>x.id===r.exam_id)}));
+  return{u,att,vids,vocab,vocabStarted:!!myTrack,exams};
+}
+// 학부모용 A4 주간 성적표 (밝은 화면, 이 모양 그대로 PDF가 돼요)
+function parentReportHTML(sid,note,start,end){
+  const d=weeklyReportData(sid,start,end);const u=d.u;
   const C={ink:'#1d2433',sub:'#6b7385',line:'#e3e6ee',soft:'#f5f7fb',blue:'#3b63e6',green:'#1f9d57',amber:'#c27a00',red:'#d23b3b'};
-  const box=(title,body)=>`<div class="pb" style="border:1px solid ${C.line};border-radius:12px;padding:18px 20px;margin-bottom:14px"><div style="font-size:15px;font-weight:700;margin-bottom:10px">${title}</div>${body}</div>`;
-  const bar=(pct,color)=>`<div style="height:8px;background:${C.soft};border-radius:99px;overflow:hidden;margin-top:8px"><div style="height:100%;width:${Math.max(0,Math.min(100,pct))}%;background:${color};border-radius:99px"></div></div>`;
-  const row2=(a,b)=>`<div style="display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:3px 0"><span style="color:${C.sub}">${a}</span><span style="font-weight:600">${b}</span></div>`;
-  // 강의
-  const lectures=db.videos.filter(v=>v.category!=='review');
-  const vidRows=lectures.map(v=>{
-    const p=db.progress.find(x=>x.student_id===sid&&x.video_id===v.id);const f=watchInfo(p);
-    const pct=f?f.pct:0;
-    const notes=[];if(f&&f.fast)notes.push(`<span style="color:${C.amber}">${FAST_RATE}배 초과 ${fmtTime(f.fastSec)}</span>`);if(f&&f.skip)notes.push(`<span style="color:${C.red}">건너뜀 ${fmtTime(f.skipTotal)}</span>`);
-    return `<tr class="pb"><td style="padding:7px 8px;border-top:1px solid ${C.line}">${esc(v.title)}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};text-align:right;white-space:nowrap;font-weight:600;color:${pct>=100?C.green:pct>0?C.ink:C.red}">${p?pct+'%':'미시청'}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};font-size:12px">${notes.join(' · ')||'<span style="color:#b0b6c3">-</span>'}</td></tr>`;
-  }).join('');
-  const lectureBox=box('강의 시청',row2('시청한 강의',`${d.watched} / ${d.total}개`)+row2('평균 진도',`${d.avgPct}%`)+bar(d.avgPct,C.blue)+
-    (lectures.length?`<table style="width:100%;border-collapse:collapse;margin-top:12px;font-size:13px"><thead><tr><th style="text-align:left;padding:6px 8px;color:${C.sub};font-weight:500">강의</th><th style="text-align:right;padding:6px 8px;color:${C.sub};font-weight:500">진도</th><th style="text-align:left;padding:6px 8px;color:${C.sub};font-weight:500">시청 태도</th></tr></thead><tbody>${vidRows}</tbody></table>`:''));
+  const box=(title,body,sub)=>`<div class="pb" style="border:1px solid ${C.line};border-radius:12px;padding:18px 20px;margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><div style="font-size:15px;font-weight:700">${title}</div>${sub?`<div style="font-size:13px;color:${C.sub}">${sub}</div>`:''}</div>${body}</div>`;
+  const empty=t=>`<div style="color:${C.sub};font-size:14px">${t}</div>`;
+  const chip=(txt,color,bg)=>`<span style="display:inline-block;padding:5px 10px;border-radius:8px;background:${bg};color:${color};font-size:13px;font-weight:600;margin:0 6px 6px 0">${txt}</span>`;
   // 출석
-  const attTotal=d.present+d.late+d.absent;const attRate=attTotal?Math.round((d.present+d.late)/attTotal*100):0;
-  const attBox=box('출석',attTotal?row2('출석률',`${attRate}%`)+bar(attRate,C.green)+`<div style="display:flex;gap:18px;font-size:14px;margin-top:10px"><span>출석 <b>${d.present}</b></span><span style="color:${C.amber}">지각 <b>${d.late}</b></span><span style="color:${C.red}">결석 <b>${d.absent}</b></span></div>`:`<div style="color:${C.sub};font-size:14px">출석 기록이 없어요.</div>`);
+  const stMap={present:['출석',C.green,'#e8f6ee'],late:['지각',C.amber,'#fbf1de'],absent:['결석',C.red,'#fbe7e7']};
+  const attN=d.att.length,okN=d.att.filter(a=>a.status!=='absent').length;
+  const attBox=box('출석',attN?`<div>${d.att.map(a=>{const m=stMap[a.status]||[a.status,C.ink,C.soft];return chip(`${mdWd(a.date)} ${m[0]}`,m[1],m[2]);}).join('')}</div>`:empty('이 기간에 출석 기록이 없어요.'),attN?`출석률 <b style="color:${C.ink}">${Math.round(okN/attN*100)}%</b> (${okN}/${attN}회)`:'');
+  // 보충 강의 (본 강의가 있을 때만)
+  const vidBox=d.vids.length?box('보충 강의 시청',`<table style="width:100%;border-collapse:collapse;font-size:13px">${d.vids.map(({p,v,f})=>{
+      const notes=[];if(f&&f.fast)notes.push(`<span style="color:${C.amber}">${FAST_RATE}배 초과 ${fmtTime(f.fastSec)}</span>`);if(f&&f.skip)notes.push(`<span style="color:${C.red}">건너뜀 ${fmtTime(f.skipTotal)}</span>`);
+      const pct=f?f.pct:0;
+      return `<tr class="pb"><td style="padding:7px 8px;border-top:1px solid ${C.line}">${esc(v.title)}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};text-align:right;font-weight:600;white-space:nowrap;color:${pct>=100?C.green:C.ink}">${pct}%</td><td style="padding:7px 8px;border-top:1px solid ${C.line};font-size:12px;white-space:nowrap">${notes.join(' · ')||'<span style="color:#b0b6c3">정상 시청</span>'}</td></tr>`;}).join('')}</table>`):'';
   // 어휘
-  let vocabBox='';
-  if(d.vocab){
-    vocabBox=d.vocab.list.map(r=>{
-      let cur=`<div style="color:${C.sub};font-size:14px">${r.next?`첫 미션은 ${mdWd(r.next.set.open_date)}에 열려요.`:'열린 미션이 없어요.'}</div>`;
-      if(r.cur){const c=r.cur;const{title}=splitTitle(c.set.lesson_title||c.set.name);
-        const st=c.cleared?`<span style="color:${C.green};font-weight:700">완료 (${c.best.score}/${c.best.total})</span>`:c.tries?`<span style="color:${C.amber};font-weight:700">미완료 (최고 ${c.best?c.best.score+'/'+c.best.total:'-'})</span>`:`<span style="color:${C.red};font-weight:700">미응시</span>`;
-        cur=row2('이번 주 미션',`MISSION ${pad2(c.no)} · ${esc(title)}`)+row2('기간',`${mdWd(c.set.open_date)} ~ ${mdWd(addDays(c.set.open_date,6))}`)+row2('수행 여부',st);}
-      return box(`어휘 미션 · ${esc(r.track)}${d.vocab.started?'':' <span style="font-size:12px;color:'+C.red+';font-weight:600">(아직 시작 안 함)</span>'}`,
-        row2('수행률',`${r.openedN?r.rate+'%':'-'} <span style="color:${C.sub};font-weight:400">(열린 미션 ${r.openedN}개 중 ${r.cleared}개 완료)</span>`)+bar(r.rate,C.green)+`<div style="height:8px"></div>`+cur+
-        row2('전체 진행',`${r.allCleared} / ${r.total} 완료${r.overdue?` · <span style="color:${C.red}">밀린 미션 ${r.overdue}개</span>`:''}`));
-    }).join('');
-  }
+  const vocabBox=d.vocab.map(t=>{
+    const done=t.items.filter(x=>x.cleared).length;
+    const rows=t.items.length?t.items.map(x=>{const{title}=splitTitle(x.s.lesson_title||x.s.name);
+      const ongoing=!x.cleared&&addDays(x.s.open_date,6)>end; // 마감 전이면 아직 진행 중
+      const st=x.cleared?`<span style="color:${C.green};font-weight:700">완료 · ${x.best.score}/${x.best.total}</span>`
+        :ongoing?`<span style="color:${C.blue};font-weight:700">진행 중${x.tries?` · 최고 ${x.best?x.best.score+'/'+x.best.total:'-'}`:''}</span>`
+        :x.tries?`<span style="color:${C.amber};font-weight:700">미완료 · 최고 ${x.best?x.best.score+'/'+x.best.total:'-'}</span>`:`<span style="color:${C.red};font-weight:700">미응시</span>`;
+      return `<div class="pb" style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid ${C.line};font-size:14px"><span><b>MISSION ${pad2(x.no)}</b> · ${esc(title)}<span style="display:block;font-size:12px;color:${C.sub}">${mdWd(x.s.open_date)} ~ ${mdWd(addDays(x.s.open_date,6))}${x.tries?` · ${x.tries}회 응시`:''}</span></span>${st}</div>`;}).join('')
+      :empty(t.next?`첫 미션은 ${mdWd(t.next.open_date)}에 열려요.`:'이 기간에 열린 미션이 없어요.');
+    const sub=t.items.length?`이번 주 수행 <b style="color:${C.ink}">${done}/${t.items.length}</b>`:'';
+    return box(`어휘 미션 · ${esc(t.track)}${d.vocabStarted?'':` <span style="font-size:12px;color:${C.red};font-weight:600">(아직 시작 안 함)</span>`}`,rows+
+      `<div style="font-size:12px;color:${C.sub};margin-top:8px">누적 ${t.clearedAll}/${t.openedN}개 완료${t.overdue?` · <span style="color:${C.red};font-weight:600">밀린 미션 ${t.overdue}개</span>`:''}</div>`,sub);
+  }).join('');
   // 시험
-  const exRows=d.examRows.map(r=>{const ex=db.exams.find(x=>x.id===r.exam_id);
-    const score=ex&&descPending(ex,r)?`객관식 ${r.points_earned}/${examObjTotal(ex)}점 (주관식 채점 중)`:`${r.points_earned}/${r.points_total}점 (${r.score}%)`;
-    return `<tr class="pb"><td style="padding:7px 8px;border-top:1px solid ${C.line}">${ex?`<span style="font-size:11px;color:${ex.category==='school'?C.blue:C.green};font-weight:700">${examCatLabel(ex.category)}</span> `:''}${esc(ex?ex.name:'(삭제된 시험)')}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};text-align:right;white-space:nowrap;font-weight:600">${score}</td></tr>`;}).join('');
-  const examBox=box('시험 성적',exRows?`<table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>${exRows}</tbody></table>`:`<div style="color:${C.sub};font-size:14px">응시한 시험이 없어요.</div>`);
+  const examBox=box('시험 성적',d.exams.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">${d.exams.map(({r,ex})=>{
+      const score=ex&&descPending(ex,r)?`객관식 ${r.points_earned}/${examObjTotal(ex)}점 (주관식 채점 중)`:`${r.points_earned}/${r.points_total}점 (${r.score}%)`;
+      return `<tr class="pb"><td style="padding:7px 8px;border-top:1px solid ${C.line}">${ex?`<span style="font-size:11px;color:${ex.category==='school'?C.blue:C.green};font-weight:700">${examCatLabel(ex.category)}</span> `:''}${esc(ex?ex.name:'(삭제된 시험)')}<span style="display:block;font-size:12px;color:${C.sub}">${mdWd(ymd(new Date(r.submitted_at)))} 응시</span></td><td style="padding:7px 8px;border-top:1px solid ${C.line};text-align:right;white-space:nowrap;font-weight:600">${score}</td></tr>`;}).join('')}</table>`:empty('이 기간에 본 시험이 없어요.'));
   const noteBox=note?`<div class="pb" style="background:${C.soft};border-radius:12px;padding:18px 20px;margin-bottom:14px"><div style="font-size:15px;font-weight:700;margin-bottom:8px">쏠T 선생님 한마디</div><div style="font-size:14px;line-height:1.7;white-space:pre-wrap">${esc(note)}</div></div>`:'';
   return `<div style="width:794px;box-sizing:border-box;padding:44px 48px 40px;background:#fff;color:${C.ink};font-family:'Noto Sans KR',sans-serif">
     <div class="pb" style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid ${C.blue};padding-bottom:14px;margin-bottom:20px">
-      <div><div style="font-size:13px;color:${C.blue};font-weight:700;letter-spacing:1px">정말 쏠쏠한 국어</div><div style="font-size:26px;font-weight:800;margin-top:2px">학습 리포트</div></div>
-      <div style="text-align:right"><div style="font-size:20px;font-weight:700">${esc(u.name)} 학생</div><div style="font-size:13px;color:${C.sub}">${koDate(todayStr())} 기준</div></div>
+      <div><div style="font-size:13px;color:${C.blue};font-weight:700;letter-spacing:1px">정말 쏠쏠한 국어</div><div style="font-size:26px;font-weight:800;margin-top:2px">주간 학습 리포트</div></div>
+      <div style="text-align:right"><div style="font-size:20px;font-weight:700">${esc(u?u.name:'')} 학생</div><div style="font-size:13px;color:${C.sub}">${mdWd(start)} ~ ${mdWd(end)}</div></div>
     </div>
-    ${noteBox}${lectureBox}${attBox}${vocabBox}${examBox}
-    <div class="pb" style="font-size:11px;color:#9aa1b0;text-align:center;margin-top:18px">정말 쏠쏠한 국어 · 쏠T · 이 리포트는 ${koDate(todayStr())}까지의 기록으로 만들어졌어요.</div>
+    ${noteBox}${attBox}${vocabBox}${examBox}${vidBox}
+    <div class="pb" style="font-size:11px;color:#9aa1b0;text-align:center;margin-top:18px">정말 쏠쏠한 국어 · 쏠T · ${koDate(start)} ~ ${koDate(end)} 기록</div>
   </div>`;
 }
-async function buildReportPdf(sid,note){
+function reportRange(){
+  const s=document.getElementById('rp-start'),e=document.getElementById('rp-end');
+  if(!s.value||!e.value){const t=todayStr();e.value=t;s.value=addDays(t,-6);}
+  if(s.value>e.value){const x=s.value;s.value=e.value;e.value=x;}
+  return[s.value,e.value];
+}
+function setReportRange(kind){
+  const t=todayStr();const s=document.getElementById('rp-start'),e=document.getElementById('rp-end');
+  if(kind==='last7'){e.value=t;s.value=addDays(t,-6);}
+  else if(kind==='thisweek'){s.value=mondayOf(t);e.value=addDays(s.value,6);}
+  else if(kind==='lastweek'){s.value=addDays(mondayOf(t),-7);e.value=addDays(s.value,6);}
+  renderReportCard();
+}
+function renderReportPreview(){
+  const sid=document.getElementById('report-student-sel').value;
+  const el=document.getElementById('rp-preview');if(!el)return;
+  if(!sid||!db.users.find(u=>u.id===sid)){el.innerHTML='<div class="empty-hint">학생을 선택하세요.</div>';el.style.height='';return;}
+  const[start,end]=reportRange();
+  el.innerHTML=`<div id="rp-inner" style="transform-origin:top left">${parentReportHTML(sid,(document.getElementById('pr-note').value||'').trim(),start,end)}</div>`;
+  const inner=document.getElementById('rp-inner');const k=Math.min(1,el.clientWidth/794);
+  inner.style.transform=`scale(${k})`;el.style.height=Math.ceil(inner.firstElementChild.offsetHeight*k)+'px';
+}
+
+async function buildReportPdf(sid,note,start,end){
   await loadPdfLibs();
   const host=document.createElement('div');
   host.style.cssText='position:fixed;left:-10000px;top:0;z-index:-1';
-  host.innerHTML=parentReportHTML(sid,note);
+  host.innerHTML=parentReportHTML(sid,note,start,end);
   document.body.appendChild(host);
   try{
     if(document.fonts&&document.fonts.ready)await document.fonts.ready;
@@ -2211,8 +2268,9 @@ async function makeParentReport(){
   const note=(document.getElementById('pr-note').value||'').trim();
   const btn=document.getElementById('pr-make-btn');btn.disabled=true;btn.textContent='PDF 만드는 중...';
   try{
-    const blob=await buildReportPdf(sid,note);
-    const path=`${sid}/${todayStr()}_${reportToken()}.pdf`;
+    const[start,end]=reportRange();
+    const blob=await buildReportPdf(sid,note,start,end);
+    const path=`${sid}/${start}_${end}_${reportToken()}.pdf`;
     const{error}=await sb.storage.from('reports').upload(path,blob,{contentType:'application/pdf',upsert:false});
     if(error)throw new Error('PDF 저장 실패: '+error.message+' (schema_add8.sql을 실행했는지 확인해주세요)');
     const url=sb.storage.from('reports').getPublicUrl(path).data.publicUrl;
@@ -2224,22 +2282,23 @@ async function makeParentReport(){
     showReportLink(row,u);
     notify('학부모용 PDF를 만들었어요. 링크를 복사해서 보내세요.','success');
   }catch(e){notify(e.message,'error');}
-  finally{btn.disabled=false;btn.textContent='학부모용 PDF 만들기';}
+  finally{btn.disabled=false;btn.textContent='이 내용으로 PDF 만들기';}
 }
-function reportSms(u,url){return `[정말 쏠쏠한 국어] ${u.name} 학생 학습 리포트입니다.\n${url}`;}
+function reportPeriod(row){const m=String(row.path||'').match(/(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})_/);return m?[m[1],m[2]]:null;}
+function reportSms(u,row){const pr=reportPeriod(row);return `[정말 쏠쏠한 국어] ${u.name} 학생 ${pr?`주간 학습 리포트 (${fmtMD(pr[0])}~${fmtMD(pr[1])})`:'학습 리포트'}입니다.\n${row.url}`;}
 function showReportLink(row,u){
   const el=document.getElementById('pr-result');
   el.innerHTML=`<div class="card" style="border-color:var(--green)"><div style="font-weight:600;margin-bottom:6px">학부모님께 보낼 링크</div>
     <input class="form-input" readonly value="${esc(row.url)}" onclick="this.select()" style="font-size:12px">
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
       <button class="btn blue sm" onclick="copyReportMsg('${esc(row.id)}')">문자 내용 복사</button>
-      <a class="btn sm" href="sms:?&body=${encodeURIComponent(reportSms(u,row.url))}">문자 앱으로 보내기</a>
+      <a class="btn sm" href="sms:?&body=${encodeURIComponent(reportSms(u,row))}">문자 앱으로 보내기</a>
       <a class="btn sm" href="${esc(row.url)}" target="_blank" rel="noopener">PDF 열어보기</a></div>
     <div class="vhint" style="margin:8px 0 0">"문자 내용 복사"를 누르면 안내 문구와 링크가 함께 복사돼요. 휴대폰에서는 "문자 앱으로 보내기"로 바로 보낼 수 있어요.</div></div>`;
 }
 async function copyReportMsg(id){
   const row=db.reportLinks.find(r=>r.id===id);if(!row)return;const u=db.users.find(x=>x.id===row.student_id);
-  const text=reportSms(u||{name:''},row.url);
+  const text=reportSms(u||{name:''},row);
   try{await navigator.clipboard.writeText(text);notify('복사했어요. 문자에 붙여넣으세요.','success');}
   catch(e){prompt('아래 내용을 복사하세요',text);}
 }
@@ -2249,7 +2308,7 @@ function renderParentReports(){
   const list=db.reportLinks.filter(r=>r.student_id===sid).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   document.getElementById('pr-result').innerHTML='';
   el.innerHTML=list.length?`<div style="font-size:12px;color:var(--text2);margin:12px 0 6px">이전에 만든 PDF</div>`+list.map(r=>`<div class="card row-between" style="padding:10px 14px">
-      <span style="font-size:13px">${fmtMD(ymd(new Date(r.created_at)))} 작성${r.note?' · 한마디 포함':''}</span>
+      <span style="font-size:13px">${reportPeriod(r)?`${mdWd(reportPeriod(r)[0])} ~ ${mdWd(reportPeriod(r)[1])}`:fmtMD(ymd(new Date(r.created_at)))+' 작성'}${r.note?' · 한마디 포함':''}</span>
       <span style="display:flex;gap:6px"><button class="btn sm" onclick="copyReportMsg('${esc(r.id)}')">복사</button><a class="btn sm" href="${esc(r.url)}" target="_blank" rel="noopener">열기</a><button class="btn red sm" onclick="deleteParentReport('${esc(r.id)}')">삭제</button></span></div>`).join(''):'';
 }
 async function deleteParentReport(id){

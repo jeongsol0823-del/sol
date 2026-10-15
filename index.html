@@ -183,6 +183,10 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 .clear-banner .stars{font-size:32px;margin:6px 0}
 .mtable{min-width:600px}
 .mtable td:nth-child(2){min-width:200px}
+.tab-badge{display:inline-block;min-width:17px;height:17px;line-height:17px;padding:0 5px;margin-left:5px;border-radius:99px;background:var(--red);color:#fff;font-size:10px;font-weight:700;text-align:center;vertical-align:1px}
+.alert-card{border-color:rgba(239,68,68,.45);background:linear-gradient(180deg,var(--red-bg),var(--card))}
+.alert-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--border);flex-wrap:wrap}
+.alert-row:first-of-type{border-top:none}
 .date-in{padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--font);color-scheme:dark}
 </style>
 </head>
@@ -235,7 +239,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     <button data-t="t-access" onclick="switchTab('teacher','t-access')">복습 승인</button>
     <button data-t="t-qa" onclick="switchTab('teacher','t-qa')">질문답변</button>
     <button data-t="t-exams" onclick="switchTab('teacher','t-exams')">시험</button>
-    <button data-t="t-vocab" onclick="switchTab('teacher','t-vocab')">어휘</button>
+    <button data-t="t-vocab" onclick="switchTab('teacher','t-vocab')">어휘<span id="vocab-tab-badge"></span></button>
     <button data-t="t-clinic" onclick="switchTab('teacher','t-clinic')">클리닉</button>
     <button data-t="t-cert" onclick="switchTab('teacher','t-cert')">인증</button>
     <button data-t="t-attendance" onclick="switchTab('teacher','t-attendance')">출석</button>
@@ -316,6 +320,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     </div>
 
     <div class="section" id="t-vocab">
+      <div id="vocab-alerts"></div>
       <div class="section-head"><h2>어휘 미션</h2><div id="vt-track-chips" class="chips"></div></div>
       <div id="vocab-mission-admin"></div>
       <div class="section-head" style="margin-top:24px"><h2>학생별 진행</h2></div>
@@ -728,6 +733,8 @@ function launchTeacher(){
   renderAnnounceAdmin();
   renderReportSelect();
   renderVocabAdmin();
+  const n=vocabAlerts().filter(a=>a.urgent).length;
+  if(n)setTimeout(()=>notify(`어휘 미션이 밀린 학생이 ${n}명 있어요. 어휘 탭에서 확인하세요.`,'error'),600);
 }
 function renderPending(){
   const el=document.getElementById('pending-list');
@@ -1715,9 +1722,64 @@ function trackChipsHtml(sel){
 }
 
 /* ===================== 어휘 미션 — 강사 ===================== */
+// 학생이 주로 푸는 교재 = 가장 많이 응시한 교재 (아직 안 했으면 null)
+function studentVocabTrack(sid){
+  const cnt={};
+  db.vocabAttempts.forEach(a=>{if(a.student_id!==sid)return;const s=db.vocabSets.find(x=>x.id===a.set_id);if(s&&s.track)cnt[s.track]=(cnt[s.track]||0)+1;});
+  const ts=Object.keys(cnt);return ts.length?ts.sort((a,b)=>cnt[b]-cnt[a])[0]:null;
+}
+function lastVocabDate(sid){
+  const a=db.vocabAttempts.filter(x=>x.student_id===sid).sort((x,y)=>new Date(y.submitted_at)-new Date(x.submitted_at))[0];
+  return a?ymd(new Date(a.submitted_at)):null;
+}
+// 미션을 안 한 학생 목록. urgent=true → 일주일이 지났는데 클리어 못 한 미션이 있거나, 첫 미션 열린 지 일주일이 넘도록 한 번도 안 함
+function vocabAlerts(){
+  const today=todayStr();
+  const opens=db.vocabSets.filter(s=>s.track&&s.open_date&&s.open_date<=today).map(s=>s.open_date).sort();
+  if(!opens.length)return[];
+  const firstOpen=opens[0];
+  const out=[];
+  db.users.filter(u=>u.role==='student'&&u.status==='active').forEach(u=>{
+    const t=studentVocabTrack(u.id);const last=lastVocabDate(u.id);
+    if(!t){
+      const weeks=Math.floor(-daysUntil(firstOpen)/7);
+      out.push({u,track:null,kind:'never',weeks,urgent:weeks>=1,last});return;
+    }
+    const st=missionStates(t,u.id);
+    const overdue=st.filter(m=>m.set.open_date&&addDays(m.set.open_date,7)<=today&&!m.cleared);
+    const cur=[...st].reverse().find(m=>m.set.open_date&&m.set.open_date<=today);
+    if(overdue.length)out.push({u,track:t,kind:'behind',weeks:overdue.length,from:overdue[0],urgent:true,last});
+    else if(cur&&!cur.cleared)out.push({u,track:t,kind:'thisweek',cur,daysLeft:daysUntil(addDays(cur.set.open_date,7)),urgent:false,last});
+  });
+  const rank={behind:0,never:1,thisweek:2};
+  return out.sort((a,b)=>(rank[a.kind]-rank[b.kind])||(b.weeks||0)-(a.weeks||0));
+}
+function renderVocabAlerts(){
+  const el=document.getElementById('vocab-alerts');const badge=document.getElementById('vocab-tab-badge');
+  if(!el)return;
+  const list=vocabAlerts();const urgent=list.filter(a=>a.urgent);
+  if(badge)badge.innerHTML=urgent.length?`<span class="tab-badge">${urgent.length}</span>`:'';
+  if(!list.length){el.innerHTML='';return;}
+  const row=a=>{
+    let tag;
+    if(a.kind==='behind')tag=`<span class="pill red">${a.weeks}주 밀림</span> <span style="font-size:12px;color:var(--text2)">MISSION ${pad2(a.from.no)}부터 미클리어</span>`;
+    else if(a.kind==='never')tag=a.weeks>=1?`<span class="pill red">한 번도 안 함</span> <span style="font-size:12px;color:var(--text2)">${a.weeks}주째</span>`:`<span class="pill amber">아직 시작 안 함</span>`;
+    else tag=`<span class="pill amber">이번 주 미완료</span> <span style="font-size:12px;color:var(--text2)">MISSION ${pad2(a.cur.no)} · ${a.daysLeft<=0?'오늘 마감':'D-'+a.daysLeft}</span>`;
+    return `<div class="alert-row"><div><strong>${esc(a.u.name)}</strong>${a.track?` <span style="font-size:12px;color:var(--text3)">${esc(a.track)}</span>`:''}<div style="margin-top:2px">${tag}</div></div>
+      <div style="font-size:12px;color:var(--text2);white-space:nowrap">최근 응시 ${a.last?fmtMD(a.last):'없음'}</div></div>`;
+  };
+  const soft=list.filter(a=>!a.urgent);
+  el.innerHTML=`<div class="card ${urgent.length?'alert-card':''}" style="margin-bottom:18px">
+    <div class="row-between" style="margin-bottom:4px"><strong>${urgent.length?`🔔 미션이 밀린 학생 ${urgent.length}명`:'🔔 이번 주 미션 현황'}</strong>
+      <span style="font-size:11px;color:var(--text3)">미션은 열린 날부터 일주일 안에 클리어해야 해요</span></div>
+    ${urgent.map(row).join('')}
+    ${soft.length?(urgent.length?`<details style="margin-top:6px"><summary style="font-size:12px;color:var(--text2);cursor:pointer">이번 주 아직 안 한 학생 ${soft.length}명 보기</summary>${soft.map(row).join('')}</details>`:soft.map(row).join('')):''}
+  </div>`;
+}
 function renderVocabAdmin(){
   const adminEl=document.getElementById('vocab-mission-admin');
   if(!adminEl)return;
+  renderVocabAlerts();
   const track=pickDefaultTrack(null);vocabTrackSel=track;
   document.getElementById('vt-track-chips').innerHTML=trackChipsHtml(track);
   renderVocabTargetOptions();

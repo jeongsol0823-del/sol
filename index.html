@@ -191,8 +191,12 @@ table.simple tr:last-child td{border-bottom:none}
     <button data-t="t-access" onclick="switchTab('teacher','t-access')">복습 승인</button>
     <button data-t="t-qa" onclick="switchTab('teacher','t-qa')">질문답변</button>
     <button data-t="t-exams" onclick="switchTab('teacher','t-exams')">시험</button>
+    <button data-t="t-vocab" onclick="switchTab('teacher','t-vocab')">어휘</button>
     <button data-t="t-clinic" onclick="switchTab('teacher','t-clinic')">클리닉</button>
     <button data-t="t-cert" onclick="switchTab('teacher','t-cert')">인증</button>
+    <button data-t="t-attendance" onclick="switchTab('teacher','t-attendance')">출석</button>
+    <button data-t="t-announce" onclick="switchTab('teacher','t-announce')">공지사항</button>
+    <button data-t="t-report" onclick="switchTab('teacher','t-report')">성적표</button>
   </div>
   <div class="content">
 
@@ -267,6 +271,25 @@ table.simple tr:last-child td{border-bottom:none}
       <div id="exam-results"><div class="empty-hint">시험 목록에서 "결과 보기"를 눌러주세요.</div></div>
     </div>
 
+    <div class="section" id="t-vocab">
+      <div class="section-head"><h2>어휘 세트 만들기</h2></div>
+      <div class="card">
+        <div class="form-group"><label>세트 이름</label><input class="form-input" id="vs-name" placeholder="예: 3주차 어휘"></div>
+        <div class="form-group">
+          <label>단어 목록 붙여넣기</label>
+          <textarea class="form-input" id="vs-paste" rows="6" placeholder="엑셀에서 단어, 뜻, 예문 3개 열을 복사해서 그대로 붙여넣으세요 (예문은 없어도 돼요)&#10;예)&#10;고즈넉하다	조용하고 호젓하다	고즈넉한 산사의 풍경이 마음을 편안하게 했다"></textarea>
+        </div>
+        <div class="form-group"><label>또는 파일 업로드 (.csv, .txt)</label><input type="file" id="vs-file" accept=".csv,.txt"></div>
+        <button class="btn sm" onclick="previewVocabParse()">미리보기</button>
+        <div id="vs-preview" style="margin-top:8px"></div>
+        <button class="btn blue" style="margin-top:10px" onclick="saveVocabSet()">어휘 세트 저장</button>
+      </div>
+      <div class="section-head" style="margin-top:24px"><h2>만든 어휘 세트</h2></div>
+      <div id="vocab-set-list"></div>
+      <div class="section-head" style="margin-top:24px"><h2>응시 결과</h2></div>
+      <div id="vocab-results"><div class="empty-hint">세트 목록에서 "결과 보기"를 눌러주세요.</div></div>
+    </div>
+
     <div class="section" id="t-clinic">
       <div class="section-head"><h2>클리닉 슬롯 등록</h2></div>
       <div class="card">
@@ -292,12 +315,41 @@ table.simple tr:last-child td{border-bottom:none}
         <div class="admin-form">
           <div class="form-group"><label>주차</label><select class="form-select" id="ci-week"></select></div>
           <div class="form-group"><label>과제 제목</label><input class="form-input" id="ci-title" placeholder="예: 어휘 30개 암기 확인"></div>
+          <div class="form-group full"><label>제출 방식</label><select class="form-select" id="ci-type"><option value="check">체크형 (완료 확인만)</option><option value="photo">사진 인증 (Storage 버킷 필요)</option></select></div>
         </div>
         <button class="btn blue sm" style="margin-top:8px" onclick="addCertItem()">과제 등록 (전체 학생 대상)</button>
-        <div style="font-size:11px;color:var(--text2);margin-top:6px">※ 사진 인증은 Supabase Storage 버킷 설정 후 추가할 수 있어요. 지금은 체크형(완료 확인)만 지원합니다.</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:6px">※ 사진 인증은 Supabase Storage에 <code>cert-photos</code> 버킷(Public)을 먼저 만들어주셔야 동작해요.</div>
       </div>
       <div class="section-head" style="margin-top:24px"><h2>제출 현황</h2></div>
       <div id="cert-submission-list"></div>
+    </div>
+
+    <div class="section" id="t-attendance">
+      <div class="section-head"><h2>출석 체크</h2></div>
+      <div class="card">
+        <div class="form-group"><label>날짜</label><input class="form-input" id="att-date" type="date"></div>
+        <div id="att-student-rows" style="margin-top:8px"></div>
+        <button class="btn blue" style="margin-top:8px" onclick="saveAttendance()">출석 저장</button>
+      </div>
+      <div class="section-head" style="margin-top:24px"><h2>최근 출석 기록</h2></div>
+      <div id="att-history"></div>
+    </div>
+
+    <div class="section" id="t-announce">
+      <div class="section-head"><h2>공지 작성</h2></div>
+      <div class="card">
+        <div class="form-group"><label>제목</label><input class="form-input" id="an-title" placeholder="공지 제목"></div>
+        <div class="form-group"><label>내용</label><textarea class="form-input" id="an-content" rows="4" placeholder="공지 내용"></textarea></div>
+        <button class="btn blue sm" onclick="addAnnouncement()">공지 등록</button>
+      </div>
+      <div class="section-head" style="margin-top:24px"><h2>등록된 공지</h2></div>
+      <div id="announce-admin-list"></div>
+    </div>
+
+    <div class="section" id="t-report">
+      <div class="section-head"><h2>학생별 성적표</h2></div>
+      <div class="form-group"><select class="form-select" id="report-student-sel" onchange="renderReportCard()"></select></div>
+      <div id="report-card-area" style="margin-top:12px"></div>
     </div>
 
   </div>
@@ -314,8 +366,12 @@ table.simple tr:last-child td{border-bottom:none}
     <button data-t="s-review" onclick="switchTab('student','s-review')">복습 영상</button>
     <button data-t="s-qa" onclick="switchTab('student','s-qa')">질문답변</button>
     <button data-t="s-exams" onclick="switchTab('student','s-exams')">시험</button>
+    <button data-t="s-vocab" onclick="switchTab('student','s-vocab')">어휘</button>
     <button data-t="s-clinic" onclick="switchTab('student','s-clinic')">클리닉</button>
     <button data-t="s-cert" onclick="switchTab('student','s-cert')">인증</button>
+    <button data-t="s-attendance" onclick="switchTab('student','s-attendance')">출석</button>
+    <button data-t="s-announce" onclick="switchTab('student','s-announce')">공지사항</button>
+    <button data-t="s-report" onclick="switchTab('student','s-report')">성적표</button>
   </div>
   <div class="content">
 
@@ -364,6 +420,14 @@ table.simple tr:last-child td{border-bottom:none}
       <div id="my-exam-results"></div>
     </div>
 
+    <div class="section" id="s-vocab">
+      <div class="section-head"><h2>어휘 테스트</h2></div>
+      <div id="vocab-set-pick"></div>
+      <div id="vocab-take-area" style="margin-top:12px"></div>
+      <div class="section-head" style="margin-top:24px"><h2>내 결과</h2></div>
+      <div id="my-vocab-results"></div>
+    </div>
+
     <div class="section" id="s-clinic">
       <div class="section-head"><h2>클리닉 예약</h2></div>
       <div id="clinic-book-list"></div>
@@ -374,6 +438,21 @@ table.simple tr:last-child td{border-bottom:none}
     <div class="section" id="s-cert">
       <div class="section-head"><h2>내 인증 과제</h2></div>
       <div id="cert-my-items"></div>
+    </div>
+
+    <div class="section" id="s-attendance">
+      <div class="section-head"><h2>내 출석 기록</h2></div>
+      <div id="my-attendance"></div>
+    </div>
+
+    <div class="section" id="s-announce">
+      <div class="section-head"><h2>공지사항</h2></div>
+      <div id="announce-my-list"></div>
+    </div>
+
+    <div class="section" id="s-report">
+      <div class="section-head"><h2>내 성적표</h2></div>
+      <div id="my-report-card"></div>
     </div>
 
   </div>
@@ -411,7 +490,9 @@ const emptyDb=()=>({
   qaSchools:[],qaWeeks:[],qaQuestions:[],
   exams:[],examResponses:[],
   clinicSlots:[],clinicRequests:[],
-  certWeeks:[],certItems:[],certSubmissions:[]
+  certWeeks:[],certItems:[],certSubmissions:[],
+  attendance:[],announcements:[],announcementReads:[],
+  vocabSets:[],vocabWords:[],vocabAttempts:[]
 });
 let db=emptyDb();
 
@@ -445,7 +526,7 @@ function switchTab(scope,id){
 /* ===================== DB ===================== */
 async function loadAll(attempt=0){
   try{
-    const [u,v,p,va,ar,qs,qw,qq,ex,er,cs,cr,cw,ci,csu]=await Promise.all([
+    const [u,v,p,va,ar,qs,qw,qq,ex,er,cs,cr,cw,ci,csu,att,an,arr,vs2,vw2,va2]=await Promise.all([
       sb.from('users').select('*'),
       sb.from('videos').select('*').order('created_at'),
       sb.from('progress').select('*'),
@@ -460,7 +541,13 @@ async function loadAll(attempt=0){
       sb.from('clinic_requests').select('*'),
       sb.from('cert_weeks').select('*'),
       sb.from('cert_items').select('*'),
-      sb.from('cert_submissions').select('*')
+      sb.from('cert_submissions').select('*'),
+      sb.from('attendance').select('*'),
+      sb.from('announcements').select('*').order('created_at',{ascending:false}),
+      sb.from('announcement_reads').select('*'),
+      sb.from('vocab_sets').select('*').order('created_at',{ascending:false}),
+      sb.from('vocab_words').select('*'),
+      sb.from('vocab_attempts').select('*')
     ]);
     if(u.error)throw new Error(u.error.message);
     if(v.error)throw new Error(v.error.message);
@@ -471,6 +558,8 @@ async function loadAll(attempt=0){
     db.exams=(ex.data)||[];db.examResponses=(er.data)||[];
     db.clinicSlots=(cs.data)||[];db.clinicRequests=(cr.data)||[];
     db.certWeeks=(cw.data)||[];db.certItems=(ci.data)||[];db.certSubmissions=(csu.data)||[];
+    db.attendance=(att.data)||[];db.announcements=(an.data)||[];db.announcementReads=(arr.data)||[];
+    db.vocabSets=(vs2.data)||[];db.vocabWords=(vw2.data)||[];db.vocabAttempts=(va2.data)||[];
   }catch(e){
     if(attempt<3){
       document.querySelector('.loading-text').textContent=`재연결 중... (${attempt+1}/3)`;
@@ -562,6 +651,10 @@ function launchTeacher(){
   renderExamAdmin();
   renderClinicAdmin();
   renderCertAdmin();
+  renderAttendanceForm();
+  renderAnnounceAdmin();
+  renderReportSelect();
+  renderVocabAdmin();
 }
 function renderPending(){
   const el=document.getElementById('pending-list');
@@ -710,6 +803,10 @@ function launchStudent(){
   renderMyExamResults();
   renderClinicBook();renderMyClinic();
   renderCertMy();
+  renderMyAttendance();
+  renderMyAnnounce();
+  renderMyReportCard();
+  renderVocabPick();renderMyVocabResults();
 }
 function renderLectures(){
   const el=document.getElementById('lecture-grid');
@@ -1064,9 +1161,53 @@ function renderExamResults(examId){
   const el=document.getElementById('exam-results');
   const ex=db.exams.find(x=>x.id===examId);
   const list=db.examResponses.filter(r=>r.exam_id===examId);
+  const hasDesc=ex&&(ex.questions||[]).some(q=>q.type==='desc');
   if(!list.length){el.innerHTML='<div class="empty-hint">아직 응시한 학생이 없습니다.</div>';return;}
-  const rows=list.map(r=>`<tr><td>${esc(r.student_name)}</td><td>${r.correct_count}/${r.total_q}</td><td>${r.points_earned}/${r.points_total}점</td><td>${r.score}%</td></tr>`).join('');
-  el.innerHTML=`<div class="card"><strong>${esc(ex?ex.name:'')}</strong></div><table class="simple"><thead><tr><th>학생</th><th>정답수</th><th>점수</th><th>백분율</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const rows=list.map(r=>`<tr><td>${esc(r.student_name)}</td><td>${r.correct_count}/${r.total_q}</td><td>${r.points_earned}/${r.points_total}점</td><td>${r.score}%</td><td>${hasDesc?`<button class="btn sm" onclick="openGradeDesc('${esc(examId)}','${esc(r.student_name)}')">주관식 채점</button>`:''}</td></tr>`).join('');
+  el.innerHTML=`<div class="card"><strong>${esc(ex?ex.name:'')}</strong></div><table class="simple"><thead><tr><th>학생</th><th>정답수</th><th>점수</th><th>백분율</th><th></th></tr></thead><tbody>${rows}</tbody></table><div id="desc-grade-area" style="margin-top:12px"></div>`;
+}
+function openGradeDesc(examId,studentName){
+  const ex=db.exams.find(x=>x.id===examId);
+  const resp=db.examResponses.find(r=>r.exam_id===examId&&r.student_name===studentName);
+  if(!ex||!resp)return;
+  const descQs=(ex.questions||[]).filter(q=>q.type==='desc');
+  const partial=(resp.thoughts&&resp.thoughts.__descPoints)||{};
+  const rows=descQs.map(q=>`
+    <div class="card">
+      <div class="row-between"><strong>${q.num}번</strong><span style="color:var(--text2)">배점 ${q.points}점</span></div>
+      <div style="margin:6px 0;padding:8px;background:var(--bg2);border-radius:var(--radius-sm)">${esc((resp.answers&&resp.answers[q.num])||'(무응답)')}</div>
+      <div class="form-group"><label>부여 점수</label><input class="form-input desc-pt" data-num="${q.num}" data-max="${q.points}" type="number" min="0" max="${q.points}" value="${partial[q.num]!=null?partial[q.num]:''}"></div>
+    </div>`).join('');
+  document.getElementById('desc-grade-area').innerHTML=`<div class="card"><strong>${esc(studentName)} 학생 주관식 채점</strong></div>${rows}<button class="btn blue" onclick="saveDescGrade('${esc(examId)}','${esc(studentName)}')">채점 저장</button>`;
+}
+async function saveDescGrade(examId,studentName){
+  const ex=db.exams.find(x=>x.id===examId);
+  const resp=db.examResponses.find(r=>r.exam_id===examId&&r.student_name===studentName);
+  if(!ex||!resp)return;
+  const descPoints={};
+  document.querySelectorAll('.desc-pt').forEach(inp=>{
+    const num=inp.dataset.num;const max=parseInt(inp.dataset.max)||0;
+    let val=parseInt(inp.value);if(isNaN(val))val=0;
+    descPoints[num]=Math.max(0,Math.min(val,max));
+  });
+  let objPoints=0,objTotal=0,descTotal=0,descEarned=0;
+  (ex.questions||[]).forEach(q=>{
+    if(q.type==='obj'){
+      objTotal+=q.points||0;
+      if(String(resp.answers[q.num]||'').trim()===String(q.answer).trim())objPoints+=q.points||0;
+    }else{
+      descTotal+=q.points||0;
+      descEarned+=descPoints[q.num]||0;
+    }
+  });
+  const pointsTotal=objTotal+descTotal,pointsEarned=objPoints+descEarned;
+  const score=pointsTotal>0?Math.round((pointsEarned/pointsTotal)*100):0;
+  const thoughts=Object.assign({},resp.thoughts,{__descPoints:descPoints});
+  const{error}=await sb.from('exam_responses').update({points_earned:pointsEarned,points_total:pointsTotal,score,thoughts}).eq('exam_id',examId).eq('student_name',studentName);
+  if(error){notify('저장 실패: '+error.message,'error');return;}
+  Object.assign(resp,{points_earned:pointsEarned,points_total:pointsTotal,score,thoughts});
+  renderExamResults(examId);
+  notify('주관식 채점을 저장했습니다.','success');
 }
 
 /* ===================== 시험 — 학생 ===================== */
@@ -1227,18 +1368,19 @@ function renderCertAdmin(){
   subEl.innerHTML=db.certItems.map(item=>{
     const subs=db.certSubmissions.filter(s=>s.item_id===item.id);
     const rows=subs.map(s=>`<div class="row-between" style="padding:6px 0;border-top:1px solid var(--border)">
-      <span>${esc(userName(s.student_id))}</span>
+      <span>${esc(userName(s.student_id))}${s.photo_url?` · <a href="${esc(s.photo_url)}" target="_blank" rel="noopener" style="color:var(--accent)">사진 보기</a>`:''}</span>
       ${s.status==='approved'?'<span class="pill green">승인됨</span>':s.status==='rejected'?'<span class="pill red">거절됨</span>':`<div style="display:flex;gap:6px"><button class="btn green sm" onclick="setCertStatus('${esc(s.id)}','approved')">승인</button><button class="btn red sm" onclick="setCertStatus('${esc(s.id)}','rejected')">거절</button></div>`}
     </div>`).join('')||'<div style="color:var(--text2);font-size:12px;padding:6px 0">아직 제출한 학생이 없습니다.</div>';
-    return `<div class="card"><strong>${esc(item.title)}</strong>${rows}</div>`;
+    return `<div class="card"><strong>${esc(item.title)}</strong> ${item.type==='photo'?'<span class="pill amber">사진</span>':'<span class="pill blue">체크</span>'}${rows}</div>`;
   }).join('');
 }
 async function addCertItem(){
   const weekId=document.getElementById('ci-week').value;
   const title=document.getElementById('ci-title').value.trim();
+  const type=document.getElementById('ci-type').value;
   if(!weekId){notify('주차를 먼저 추가하세요.','error');return;}
   if(!title){notify('과제 제목을 입력하세요.','error');return;}
-  const row={id:uid('ci_'),week_id:weekId,title,type:'check',targets:null};
+  const row={id:uid('ci_'),week_id:weekId,title,type,targets:null};
   const{error}=await sb.from('cert_items').insert(row);
   if(error){notify('등록 실패: '+error.message,'error');return;}
   db.certItems.push(row);
@@ -1253,6 +1395,151 @@ async function setCertStatus(subId,status){
   notify(status==='approved'?'승인했습니다.':'거절했습니다.','info');
 }
 
+/* ===================== 출석 — 강사 ===================== */
+function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function renderAttendanceForm(){
+  const dateEl=document.getElementById('att-date');
+  if(!dateEl.value)dateEl.value=todayStr();
+  dateEl.onchange=renderAttendanceForm;
+  const date=dateEl.value;
+  const active=db.users.filter(u=>u.role==='student'&&u.status==='active');
+  const rows=document.getElementById('att-student-rows');
+  rows.innerHTML=active.map(u=>{
+    const rec=db.attendance.find(a=>a.student_id===u.id&&a.date===date);
+    const st=rec?rec.status:'present';
+    return `<div class="row-between" style="padding:6px 0;border-top:1px solid var(--border)">
+      <span>${esc(u.name)}</span>
+      <select class="form-select att-sel" data-sid="${esc(u.id)}" style="width:110px">
+        <option value="present"${st==='present'?' selected':''}>출석</option>
+        <option value="late"${st==='late'?' selected':''}>지각</option>
+        <option value="absent"${st==='absent'?' selected':''}>결석</option>
+      </select>
+    </div>`;
+  }).join('')||'<div class="empty-hint">등록된 학생이 없습니다.</div>';
+  renderAttendanceHistory();
+}
+async function saveAttendance(){
+  const date=document.getElementById('att-date').value||todayStr();
+  const sels=[...document.querySelectorAll('.att-sel')];
+  for(const sel of sels){
+    const row={id:uid('att_'),student_id:sel.dataset.sid,date,status:sel.value};
+    const{error}=await sb.from('attendance').upsert(row,{onConflict:'student_id,date'});
+    if(error){notify('출석 저장 실패: '+error.message+' (schema_add2.sql을 실행하셨는지 확인해주세요)','error');return;}
+    const ex2=db.attendance.find(a=>a.student_id===sel.dataset.sid&&a.date===date);
+    if(ex2)Object.assign(ex2,row);else db.attendance.push(row);
+  }
+  notify('출석을 저장했습니다.','success');
+  renderAttendanceHistory();
+}
+function renderAttendanceHistory(){
+  const el=document.getElementById('att-history');
+  if(!el)return;
+  const dates=[...new Set(db.attendance.map(a=>a.date))].sort().reverse().slice(0,10);
+  if(!dates.length){el.innerHTML='<div class="empty-hint">출석 기록이 없습니다.</div>';return;}
+  el.innerHTML=dates.map(d=>{
+    const recs=db.attendance.filter(a=>a.date===d);
+    const present=recs.filter(a=>a.status==='present').length;
+    const late=recs.filter(a=>a.status==='late').length;
+    const absent=recs.filter(a=>a.status==='absent').length;
+    return `<div class="card row-between"><span>${esc(d)}</span><span>출석 ${present} · 지각 ${late} · 결석 ${absent}</span></div>`;
+  }).join('');
+}
+
+/* ===================== 출석 — 학생 ===================== */
+function renderMyAttendance(){
+  const el=document.getElementById('my-attendance');
+  const mine=db.attendance.filter(a=>a.student_id===session.id).sort((a,b)=>b.date.localeCompare(a.date));
+  if(!mine.length){el.innerHTML='<div class="empty-hint">출석 기록이 없습니다.</div>';return;}
+  const labelMap={present:'출석',late:'지각',absent:'결석'};
+  const pillMap={present:'green',late:'amber',absent:'red'};
+  el.innerHTML=mine.map(a=>`<div class="card row-between"><span>${esc(a.date)}</span><span class="pill ${pillMap[a.status]||'blue'}">${labelMap[a.status]||a.status}</span></div>`).join('');
+}
+
+/* ===================== 공지사항 — 강사 ===================== */
+async function addAnnouncement(){
+  const title=document.getElementById('an-title').value.trim();
+  const content=document.getElementById('an-content').value.trim();
+  if(!title){notify('제목을 입력하세요.','error');return;}
+  const row={id:uid('an_'),title,content};
+  const{error}=await sb.from('announcements').insert(row);
+  if(error){notify('등록 실패: '+error.message+' (schema_add2.sql을 실행하셨는지 확인해주세요)','error');return;}
+  db.announcements.unshift(row);
+  document.getElementById('an-title').value='';document.getElementById('an-content').value='';
+  renderAnnounceAdmin();
+  notify('공지를 등록했습니다.','success');
+}
+function renderAnnounceAdmin(){
+  const el=document.getElementById('announce-admin-list');
+  if(!db.announcements.length){el.innerHTML='<div class="empty-hint">등록된 공지가 없습니다.</div>';return;}
+  el.innerHTML=db.announcements.map(a=>{
+    const readCount=db.announcementReads.filter(r=>r.announcement_id===a.id).length;
+    const activeStudents=db.users.filter(u=>u.role==='student'&&u.status==='active').length;
+    return `<div class="card"><div class="row-between"><strong>${esc(a.title)}</strong><span style="color:var(--text2);font-size:12px">읽음 ${readCount}/${activeStudents}</span></div><div style="margin-top:6px;color:var(--text2)">${esc(a.content||'')}</div></div>`;
+  }).join('');
+}
+
+/* ===================== 공지사항 — 학생 ===================== */
+function renderMyAnnounce(){
+  const el=document.getElementById('announce-my-list');
+  if(!db.announcements.length){el.innerHTML='<div class="empty-hint">등록된 공지가 없습니다.</div>';return;}
+  el.innerHTML=db.announcements.map(a=>{
+    const read=db.announcementReads.some(r=>r.announcement_id===a.id&&r.student_id===session.id);
+    if(!read)markAnnouncementRead(a.id);
+    return `<div class="card"><strong>${esc(a.title)}</strong><div style="margin-top:6px;color:var(--text2)">${esc(a.content||'')}</div></div>`;
+  }).join('');
+}
+async function markAnnouncementRead(annId){
+  const row={id:uid('ar_'),announcement_id:annId,student_id:session.id};
+  db.announcementReads.push(row);
+  const{error}=await sb.from('announcement_reads').upsert(row,{onConflict:'announcement_id,student_id'});
+  if(error)db.announcementReads=db.announcementReads.filter(r=>r!==row);
+}
+
+/* ===================== 성적표 ===================== */
+function buildReportData(studentId){
+  const student=db.users.find(u=>u.id===studentId);
+  const examRows=db.examResponses.filter(r=>r.student_name===(student?student.name:'__none__'));
+  const videoList=db.videos.filter(v=>v.category!=='review');
+  const watched=videoList.filter(v=>getPct(studentId,v.id)>0).length;
+  const avgPct=videoList.length?Math.round(videoList.reduce((a,v)=>a+getPct(studentId,v.id),0)/videoList.length):0;
+  const attRecs=db.attendance.filter(a=>a.student_id===studentId);
+  const present=attRecs.filter(a=>a.status==='present').length;
+  const late=attRecs.filter(a=>a.status==='late').length;
+  const absent=attRecs.filter(a=>a.status==='absent').length;
+  return{student,examRows,watched,total:videoList.length,avgPct,present,late,absent};
+}
+function renderReportCardHTML(d){
+  if(!d.student)return '<div class="empty-hint">학생 정보를 찾을 수 없습니다.</div>';
+  const examRowsHtml=d.examRows.length?d.examRows.map(r=>{
+    const ex=db.exams.find(x=>x.id===r.exam_id);
+    return `<tr><td>${esc(ex?ex.name:'(삭제된 시험)')}</td><td>${r.correct_count}/${r.total_q}</td><td>${r.score}%</td></tr>`;
+  }).join(''):'<tr><td colspan="3" style="color:var(--text2)">응시한 시험이 없습니다</td></tr>';
+  return `
+    <div class="card"><strong>${esc(d.student.name)}</strong> <span style="color:var(--text2)">(${esc(d.student.id)})</span></div>
+    <div class="card">
+      <div class="row-between"><span>강의 시청</span><span>${d.watched}/${d.total}개 · 평균 ${d.avgPct}%</span></div>
+      <div class="progress-bar"><div class="progress-bar-fill" style="width:${d.avgPct}%"></div></div>
+    </div>
+    <div class="card row-between"><span>출석</span><span>출석 ${d.present} · 지각 ${d.late} · 결석 ${d.absent}</span></div>
+    <div class="section-head" style="margin-top:16px"><h2 style="font-size:13px">시험 성적</h2></div>
+    <table class="simple"><thead><tr><th>시험명</th><th>정답수</th><th>점수</th></tr></thead><tbody>${examRowsHtml}</tbody></table>`;
+}
+function renderReportSelect(){
+  const sel=document.getElementById('report-student-sel');
+  const active=db.users.filter(u=>u.role==='student'&&u.status==='active');
+  sel.innerHTML=active.map(u=>`<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('')||'<option value="">학생이 없습니다</option>';
+}
+function renderReportCard(){
+  const sid=document.getElementById('report-student-sel').value;
+  const el=document.getElementById('report-card-area');
+  if(!sid){el.innerHTML='<div class="empty-hint">학생을 선택하세요.</div>';return;}
+  el.innerHTML=renderReportCardHTML(buildReportData(sid));
+}
+function renderMyReportCard(){
+  const el=document.getElementById('my-report-card');
+  el.innerHTML=renderReportCardHTML(buildReportData(session.id));
+}
+
 /* ===================== 인증 — 학생 ===================== */
 function renderCertMy(){
   const el=document.getElementById('cert-my-items');
@@ -1260,24 +1547,195 @@ function renderCertMy(){
   el.innerHTML=db.certItems.map(item=>{
     const w=db.certWeeks.find(x=>x.id===item.week_id);
     const mySub=db.certSubmissions.find(s=>s.item_id===item.id&&s.student_id===session.id);
-    let statusHtml='<button class="btn blue sm" onclick="submitCertItem(\''+esc(item.id)+'\')">완료 체크</button>';
+    let statusHtml=item.type==='photo'
+      ?`<div style="display:flex;gap:6px;align-items:center"><input type="file" accept="image/*" id="cert-file-${esc(item.id)}" style="max-width:150px;font-size:11px"><button class="btn blue sm" onclick="submitCertItem('${esc(item.id)}')">제출</button></div>`
+      :`<button class="btn blue sm" onclick="submitCertItem('${esc(item.id)}')">완료 체크</button>`;
     if(mySub){
       if(mySub.status==='approved')statusHtml='<span class="pill green">승인됨</span>';
-      else if(mySub.status==='rejected')statusHtml='<span class="pill red">거절됨 (다시 제출해주세요)</span>';
+      else if(mySub.status==='rejected')statusHtml=(item.type==='photo'?`<div style="display:flex;gap:6px;align-items:center"><input type="file" accept="image/*" id="cert-file-${esc(item.id)}" style="max-width:150px;font-size:11px"><button class="btn blue sm" onclick="submitCertItem('${esc(item.id)}')">재제출</button></div>`:`<button class="btn blue sm" onclick="submitCertItem('${esc(item.id)}')">재제출</button>`);
       else statusHtml='<span class="pill amber">확인 대기중</span>';
     }
     return `<div class="card row-between"><div><strong>${esc(item.title)}</strong><div style="font-size:12px;color:var(--text2)">${esc(w?w.name:'')}</div></div>${statusHtml}</div>`;
   }).join('');
 }
 async function submitCertItem(itemId){
+  const item=db.certItems.find(x=>x.id===itemId);
   const existing=db.certSubmissions.find(s=>s.item_id===itemId&&s.student_id===session.id);
   if(existing&&existing.status!=='rejected'){notify('이미 제출했어요.','info');return;}
-  const row={id:uid('cs_'),item_id:itemId,student_id:session.id,status:'pending',photo_url:null,submitted_at:new Date().toISOString()};
+  let photoUrl=null;
+  if(item&&item.type==='photo'){
+    const fileEl=document.getElementById('cert-file-'+itemId);
+    const file=fileEl&&fileEl.files&&fileEl.files[0];
+    if(!file){notify('사진을 선택해주세요.','error');return;}
+    const path=session.id+'/'+Date.now()+'_'+file.name;
+    const{error:upErr}=await sb.storage.from('cert-photos').upload(path,file,{upsert:true});
+    if(upErr){notify('사진 업로드 실패: '+upErr.message+' (cert-photos 버킷이 만들어져 있는지 확인해주세요)','error');return;}
+    photoUrl=sb.storage.from('cert-photos').getPublicUrl(path).data.publicUrl;
+  }
+  const row={id:uid('cs_'),item_id:itemId,student_id:session.id,status:'pending',photo_url:photoUrl,submitted_at:new Date().toISOString()};
   const{error}=await sb.from('cert_submissions').insert(row);
   if(error){notify('제출 실패: '+error.message,'error');return;}
-  db.certSubmissions.push(row);
+  const exist=db.certSubmissions.find(s=>s.item_id===itemId&&s.student_id===session.id);
+  if(exist)Object.assign(exist,row);else db.certSubmissions.push(row);
   renderCertMy();
   notify('제출했습니다. 쏠T의 확인을 기다려주세요.','success');
+}
+
+/* ===================== 어휘 테스트 — 강사 ===================== */
+async function getVocabRows(){
+  const fileEl=document.getElementById('vs-file');
+  let text='';
+  if(fileEl&&fileEl.files&&fileEl.files[0]){
+    text=await fileEl.files[0].text();
+  }else{
+    text=document.getElementById('vs-paste').value;
+  }
+  return parseVocabText(text);
+}
+function parseVocabText(text){
+  return text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(line=>{
+    let parts=line.includes('\t')?line.split('\t'):line.split(',');
+    parts=parts.map(p=>p.trim());
+    return{word:parts[0]||'',meaning:parts[1]||'',example:parts[2]||''};
+  }).filter(r=>r.word&&r.meaning);
+}
+async function previewVocabParse(){
+  const rows=await getVocabRows();
+  const el=document.getElementById('vs-preview');
+  if(!rows.length){el.innerHTML='<div class="empty-hint">파싱된 단어가 없습니다. "단어[탭/쉼표]뜻[탭/쉼표]예문" 형식인지 확인해주세요.</div>';return;}
+  el.innerHTML=`<div class="card">${rows.length}개 단어 인식됨<table class="simple" style="margin-top:8px"><thead><tr><th>단어</th><th>뜻</th><th>예문</th></tr></thead><tbody>${rows.slice(0,5).map(r=>`<tr><td>${esc(r.word)}</td><td>${esc(r.meaning)}</td><td>${esc(r.example||'')}</td></tr>`).join('')}</tbody></table>${rows.length>5?`<div style="color:var(--text2);font-size:12px;margin-top:6px">...외 ${rows.length-5}개</div>`:''}</div>`;
+}
+async function saveVocabSet(){
+  const name=document.getElementById('vs-name').value.trim();
+  if(!name){notify('세트 이름을 입력하세요.','error');return;}
+  const rows=await getVocabRows();
+  if(rows.length<2){notify('단어를 2개 이상 입력하세요 (4지선다를 만들려면 여러 개 필요해요).','error');return;}
+  const setRow={id:uid('vs_'),name};
+  const{error:e1}=await sb.from('vocab_sets').insert(setRow);
+  if(e1){notify('저장 실패: '+e1.message+' (schema_add3.sql을 실행하셨는지 확인해주세요)','error');return;}
+  const wordRows=rows.map(r=>({id:uid('vw_'),set_id:setRow.id,word:r.word,meaning:r.meaning,example:r.example||null}));
+  const{error:e2}=await sb.from('vocab_words').insert(wordRows);
+  if(e2){notify('단어 저장 실패: '+e2.message,'error');return;}
+  db.vocabSets.unshift(setRow);
+  db.vocabWords.push(...wordRows);
+  document.getElementById('vs-name').value='';
+  document.getElementById('vs-paste').value='';
+  document.getElementById('vs-file').value='';
+  document.getElementById('vs-preview').innerHTML='';
+  renderVocabAdmin();
+  notify(`어휘 세트를 저장했습니다 (${wordRows.length}개 단어).`,'success');
+}
+function renderVocabAdmin(){
+  const el=document.getElementById('vocab-set-list');
+  if(!el)return;
+  if(!db.vocabSets.length){el.innerHTML='<div class="empty-hint">만든 어휘 세트가 없습니다.</div>';return;}
+  el.innerHTML=db.vocabSets.map(s=>{
+    const cnt=db.vocabWords.filter(w=>w.set_id===s.id).length;
+    const attemptCnt=db.vocabAttempts.filter(a=>a.set_id===s.id).length;
+    return `<div class="card row-between">
+      <div><strong>${esc(s.name)}</strong> <span style="color:var(--text2)">· 단어 ${cnt}개 · 응시 ${attemptCnt}명</span></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn sm" onclick="renderVocabResults('${esc(s.id)}')">결과 보기</button>
+        <button class="btn red sm" onclick="deleteVocabSet('${esc(s.id)}')">삭제</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function deleteVocabSet(setId){
+  if(!confirm('이 어휘 세트를 삭제하시겠습니까? 단어와 응시 기록도 함께 삭제됩니다.'))return;
+  await sb.from('vocab_attempts').delete().eq('set_id',setId);
+  await sb.from('vocab_words').delete().eq('set_id',setId);
+  await sb.from('vocab_sets').delete().eq('id',setId);
+  db.vocabAttempts=db.vocabAttempts.filter(a=>a.set_id!==setId);
+  db.vocabWords=db.vocabWords.filter(w=>w.set_id!==setId);
+  db.vocabSets=db.vocabSets.filter(s=>s.id!==setId);
+  renderVocabAdmin();
+  notify('어휘 세트를 삭제했습니다.','info');
+}
+function renderVocabResults(setId){
+  const el=document.getElementById('vocab-results');
+  const set=db.vocabSets.find(s=>s.id===setId);
+  const list=db.vocabAttempts.filter(a=>a.set_id===setId);
+  if(!list.length){el.innerHTML='<div class="empty-hint">아직 응시한 학생이 없습니다.</div>';return;}
+  const rows=list.map(a=>`<tr><td>${esc(userName(a.student_id))}</td><td>${a.score}/${a.total}</td></tr>`).join('');
+  el.innerHTML=`<div class="card"><strong>${esc(set?set.name:'')}</strong></div><table class="simple"><thead><tr><th>학생</th><th>점수</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/* ===================== 어휘 테스트 — 학생 ===================== */
+function renderVocabPick(){
+  const el=document.getElementById('vocab-set-pick');
+  if(!el)return;
+  if(!db.vocabSets.length){el.innerHTML='<div class="empty-hint">등록된 어휘 세트가 없습니다.</div>';return;}
+  el.innerHTML=db.vocabSets.map(s=>{
+    const cnt=db.vocabWords.filter(w=>w.set_id===s.id).length;
+    const mine=db.vocabAttempts.filter(a=>a.set_id===s.id&&a.student_id===session.id).sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0];
+    return `<div class="card row-between">
+      <div><strong>${esc(s.name)}</strong> <span style="color:var(--text2)">· 단어 ${cnt}개</span>${mine?` <span class="pill green">최근 ${mine.score}/${mine.total}</span>`:''}</div>
+      <button class="btn blue sm" onclick="startVocabTest('${esc(s.id)}')">${mine?'다시 풀기':'시작'}</button>
+    </div>`;
+  }).join('');
+}
+let currentVocabQuiz=null;
+function shuffle(arr){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function startVocabTest(setId){
+  const words=db.vocabWords.filter(w=>w.set_id===setId);
+  if(words.length<2){notify('단어가 부족합니다.','error');return;}
+  const questions=shuffle(words).map(w=>{
+    const distractors=shuffle(words.filter(x=>x.id!==w.id)).slice(0,3).map(x=>x.meaning);
+    const choices=shuffle([w.meaning,...distractors]);
+    return{wordId:w.id,word:w.word,meaning:w.meaning,example:w.example,choices};
+  });
+  currentVocabQuiz={setId,questions,answers:{}};
+  renderVocabTake();
+}
+function renderVocabTake(){
+  const el=document.getElementById('vocab-take-area');
+  const q=currentVocabQuiz;
+  if(!q){el.innerHTML='';return;}
+  el.innerHTML=`<div class="card"><strong>어휘 테스트</strong> <span style="color:var(--text2)">· 총 ${q.questions.length}문항</span></div>`+
+    q.questions.map((item,i)=>`
+      <div class="card">
+        <div class="row-between"><strong>${i+1}. ${esc(item.word)}</strong></div>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
+          ${item.choices.map(c=>`<button type="button" class="btn" data-qi="${i}" data-val="${esc(c)}" onclick="pickVocabChoice(${i},this)" style="text-align:left">${esc(c)}</button>`).join('')}
+        </div>
+      </div>`).join('')+
+    `<button class="btn blue" onclick="submitVocabTest()">제출하기</button><div id="vocab-result-box" style="margin-top:12px"></div>`;
+}
+function pickVocabChoice(qi,btn){
+  currentVocabQuiz.answers[qi]=btn.dataset.val;
+  [...btn.parentElement.children].forEach(b=>b.classList.remove('blue'));
+  btn.classList.add('blue');
+}
+async function submitVocabTest(){
+  const q=currentVocabQuiz;if(!q)return;
+  const unanswered=q.questions.some((_,i)=>q.answers[i]==null);
+  if(unanswered){notify('모든 문항에 답해주세요.','error');return;}
+  let score=0;const wrongWords=[];
+  q.questions.forEach((item,i)=>{
+    if(q.answers[i]===item.meaning)score++;
+    else wrongWords.push({word:item.word,meaning:item.meaning,example:item.example,picked:q.answers[i]});
+  });
+  const row={id:uid('va_'),set_id:q.setId,student_id:session.id,score,total:q.questions.length,wrong_words:wrongWords,submitted_at:new Date().toISOString()};
+  const{error}=await sb.from('vocab_attempts').insert(row);
+  if(error){notify('제출 실패: '+error.message+' (schema_add3.sql을 실행하셨는지 확인해주세요)','error');return;}
+  db.vocabAttempts.push(row);
+  const box=document.getElementById('vocab-result-box');
+  const wrongHtml=wrongWords.length?wrongWords.map(w=>`<div class="card"><strong>${esc(w.word)}</strong> → 정답 ${esc(w.meaning)}${w.example?`<div style="color:var(--text2);margin-top:4px">${esc(w.example)}</div>`:''}</div>`).join(''):'<div class="empty-hint">모두 정답입니다! 🎉</div>';
+  box.innerHTML=`<div class="card"><strong>채점 결과</strong> · ${score}/${q.questions.length} 정답</div>${wrongHtml}`;
+  currentVocabQuiz=null;
+  renderVocabPick();renderMyVocabResults();
+  notify('어휘 테스트를 제출했습니다.','success');
+}
+function renderMyVocabResults(){
+  const el=document.getElementById('my-vocab-results');
+  if(!el)return;
+  const mine=db.vocabAttempts.filter(a=>a.student_id===session.id).sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at));
+  if(!mine.length){el.innerHTML='<div class="empty-hint">아직 응시한 어휘 테스트가 없습니다.</div>';return;}
+  el.innerHTML=mine.map(a=>{
+    const set=db.vocabSets.find(s=>s.id===a.set_id);
+    return `<div class="card row-between"><span>${esc(set?set.name:'(삭제된 세트)')}</span><span>${a.score}/${a.total}</span></div>`;
+  }).join('');
 }
 
 /* ===================== 시작 ===================== */

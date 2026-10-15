@@ -2803,7 +2803,7 @@ function renderVocabPick(){
     const nextLocked=st.find(m=>m.state==='date');
     let nextHtml;
     if(cur){const{title}=splitTitle(cur.set.lesson_title||cur.set.name);
-      nextHtml=`<div><div style="font-size:12px;color:var(--text2)">지금 도전할 미션</div><div style="font-weight:700">MISSION ${pad2(cur.no)} · ${esc(title)}</div></div><button class="btn blue" onclick="startVocabTest('${esc(cur.set.id)}')">${cur.tries?'재도전':'도전하기'} ▶</button>`;}
+      nextHtml=`<div><div style="font-size:12px;color:var(--text2)">지금 도전할 미션</div><div style="font-weight:700">MISSION ${pad2(cur.no)} · ${esc(title)}</div></div><button class="btn blue" onclick="openVocabStudy('${esc(cur.set.id)}')">${cur.tries?'재도전':'도전하기'} ▶</button>`;}
     else if(cleared===st.length&&st.length){nextHtml=`<div style="font-weight:700">🏆 모든 미션을 클리어했어요!</div>`;}
     else if(nextLocked){const d=daysUntil(nextLocked.set.open_date);nextHtml=`<div><div style="font-size:12px;color:var(--text2)">다음 미션</div><div style="font-weight:700">MISSION ${pad2(nextLocked.no)} · ${fmtMD(nextLocked.set.open_date)} 오픈 (D-${d})</div></div><span class="pill green">이번 주 미션 완료</span>`;}
     else nextHtml='';
@@ -2819,14 +2819,14 @@ function renderVocabPick(){
   if(free.length){
     html+=`<div class="section-head" style="margin-top:24px"><h2>자유 테스트</h2></div>`+free.map(s=>{
       const cnt=db.vocabWords.filter(w=>w.set_id===s.id).length;const best=bestAttempt(s.id,session.id);
-      return `<div class="card row-between"><div><strong>${esc(s.name)}</strong> <span style="color:var(--text2)">· 단어 ${cnt}개</span>${best?` <span class="pill green">최고 ${best.score}/${best.total}</span>`:''}</div><button class="btn blue sm" onclick="startVocabTest('${esc(s.id)}')">${best?'다시 풀기':'시작'}</button></div>`;
+      return `<div class="card row-between"><div><strong>${esc(s.name)}</strong> <span style="color:var(--text2)">· 단어 ${cnt}개</span>${best?` <span class="pill green">최고 ${best.score}/${best.total}</span>`:''}</div><button class="btn blue sm" onclick="openVocabStudy('${esc(s.id)}')">${best?'다시 풀기':'시작'}</button></div>`;
     }).join('');
   }
   el.innerHTML=html||'<div class="empty-hint">아직 열린 어휘 미션이 없어요.</div>';
 }
 function missionTileHtml(m){
   const{cat,title}=splitTitle(m.set.lesson_title||m.set.name);
-  let cls='m-tile',foot,click=`onclick="startVocabTest('${esc(m.set.id)}')"`;
+  let cls='m-tile',foot,click=`onclick="openVocabStudy('${esc(m.set.id)}')"`;
   if(m.state==='cleared'){cls+=' cleared';foot=`${starsHtml(m.stars)} <span style="margin-left:4px">${m.best.score}/${m.best.total}</span>`;}
   else if(m.state==='open'){cls+=m.tries?' open tried':' open';foot=m.tries?`<span style="color:var(--amber)">최고 ${m.best?m.best.score+'/'+m.best.total:'-'} · 재도전!</span>`:'<span style="color:var(--accent);font-weight:600">도전하기 ▶</span>';}
   else if(m.state==='date'){cls+=' locked';click=`onclick="notify('${fmtMD(m.set.open_date)}에 열려요.','info')"`;foot=`🔒 ${fmtMD(m.set.open_date)} 오픈`;}
@@ -2878,8 +2878,48 @@ function highlightExample(ex,word){
   if(stem.length<1)return e;const s=esc(stem);const i=e.indexOf(s);
   return i<0?e:e.slice(0,i)+'<mark>'+s+'</mark>'+e.slice(i+s.length);
 }
+/* --- 시험 전 단어 공부 화면 --- */
+let currentVocabStudy=null;
+function openVocabStudy(setId){
+  const set=db.vocabSets.find(s=>s.id===setId);if(!set)return;
+  if(set.track){const m=missionStates(set.track,session.id).find(x=>x.set.id===setId);if(m&&(m.state==='date'||m.state==='prev')){notify('아직 열리지 않은 미션이에요.','info');return;}}
+  currentVocabQuiz=null;
+  currentVocabStudy={setId,set,hide:false,shown:new Set(),order:wordsOf(setId).map(w=>w.id)};
+  renderVocabTake();window.scrollTo({top:0,behavior:'smooth'});
+}
+function studyToggleHide(){const st=currentVocabStudy;if(!st)return;st.hide=!st.hide;st.shown=new Set();renderVocabTake();}
+function studyShuffle(){const st=currentVocabStudy;if(!st)return;st.order=shuffle(st.order);st.shown=new Set();renderVocabTake();}
+function studyReveal(id){const st=currentVocabStudy;if(!st)return;st.shown.add(id);renderVocabTake();}
+function studyStart(){const st=currentVocabStudy;if(!st)return;const id=st.setId;currentVocabStudy=null;startVocabTest(id);}
+function studyBack(){currentVocabStudy=null;renderVocabTake();renderVocabPick();renderMyVocabResults();}
+function renderVocabStudy(el){
+  const st=currentVocabStudy;const set=st.set;
+  const byId={};wordsOf(set.id).forEach(w=>byId[w.id]=w);
+  const words=st.order.map(id=>byId[id]).filter(Boolean);
+  const best=bestAttempt(set.id,session.id);
+  const{cat,title}=splitTitle(set.lesson_title||set.name);
+  const need=Math.ceil(words.length*VOCAB_PASS);
+  el.innerHTML=`<div class="q-wrap">
+    <div class="q-top"><div><span style="font-family:var(--mono);font-size:12px;color:var(--text2)">${esc(set.track?missionLabel(set):'자유 테스트')}</span> <strong style="margin-left:4px">${esc(title)}</strong></div>
+      <button class="btn sm" onclick="studyBack()">미션 맵으로</button></div>
+    <div class="card"><div style="font-weight:700">📖 테스트 전에 단어를 먼저 공부하세요</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:4px">${cat?esc(cat)+' · ':''}단어 ${words.length}개 · ${need}개 이상 맞히면 클리어${best?` · 내 최고 ${best.score}/${best.total}`:''}</div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn sm ${st.hide?'blue':''}" onclick="studyToggleHide()">${st.hide?'뜻 모두 보기':'뜻 가리고 외우기'}</button>
+        <button class="btn sm" onclick="studyShuffle()">순서 섞기</button></div>
+      ${st.hide?'<div style="font-size:12px;color:var(--text2);margin-top:8px">뜻을 떠올려 본 다음 카드를 눌러 확인해 보세요.</div>':''}</div>
+    ${words.map((w,i)=>{const open=!st.hide||st.shown.has(w.id);
+      return `<div class="card"${open?'':` style="cursor:pointer" onclick="studyReveal('${esc(w.id)}')"`}>
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${i+1}</span><span style="font-size:18px;font-weight:700">${esc(w.word)}</span>${w.hanja?`<span style="color:var(--text2);font-size:13px">${esc(w.hanja)}</span>`:''}</div>
+        ${open?`<div style="margin-top:6px;line-height:1.6">${esc(w.meaning)}</div>${w.example?`<div style="margin-top:6px;font-size:13px;color:var(--text2);line-height:1.6">예) ${highlightExample(w.example,w.word)}</div>`:''}`
+          :`<div style="margin-top:6px;font-size:13px;color:var(--accent)">눌러서 뜻 보기 ▾</div>`}
+      </div>`;}).join('')}
+    <div style="position:sticky;bottom:12px;margin-top:8px"><button class="btn blue" style="width:100%;padding:12px;font-size:15px;box-shadow:0 6px 18px rgba(0,0,0,.35)" onclick="studyStart()">다 외웠어요 · 테스트 시작 ▶</button></div>
+  </div>`;
+}
 function renderVocabTake(){
   const el=document.getElementById('vocab-take-area');const home=document.getElementById('vocab-home');
+  if(currentVocabStudy&&!currentVocabQuiz){home.style.display='none';renderVocabStudy(el);return;}
   const q=currentVocabQuiz;
   if(!q){el.innerHTML='';home.style.display='';return;}
   home.style.display='none';
@@ -2924,7 +2964,7 @@ function nextVocabQ(){
 }
 function quitVocabTest(){
   if(currentVocabQuiz&&!currentVocabQuiz.done&&currentVocabQuiz.picks.length&&!confirm('그만두면 이번 도전은 기록되지 않아요. 그만할까요?'))return;
-  currentVocabQuiz=null;renderVocabTake();renderVocabPick();renderMyVocabResults();
+  currentVocabQuiz=null;currentVocabStudy=null;renderVocabTake();renderVocabPick();renderMyVocabResults();
 }
 async function submitVocabTest(){
   const q=currentVocabQuiz;if(!q||q.done)return;
@@ -2945,7 +2985,7 @@ async function submitVocabTest(){
   let nextBtn='';
   if(pass&&q.set.track){
     const nxt=missionStates(q.set.track,session.id).find(m=>m.state==='open');
-    if(nxt&&nxt.set.id!==q.setId)nextBtn=`<button class="btn blue" onclick="startVocabTest('${esc(nxt.set.id)}')">다음 미션 ▶</button>`;
+    if(nxt&&nxt.set.id!==q.setId)nextBtn=`<button class="btn blue" onclick="openVocabStudy('${esc(nxt.set.id)}')">다음 미션 ▶</button>`;
     else{const lk=missionStates(q.set.track,session.id).find(m=>m.state==='date');if(lk)nextBtn=`<span class="pill blue" style="align-self:center">다음 미션은 ${fmtMD(lk.set.open_date)}에 열려요</span>`;}
   }
   const wrongHtml=wrongWords.length?`<div class="section-head" style="margin-top:18px"><h2>틀린 단어 다시 보기</h2></div>`+wrongWords.map(w=>`<div class="card"><strong>${esc(w.word)}</strong> — ${esc(w.meaning)}${w.example?`<div style="color:var(--text2);margin-top:4px;font-size:13px">예) ${highlightExample(w.example,w.word)}</div>`:''}</div>`).join(''):'';
@@ -2957,6 +2997,7 @@ async function submitVocabTest(){
       <div style="font-size:15px">${total}문제 중 <b>${score}</b>개 정답 (${Math.round(r*100)}%)</div>
       ${pass?'':`<div style="font-size:12px;color:var(--text2);margin-top:4px">${Math.ceil(total*VOCAB_PASS)}개 이상 맞히면 클리어예요</div>`}
       <div style="display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap">
+        <button class="btn" onclick="openVocabStudy('${esc(q.setId)}')">단어 다시 보기</button>
         <button class="btn" onclick="startVocabTest('${esc(q.setId)}')">${pass?(stars===3?'다시 풀기':'★ 더 받기 재도전'):'다시 도전'}</button>
         ${nextBtn}
         <button class="btn" onclick="quitVocabTest()">미션 맵으로</button>

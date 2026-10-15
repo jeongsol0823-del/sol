@@ -2060,6 +2060,7 @@ function vocabReport(sid){
 function mdWd(d){const [y,m,dd]=d.split('-').map(Number);return `${m}/${dd}(${'일월화수목금토'[new Date(y,m-1,dd).getDay()]})`;}
 function vocabReportHTML(v){
   if(!v)return'';
+  if(!v.started)return `<div class="card row-between"><strong>어휘 미션</strong><span class="pill red">아직 시작 안 함</span></div>`;
   return v.list.map(r=>{
     let curLine;
     if(!r.cur){curLine=r.next?`<span style="color:var(--text2)">첫 미션은 ${mdWd(r.next.set.open_date)}에 열려요</span>`:'<span style="color:var(--text2)">열린 미션이 없어요</span>';}
@@ -2072,7 +2073,7 @@ function vocabReportHTML(v){
         <div style="font-size:12px;color:var(--text2);margin-top:2px">기간 ${mdWd(c.set.open_date)} ~ ${mdWd(addDays(c.set.open_date,6))}</div>`;
     }
     return `<div class="card">
-      <div class="row-between"><strong>어휘 미션 · ${esc(r.track)}${v.started?'':' <span class="pill red" style="margin-left:4px">아직 시작 안 함</span>'}</strong>
+      <div class="row-between"><strong>어휘 미션</strong>
         <span>수행률 <b>${r.openedN?r.rate+'%':'-'}</b> <span style="color:var(--text2);font-size:12px">(${r.cleared}/${r.openedN})</span></span></div>
       <div class="progress-bar"><div class="progress-bar-fill" style="width:${r.rate}%;background:var(--green)"></div></div>
       <div style="font-size:12px;color:var(--text2);margin:10px 0 4px">이번 주 미션</div>
@@ -2177,7 +2178,7 @@ function parentReportHTML(sid,note,start,end){
       const pct=f?f.pct:0;
       return `<tr class="pb"><td style="padding:7px 8px;border-top:1px solid ${C.line}">${esc(v.title)}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};text-align:right;font-weight:600;white-space:nowrap;color:${pct>=100?C.green:C.ink}">${pct}%</td><td style="padding:7px 8px;border-top:1px solid ${C.line};font-size:12px;white-space:nowrap">${notes.join(' · ')||'<span style="color:#b0b6c3">정상 시청</span>'}</td></tr>`;}).join('')}</table>`):'';
   // 어휘
-  const vocabBox=d.vocab.map(t=>{
+  const vocabBox=!d.vocabStarted?box('어휘 미션',empty('아직 어휘 미션을 시작하지 않았어요.')):d.vocab.map(t=>{
     const done=t.items.filter(x=>x.cleared).length;
     const rows=t.items.length?t.items.map(x=>{const{title}=splitTitle(x.s.lesson_title||x.s.name);
       const ongoing=!x.cleared&&addDays(x.s.open_date,6)>end; // 마감 전이면 아직 진행 중
@@ -2187,7 +2188,7 @@ function parentReportHTML(sid,note,start,end){
       return `<div class="pb" style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid ${C.line};font-size:14px"><span><b>MISSION ${pad2(x.no)}</b> · ${esc(title)}<span style="display:block;font-size:12px;color:${C.sub}">${mdWd(x.s.open_date)} ~ ${mdWd(addDays(x.s.open_date,6))}${x.tries?` · ${x.tries}회 응시`:''}</span></span>${st}</div>`;}).join('')
       :empty(t.next?`첫 미션은 ${mdWd(t.next.open_date)}에 열려요.`:'이 기간에 열린 미션이 없어요.');
     const sub=t.items.length?`이번 주 수행 <b style="color:${C.ink}">${done}/${t.items.length}</b>`:'';
-    return box(`어휘 미션 · ${esc(t.track)}${d.vocabStarted?'':` <span style="font-size:12px;color:${C.red};font-weight:600">(아직 시작 안 함)</span>`}`,rows+
+    return box('어휘 미션',rows+
       `<div style="font-size:12px;color:${C.sub};margin-top:8px">누적 ${t.clearedAll}/${t.openedN}개 완료${t.overdue?` · <span style="color:${C.red};font-weight:600">밀린 미션 ${t.overdue}개</span>`:''}</div>`,sub);
   }).join('');
   // 시험

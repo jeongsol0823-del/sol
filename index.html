@@ -229,6 +229,9 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       </div>
       <div id="form-signup" style="display:none">
         <div class="form-group"><label>이름</label><input class="form-input" id="su-name" placeholder="이름"></div>
+        <div class="form-group"><label>학교</label><select class="form-select" id="su-school" onchange="onSuSchoolChange()"></select>
+          <input class="form-input" id="su-school-other" placeholder="학교 이름 (예: 수지고)" style="display:none;margin-top:6px"></div>
+        <div class="form-group"><label>학년</label><select class="form-select" id="su-grade"><option value="">학년 선택</option><option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option></select></div>
         <div class="form-group"><label>아이디</label><input class="form-input" id="su-id" placeholder="영문/숫자/밑줄"></div>
         <div class="form-group"><label>비밀번호</label><input class="form-input" id="su-pw" type="password" placeholder="4자 이상"></div>
         <div class="form-group"><label>비밀번호 확인</label><input class="form-input" id="su-pw2" type="password" placeholder="비밀번호 확인"></div>
@@ -262,7 +265,11 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
   <div class="content">
 
     <div class="section active" id="t-students">
-      <div class="section-head"><h2>가입 승인 대기</h2></div>
+      <div class="card"><div style="font-weight:600;margin-bottom:6px">학교 목록</div>
+        <div id="school-list" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <div style="display:flex;gap:6px;margin-top:10px"><input class="form-input" id="school-new" placeholder="예: 수지고" style="flex:1"><button class="btn sm" onclick="addSchool()">학교 추가</button></div>
+        <div class="vhint" style="margin:8px 0 0">학년은 매년 3월 1일에 한 학년씩 자동으로 올라가요.</div></div>
+      <div class="section-head" style="margin-top:20px"><h2>가입 승인 대기</h2></div>
       <div id="pending-list"></div>
       <div class="section-head" style="margin-top:24px"><h2>학생 목록 &amp; 진도</h2></div>
       <div id="active-list"></div>
@@ -275,7 +282,10 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
         <div class="admin-form">
           <div class="full form-group"><label>제목</label><input class="form-input" id="v-title" placeholder="강의 제목"></div>
           <div class="full form-group"><label>유튜브 URL</label><input class="form-input" id="v-url" placeholder="https://youtu.be/..."></div>
-          <div class="form-group"><label>수업 날짜 (이 날 결석한 학생에게 자동으로 열려요)</label><input class="form-input" id="v-date" type="date"></div>
+          <div class="form-group"><label>수업 날짜</label><input class="form-input" id="v-date" type="date"></div>
+          <div class="form-group"><label>학교</label><select class="form-select" id="v-school"></select></div>
+          <div class="form-group"><label>학년</label><select class="form-select" id="v-grade"><option value="">전체 학년</option><option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option></select></div>
+          <div class="full vhint" style="margin:0">수업 날짜 · 학교 · 학년이 맞는 학생 중 그날 <b>결석</b>으로 저장된 학생에게 자동으로 열려요.</div>
           <div class="form-group"><label>설명 (선택)</label><input class="form-input" id="v-desc" placeholder="간단한 설명"></div>
         </div>
         <button class="btn blue" style="margin-top:10px" onclick="addVideo()">영상 등록</button>
@@ -408,7 +418,8 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     <div class="section" id="t-attendance">
       <div class="section-head"><h2>출석 체크</h2></div>
       <div class="card">
-        <div class="form-group"><label>날짜</label><input class="form-input" id="att-date" type="date"></div>
+        <div class="admin-form"><div class="form-group"><label>날짜</label><input class="form-input" id="att-date" type="date"></div>
+          <div class="form-group"><label>학교</label><select class="form-select" id="att-school" onchange="renderAttendanceForm()"></select></div></div>
         <div class="row-between" style="margin-top:4px"><span id="att-saved-state" style="font-size:12px;color:var(--text2)"></span>
           <div style="display:flex;gap:6px"><button class="btn sm" onclick="setAllAttendance('present')">모두 출석</button><button class="btn sm" onclick="setAllAttendance('absent')">모두 결석</button></div></div>
         <div id="att-student-rows" style="margin-top:8px"></div>
@@ -593,7 +604,7 @@ const emptyDb=()=>({
   clinicSlots:[],clinicRequests:[],
   certWeeks:[],certItems:[],certSubmissions:[],
   attendance:[],announcements:[],announcementReads:[],
-  vocabSets:[],vocabWords:[],vocabAttempts:[],reportLinks:[]
+  vocabSets:[],vocabWords:[],vocabAttempts:[],reportLinks:[],schools:[]
 });
 let db=emptyDb();
 
@@ -643,7 +654,7 @@ async function selectAll(table,orderCols=['id']){
 }
 async function loadAll(attempt=0){
   try{
-    const [u,v,p,va,ar,qs,qw,qq,ex,er,cs,cr,cw,ci,csu,att,an,arr,vs2,vw2,va2,rl]=await Promise.all([
+    const [u,v,p,va,ar,qs,qw,qq,ex,er,cs,cr,cw,ci,csu,att,an,arr,vs2,vw2,va2,rl,sc]=await Promise.all([
       sb.from('users').select('*'),
       sb.from('videos').select('*').order('created_at'),
       selectAll('progress',['student_id','video_id']),
@@ -665,7 +676,8 @@ async function loadAll(attempt=0){
       sb.from('vocab_sets').select('*').order('created_at',{ascending:false}),
       selectAll('vocab_words'),
       selectAll('vocab_attempts'),
-      sb.from('report_links').select('*').order('created_at',{ascending:false})
+      sb.from('report_links').select('*').order('created_at',{ascending:false}),
+      sb.from('schools').select('*')
     ]);
     if(u.error)throw new Error(u.error.message);
     if(v.error)throw new Error(v.error.message);
@@ -678,7 +690,7 @@ async function loadAll(attempt=0){
     db.certWeeks=(cw.data)||[];db.certItems=(ci.data)||[];db.certSubmissions=(csu.data)||[];
     db.attendance=(att.data)||[];db.announcements=(an.data)||[];db.announcementReads=(arr.data)||[];
     db.vocabSets=(vs2.data)||[];db.vocabWords=(vw2.data)||[];db.vocabAttempts=(va2.data)||[];
-    db.reportLinks=(rl&&rl.data)||[];
+    db.reportLinks=(rl&&rl.data)||[];db.schools=(sc&&sc.data)||[];
   }catch(e){
     if(attempt<3){
       document.querySelector('.loading-text').textContent=`재연결 중... (${attempt+1}/3)`;
@@ -729,7 +741,11 @@ async function doLogin(){
   }catch(e){err.textContent='연결 오류: '+e.message;}
   finally{btn.disabled=false;btn.textContent='로그인';}
 }
-function showSignup(){document.getElementById('form-login').style.display='none';document.getElementById('form-signup').style.display='block';}
+function showSignup(){document.getElementById('form-login').style.display='none';document.getElementById('form-signup').style.display='block';
+  const fill=()=>{fillSchoolSelect('su-school','학교 선택',true);onSuSchoolChange();};fill();
+  if(!db.users.length)loadAll().then(fill).catch(()=>{}); // 로그아웃 직후엔 학교 목록을 다시 불러옴
+}
+function onSuSchoolChange(){const v=document.getElementById('su-school').value;document.getElementById('su-school-other').style.display=v==='__other'?'':'none';}
 function showLogin(){document.getElementById('form-signup').style.display='none';document.getElementById('form-login').style.display='block';selectRole('student');}
 async function doSignup(){
   const name=document.getElementById('su-name').value.trim();
@@ -739,7 +755,12 @@ async function doSignup(){
   const err=document.getElementById('signup-err');
   const btn=document.getElementById('signup-btn');
   err.textContent='';
+  const schoolSel=document.getElementById('su-school').value;
+  const school=(schoolSel==='__other'?document.getElementById('su-school-other').value:schoolSel).trim();
+  const grade=parseInt(document.getElementById('su-grade').value,10)||null;
   if(!name||!id||!pw||!pw2){err.textContent='모든 항목을 입력하세요.';return;}
+  if(!school){err.textContent='학교를 선택하거나 입력하세요.';return;}
+  if(!grade){err.textContent='학년을 선택하세요.';return;}
   if(!/^[a-zA-Z0-9_]+$/.test(id)){err.textContent='아이디는 영문/숫자/밑줄만 가능합니다.';return;}
   if(pw.length<4){err.textContent='비밀번호는 4자 이상이어야 합니다.';return;}
   if(pw!==pw2){err.textContent='비밀번호가 일치하지 않습니다.';return;}
@@ -748,13 +769,57 @@ async function doSignup(){
     await loadAll();
     if(db.users.find(u=>u.id===id)){err.textContent='이미 사용 중인 아이디입니다.';return;}
     if(nameTaken(name)){err.textContent='같은 이름의 학생이 이미 있어요. 이름 뒤에 학교명이나 숫자를 붙여 주세요. 예) '+name+'(수지고), '+name+'2';return;}
-    const{error}=await sb.from('users').insert({id,name,pw,role:'student',status:'pending'});
+    const row={id,name,pw,role:'student',status:'pending',school,grade,grade_year:academicYear(todayStr())};
+    let{error}=await sb.from('users').insert(row);
+    if(error&&/school|grade/.test(error.message)){['school','grade','grade_year'].forEach(k=>delete row[k]);({error}=await sb.from('users').insert(row));} // SQL 실행 전이면 학교 없이라도 가입
     if(error){err.textContent='가입 실패: '+error.message;return;}
-    ['su-name','su-id','su-pw','su-pw2'].forEach(i=>document.getElementById(i).value='');
+    ['su-name','su-id','su-pw','su-pw2','su-school-other'].forEach(i=>document.getElementById(i).value='');document.getElementById('su-grade').value='';
     showLogin();
     notify('가입 신청 완료! 쏠T의 승인 후 로그인하세요.','success');
   }catch(e){err.textContent='오류: '+e.message;}
   finally{btn.disabled=false;btn.textContent='가입 신청';}
+}
+/* ---- 학교·학년 ---- */
+// 학년은 3월 1일에 한 학년씩 자동으로 올라가요 (가입·수정한 해 기준)
+function academicYear(d){const [y,m]=d.split('-').map(Number);return m>=3?y:y-1;}
+function gradeAt(u,d){if(!u||!u.grade)return null;const base=u.grade_year||academicYear(todayStr());return u.grade+(academicYear(d||todayStr())-base);}
+function gradeLabel(g){return g==null?'학년 미입력':g>3?'졸업':g+'학년';}
+function studentTag(u){return `${u.school||'학교 미입력'} · ${gradeLabel(gradeAt(u))}`;}
+function schoolNames(){const set=new Set(db.schools.map(s=>s.name));db.users.forEach(u=>{if(u.role==='student'&&u.school)set.add(u.school);});return [...set].sort((a,b)=>a.localeCompare(b,'ko'));}
+function fillSchoolSelect(id,firstLabel,withOther,value){
+  const el=document.getElementById(id);if(!el)return;
+  const names=schoolNames();
+  el.innerHTML=`<option value="">${esc(firstLabel)}</option>`+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')+(withOther?'<option value="__other">목록에 없음 (직접 입력)</option>':'');
+  if(value!=null)el.value=value;
+}
+async function addSchool(){
+  const inp=document.getElementById('school-new');const name=(inp.value||'').trim();
+  if(!name){notify('학교 이름을 입력하세요.','error');return;}
+  if(db.schools.some(s=>s.name===name)){notify('이미 있는 학교예요.','info');return;}
+  const row={id:uid('sch_'),name};
+  const{error}=await sb.from('schools').insert(row);
+  if(error){notify('추가 실패: '+error.message+(/schools/.test(error.message)?' (schema_add10.sql을 실행해주세요)':''),'error');return;}
+  db.schools.push(row);inp.value='';renderSchoolAdmin();renderActive();notify(`"${name}"을(를) 추가했어요.`,'success');
+}
+async function deleteSchool(id){
+  const s=db.schools.find(x=>x.id===id);if(!s)return;
+  if(!confirm(`"${s.name}"을(를) 학교 목록에서 뺄까요? 이미 이 학교로 등록된 학생 정보는 그대로예요.`))return;
+  await sb.from('schools').delete().eq('id',id);db.schools=db.schools.filter(x=>x.id!==id);renderSchoolAdmin();
+}
+function renderSchoolAdmin(){
+  const el=document.getElementById('school-list');if(!el)return;
+  el.innerHTML=db.schools.length?db.schools.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko')).map(s=>`<span class="chip" style="cursor:default">${esc(s.name)} <span style="cursor:pointer;margin-left:4px" onclick="deleteSchool('${esc(s.id)}')">✕</span></span>`).join(' '):'<span style="font-size:12px;color:var(--text3)">아직 학교가 없어요. 추가하면 학생이 가입할 때 목록에서 고를 수 있어요.</span>';
+  fillSchoolSelect('v-school','전체 학교',false,document.getElementById('v-school')?document.getElementById('v-school').value:null);
+  fillSchoolSelect('att-school','전체 학교',false,document.getElementById('att-school')?document.getElementById('att-school').value:null);
+}
+async function updateStudentInfo(id){
+  const u=db.users.find(x=>x.id===id);if(!u)return;
+  const school=document.getElementById('st-school-'+id).value||null;
+  const grade=parseInt(document.getElementById('st-grade-'+id).value,10)||null;
+  const patch={school,grade,grade_year:academicYear(todayStr())};
+  const{error}=await sb.from('users').update(patch).eq('id',id);
+  if(error){notify('저장 실패: '+error.message+(/school|grade/.test(error.message)?' (schema_add10.sql을 실행해주세요)':''),'error');return;}
+  Object.assign(u,patch);notify(`${u.name}: ${studentTag(u)}`,'success');renderPending();renderActive();
 }
 function normName(n){return String(n||'').replace(/\s+/g,'').toLowerCase();}
 function nameTaken(name,exceptId){return db.users.some(u=>u.id!==exceptId&&normName(u.name)===normName(name));}
@@ -774,7 +839,7 @@ function doLogout(){
 function launchTeacher(){
   document.getElementById('teacher-name').textContent=session.name+' 선생님';
   showPage('page-teacher');
-  renderPending();renderActive();renderVideoAdmin();
+  renderSchoolAdmin();renderPending();renderActive();renderVideoAdmin();
   renderAccessAdmin();
   renderQaSchools();renderQaWeeks();renderQaQuestions();renderQaFreeAdmin();
   renderExamAdmin();
@@ -794,7 +859,7 @@ function renderPending(){
   if(!pending.length){el.innerHTML='<div class="empty-hint">대기 중인 가입 신청이 없습니다.</div>';return;}
   el.innerHTML=pending.map(u=>`
     <div class="card row-between">
-      <div><strong>${esc(u.name)}</strong> <span style="color:var(--text2)">(${esc(u.id)})</span>${nameTaken(u.name,u.id)?' <span class="pill red">동명이인</span>':''}</div>
+      <div><strong>${esc(u.name)}</strong> <span style="color:var(--text2)">(${esc(u.id)})</span>${nameTaken(u.name,u.id)?' <span class="pill red">동명이인</span>':''}<div style="font-size:12px;color:var(--text2)">${esc(studentTag(u))}</div></div>
       <div style="display:flex;gap:6px">
         <button class="btn sm" onclick="renameStudent('${esc(u.id)}')">이름 수정</button>
         <button class="btn green sm" onclick="approveStudent('${esc(u.id)}')">승인</button>
@@ -813,14 +878,16 @@ function renderActive(){
     const flags=videoFlagsFor(u.id);
     const fast=flags.filter(f=>f.fast).length,skip=flags.filter(f=>f.skip).length;
     return `<tr>
-      <td>${esc(u.name)}${nameTaken(u.name,u.id)?' <span class="pill red">동명이인</span>':''}</td><td style="color:var(--text2)">${esc(u.id)}</td>
+      <td>${esc(u.name)}${nameTaken(u.name,u.id)?' <span class="pill red">동명이인</span>':''}<div style="font-size:11px;color:var(--text3)">${esc(u.id)}</div></td>
+      <td style="white-space:nowrap"><select class="date-in" id="st-school-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}')"><option value="">학교 미입력</option>${[...new Set(schoolNames().concat(u.school?[u.school]:[]))].map(n=>`<option value="${esc(n)}"${u.school===n?' selected':''}>${esc(n)}</option>`).join('')}</select>
+        <select class="date-in" id="st-grade-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}')"><option value="">학년</option>${[1,2,3].map(g=>`<option value="${g}"${gradeAt(u)===g?' selected':''}>${g}학년</option>`).join('')}</select></td>
       <td>${watched} / ${db.videoAccess.filter(a=>a.student_id===u.id).length}개 시청</td>
       <td>${avg}%</td>
       <td>${fast?`<span class="pill amber">배속 ${fast}</span> `:''}${skip?`<span class="pill red">건너뜀 ${skip}</span>`:''}${!fast&&!skip?'<span style="color:var(--text3)">-</span>':''}</td>
       <td style="white-space:nowrap"><button class="btn sm" onclick="renameStudent('${esc(u.id)}')">이름 수정</button> <button class="btn red sm" onclick="removeStudent('${esc(u.id)}')">삭제</button></td>
     </tr>`;
   }).join('');
-  el.innerHTML=`<div style="overflow-x:auto"><table class="simple" style="min-width:620px"><thead><tr><th>이름</th><th>아이디</th><th>시청 현황</th><th>평균 진도</th><th>영상 확인</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  el.innerHTML=`<div style="overflow-x:auto"><table class="simple" style="min-width:720px"><thead><tr><th>이름</th><th>학교·학년</th><th>시청 현황</th><th>평균 진도</th><th>영상 확인</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 async function renameStudent(id){
   const u=db.users.find(x=>x.id===id);if(!u)return;
@@ -886,18 +953,20 @@ async function addVideo(){
   const desc=document.getElementById('v-desc').value.trim();
   const category='review'; // 모든 영상은 허락받은 학생만 볼 수 있어요
   const classDate=document.getElementById('v-date').value||null;
+  const vSchool=document.getElementById('v-school').value||null;
+  const vGrade=parseInt(document.getElementById('v-grade').value,10)||null;
   if(!title||!url){notify('제목과 URL을 입력하세요.','error');return;}
   if(!ytId(url)){notify('유효한 유튜브 URL을 입력하세요.','error');return;}
   const id=uid('v');
-  const row={id,title,url,description:desc,category,class_date:classDate};
+  const row={id,title,url,description:desc,category,class_date:classDate,school:vSchool,grade:vGrade};
   let{error}=await sb.from('videos').insert(row);
   let noDateCol=false;
-  if(error&&/class_date/.test(error.message)){noDateCol=true;delete row.class_date;({error}=await sb.from('videos').insert(row));}
+  if(error&&/class_date|school|grade/.test(error.message)){noDateCol=true;['class_date','school','grade'].forEach(k=>delete row[k]);({error}=await sb.from('videos').insert(row));}
   if(error){notify('등록 실패: '+error.message,'error');return;}
   db.videos.push(Object.assign({created_at:new Date().toISOString()},row));
-  ['v-title','v-url','v-desc','v-date'].forEach(i=>document.getElementById(i).value='');
+  ['v-title','v-url','v-desc','v-date'].forEach(i=>document.getElementById(i).value='');document.getElementById('v-grade').value='';
   const n=classDate&&!noDateCol?await autoGrantAbsentees(classDate):0;
-  notify(noDateCol?'영상은 등록했지만 수업 날짜는 SQL(schema_add9)을 실행해야 저장돼요.':`영상을 등록했어요.${n?` 그날 결석한 학생 ${n}명에게 열어줬어요.`:''}`,noDateCol?'error':'success');
+  notify(noDateCol?'영상은 등록했지만 수업 날짜·학교·학년은 SQL(schema_add10)을 실행해야 저장돼요.':`영상을 등록했어요.${n?` 그날 결석한 학생 ${n}명에게 열어줬어요.`:''}`,noDateCol?'error':'success');
   renderVideoAdmin();
 }
 /* ---- 영상 시청 권한: 결석생 자동 열기 + 수동 열기/닫기 ---- */
@@ -919,23 +988,33 @@ async function revokeAccess(sid,vid){
   db.videoAccess=db.videoAccess.filter(a=>!(a.student_id===sid&&a.video_id===vid));
 }
 // date에 결석한 학생에게 그 날짜 수업 영상을 열어줌. 새로 열어준 학생 수를 돌려줌
+// 이 영상이 그 학생의 수업인지 (학교·학년이 비어 있으면 전체)
+function videoFor(v,u){
+  if(!u)return false;
+  if(v.school&&v.school!==u.school)return false;
+  if(v.grade&&gradeAt(u,v.class_date||todayStr())!==v.grade)return false;
+  return true;
+}
 async function autoGrantAbsentees(date){
   const vids=db.videos.filter(v=>v.class_date===date);if(!vids.length)return 0;
   const absent=db.attendance.filter(a=>a.date===date&&a.status==='absent').map(a=>a.student_id);
   const who=new Set();
-  for(const sid of absent)for(const v of vids){if(await grantAccess(sid,v.id))who.add(sid);}
+  for(const sid of absent){const u=db.users.find(x=>x.id===sid);for(const v of vids){if(videoFor(v,u)&&await grantAccess(sid,v.id))who.add(sid);}}
   return who.size;
 }
 async function setVideoDate(vid){
   const v=db.videos.find(x=>x.id===vid);if(!v)return;
   const d=document.getElementById('vdate-'+vid).value||null;
-  const{error}=await sb.from('videos').update({class_date:d}).eq('id',vid);
-  if(error){notify('저장 실패: '+error.message+(/class_date/.test(error.message)?' (schema_add9.sql을 실행해주세요)':''),'error');return;}
-  v.class_date=d;
+  const sch=document.getElementById('vschool-'+vid).value||null;
+  const gr=parseInt(document.getElementById('vgrade-'+vid).value,10)||null;
+  const{error}=await sb.from('videos').update({class_date:d,school:sch,grade:gr}).eq('id',vid);
+  if(error){notify('저장 실패: '+error.message+(/class_date|school|grade/.test(error.message)?' (schema_add10.sql을 실행해주세요)':''),'error');return;}
+  v.class_date=d;v.school=sch;v.grade=gr;
   const n=d?await autoGrantAbsentees(d):0;
   renderVideoAdmin();renderVideoWatchDetail(vid);renderAccessAdmin();
-  notify(d?`수업 날짜를 ${mdWd(d)}로 정했어요.${n?` 결석한 학생 ${n}명에게 열어줬어요.`:''}`:'수업 날짜를 지웠어요.','success');
+  notify(`${videoClassLabel(v)}(으)로 저장했어요.${n?` 결석한 학생 ${n}명에게 열어줬어요.`:''}`,'success');
 }
+function videoClassLabel(v){return [v.school||'전체 학교',v.grade?v.grade+'학년':'',v.class_date?mdWd(v.class_date)+' 수업':'날짜 없음'].filter(Boolean).join(' · ');}
 async function toggleAccess(sid,vid){
   if(hasAccess(sid,vid)){await revokeAccess(sid,vid);notify(`${userName(sid)} 학생의 시청 권한을 닫았어요.`,'info');}
   else{await grantAccess(sid,vid);notify(`${userName(sid)} 학생에게 영상을 열어줬어요.`,'success');}
@@ -948,7 +1027,7 @@ function renderVideoAdmin(){
     <div class="card row-between">
       <div style="display:flex;gap:10px;align-items:center">
         <img src="${thumb(v.url)}" style="width:80px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;background:var(--bg3)" alt="">
-        <div><strong>${esc(v.title)}</strong>${v.class_date?` <span class="pill blue">${mdWd(v.class_date)} 수업</span>`:' <span class="pill amber">날짜 없음</span>'}<div style="color:var(--text2);font-size:12px">시청 가능 ${db.videoAccess.filter(a=>a.video_id===v.id).length}명${v.description?' · '+esc(v.description):''}</div></div>
+        <div><strong>${esc(v.title)}</strong> <span class="pill ${v.class_date?'blue':'amber'}">${esc(videoClassLabel(v))}</span><div style="color:var(--text2);font-size:12px">시청 가능 ${db.videoAccess.filter(a=>a.video_id===v.id).length}명${v.description?' · '+esc(v.description):''}</div></div>
       </div>
       <div style="display:flex;gap:6px"><button class="btn sm" onclick="renderVideoWatchDetail('${esc(v.id)}')">시청 권한·기록</button><button class="btn red sm" onclick="deleteVideo('${esc(v.id)}')">삭제</button></div>
     </div>`).join('');
@@ -1007,17 +1086,21 @@ function renderVideoAlerts(){
 }
 function renderVideoWatchDetail(vid){
   const el=document.getElementById('video-watch-detail');const v=db.videos.find(x=>x.id===vid);
-  const students=db.users.filter(u=>u.role==='student'&&u.status==='active');
+  const students=db.users.filter(u=>u.role==='student'&&u.status==='active').sort((a,b)=>(videoFor(v,b)?1:0)-(videoFor(v,a)?1:0)); // 이 수업 학생 먼저
   const accCell=u=>{const ok=hasAccess(u.id,vid);const abs=v&&v.class_date&&db.attendance.some(a=>a.student_id===u.id&&a.date===v.class_date&&a.status==='absent');const req=accessReqStatus(u.id,vid);
     return `<td style="white-space:nowrap">${ok?'<span class="pill green">열림</span>':req&&req.status==='pending'?'<span class="pill amber">신청함</span>':'<span class="pill" style="color:var(--text3)">닫힘</span>'}${abs?' <span style="font-size:11px;color:var(--red)">결석</span>':''}<div style="margin-top:4px"><button class="btn sm${ok?'':' green'}" onclick="toggleAccess('${esc(u.id)}','${esc(vid)}')">${ok?'닫기':'열어주기'}</button></div></td>`;};
   const rows=students.map(u=>{const p=db.progress.find(x=>x.student_id===u.id&&x.video_id===vid);const f=watchInfo(p);
-    if(!f)return `<tr><td>${esc(u.name)}</td>${accCell(u)}<td colspan="4" style="color:var(--text3)">아직 안 봄</td></tr>`;
+    const nm=`<td>${esc(u.name)}<div style="font-size:11px;color:${videoFor(v,u)?'var(--text2)':'var(--text3)'}">${esc(studentTag(u))}</div></td>`;
+    if(!f)return `<tr>${nm}${accCell(u)}<td colspan="4" style="color:var(--text3)">아직 안 봄</td></tr>`;
     const skipTxt=!f.hasRanges?'<span style="color:var(--text3)">기록 없음</span>':f.skips.length?`<span style="color:${f.skip?'var(--red)':'var(--text2)'}">${fmtTime(f.skipTotal)}</span><div style="font-size:11px;color:var(--text2)">${f.skips.map(([a,b])=>fmtClock(a)+'~'+fmtClock(b)).join(', ')}</div>`:'없음';
-    return `<tr><td>${esc(u.name)}</td>${accCell(u)}<td>${f.pct}%${f.remaining>5?`<div style="font-size:11px;color:var(--text3)">남은 ${fmtTime(f.remaining)}</div>`:''}</td>
+    return `<tr>${nm}${accCell(u)}<td>${f.pct}%${f.remaining>5?`<div style="font-size:11px;color:var(--text3)">남은 ${fmtTime(f.remaining)}</div>`:''}</td>
       <td><span style="color:${f.fast?'var(--amber)':'inherit'}">최고 ${f.maxRate}배</span><div style="font-size:11px;color:var(--text2)">${ratesText(f.rates)}</div></td>
       <td>${skipTxt}</td><td style="font-size:12px;color:var(--text2)">${p.updated_at?fmtMD(ymd(new Date(p.updated_at))):''}</td></tr>`;}).join('');
   el.innerHTML=`<div class="card"><strong>${esc(v?v.title:'')}</strong> <span style="color:var(--text2)">시청 권한·기록</span>
-      <div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:12px;color:var(--text2)">수업 날짜 <input type="date" class="date-in" id="vdate-${esc(vid)}" value="${esc((v&&v.class_date)||'')}"><button class="btn sm" onclick="setVideoDate('${esc(vid)}')">적용</button><span>이 날 결석으로 저장된 학생에게 자동으로 열려요</span></div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:12px;color:var(--text2)">수업 날짜 <input type="date" class="date-in" id="vdate-${esc(vid)}" value="${esc((v&&v.class_date)||'')}">
+        <select class="date-in" id="vschool-${esc(vid)}"><option value="">전체 학교</option>${schoolNames().concat(v&&v.school&&!schoolNames().includes(v.school)?[v.school]:[]).map(n=>`<option value="${esc(n)}"${v&&v.school===n?' selected':''}>${esc(n)}</option>`).join('')}</select>
+        <select class="date-in" id="vgrade-${esc(vid)}"><option value="">전체 학년</option>${[1,2,3].map(g=>`<option value="${g}"${v&&v.grade===g?' selected':''}>${g}학년</option>`).join('')}</select>
+        <button class="btn sm" onclick="setVideoDate('${esc(vid)}')">적용</button><span>맞는 학생 중 그날 결석한 학생에게 자동으로 열려요</span></div>
       <div class="vhint" style="margin:6px 0 0">"열어주기"로 결석하지 않은 학생에게도 직접 열 수 있어요. 건너뛴 구간 = 앞까지 봤는데 중간에 안 본 부분이에요.</div></div>
     <div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple" style="min-width:640px"><thead><tr><th>학생</th><th>시청 권한</th><th>진도</th><th>배속</th><th>건너뛴 구간</th><th>최근</th></tr></thead><tbody>${rows||'<tr><td colspan="6">학생이 없습니다</td></tr>'}</tbody></table></div>`;
   el.scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -1112,8 +1195,9 @@ function renderLectures(){
 }
 function renderReviewGrid(){
   const el=document.getElementById('review-grid');
-  const list=db.videos.slice().sort((a,b)=>String(b.class_date||b.created_at||'').localeCompare(String(a.class_date||a.created_at||'')));
-  if(!list.length){el.innerHTML='<div class="empty-hint">등록된 수업 영상이 없습니다.</div>';return;}
+  const me=db.users.find(u=>u.id===session.id)||session;
+  const list=db.videos.filter(v=>hasAccess(session.id,v.id)||videoFor(v,me)).sort((a,b)=>String(b.class_date||b.created_at||'').localeCompare(String(a.class_date||a.created_at||'')));
+  if(!list.length){el.innerHTML='<div class="empty-hint">우리 학교 수업 영상이 아직 없어요.</div>';return;}
   // 볼 수 있는 영상을 앞으로
   const mine=list.filter(v=>hasAccess(session.id,v.id)),rest=list.filter(v=>!hasAccess(session.id,v.id));
   const card=v=>{
@@ -1973,13 +2057,14 @@ function renderAttendanceForm(){
   if(!dateEl.value)dateEl.value=todayStr();
   dateEl.onchange=renderAttendanceForm;
   const date=dateEl.value;
-  const active=db.users.filter(u=>u.role==='student'&&u.status==='active');
+  const sch=(document.getElementById('att-school')||{}).value||'';
+  const active=db.users.filter(u=>u.role==='student'&&u.status==='active'&&(!sch||u.school===sch));
   const rows=document.getElementById('att-student-rows');
   rows.innerHTML=active.map(u=>{
     const rec=db.attendance.find(a=>a.student_id===u.id&&a.date===date);
     const st=rec?rec.status:'absent'; // 저장된 기록이 없으면 결석으로 시작
     return `<div class="row-between" style="padding:6px 0;border-top:1px solid var(--border)">
-      <span>${esc(u.name)}</span>
+      <span>${esc(u.name)} <span style="font-size:11px;color:var(--text3)">${esc(studentTag(u))}</span></span>
       <select class="form-select att-sel" data-sid="${esc(u.id)}" style="width:110px">
         <option value="present"${st==='present'?' selected':''}>출석</option>
         <option value="late"${st==='late'?' selected':''}>지각</option>
@@ -1987,7 +2072,7 @@ function renderAttendanceForm(){
       </select>
     </div>`;
   }).join('')||'<div class="empty-hint">등록된 학생이 없습니다.</div>';
-  const saved=db.attendance.some(a=>a.date===date);
+  const saved=db.attendance.some(a=>a.date===date&&active.some(u=>u.id===a.student_id));
   const st=document.getElementById('att-saved-state');
   if(st)st.innerHTML=saved?'<span class="pill green">이 날짜는 저장됨</span>':'<span class="pill amber">아직 저장 안 함 · 기본값 결석</span>';
   renderAttendanceHistory();
@@ -2141,7 +2226,7 @@ function renderReportCardHTML(d){
     return `<tr><td>${esc(ex?ex.name:'(삭제된 시험)')}</td><td>${r.correct_count}/${r.total_q}</td><td>${ex&&descPending(ex,r)?`객관식 ${r.points_earned}/${examObjTotal(ex)}점 <span class="pill amber">주관식 채점 대기</span>`:r.score+'%'}</td></tr>`;
   }).join(''):'<tr><td colspan="3" style="color:var(--text2)">응시한 시험이 없습니다</td></tr>';
   return `
-    <div class="card"><strong>${esc(d.student.name)}</strong> <span style="color:var(--text2)">(${esc(d.student.id)})</span></div>
+    <div class="card"><strong>${esc(d.student.name)}</strong> <span style="color:var(--text2)">(${esc(d.student.id)}) · ${esc(studentTag(d.student))}</span></div>
     <div class="card">
       <div class="row-between"><span>복습 영상</span><span>${d.total?`${d.watched}/${d.total}개 · 평균 ${d.avgPct}%`:'열린 영상 없음'}</span></div>
       <div class="progress-bar"><div class="progress-bar-fill" style="width:${d.avgPct}%"></div></div>
@@ -2251,7 +2336,7 @@ function parentReportHTML(sid,note,start,end){
   return `<div style="width:794px;box-sizing:border-box;padding:44px 48px 40px;background:#fff;color:${C.ink};font-family:'Noto Sans KR',sans-serif">
     <div class="pb" style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid ${C.blue};padding-bottom:14px;margin-bottom:20px">
       <div><div style="font-size:13px;color:${C.blue};font-weight:700;letter-spacing:1px">정말 쏠쏠한 국어</div><div style="font-size:26px;font-weight:800;margin-top:2px">주간 학습 리포트</div></div>
-      <div style="text-align:right"><div style="font-size:20px;font-weight:700">${esc(u?u.name:'')} 학생</div><div style="font-size:13px;color:${C.sub}">${mdWd(start)} ~ ${mdWd(end)}</div></div>
+      <div style="text-align:right"><div style="font-size:20px;font-weight:700">${esc(u?u.name:'')} 학생</div><div style="font-size:13px;color:${C.sub}">${u&&u.school?esc(u.school)+' '+gradeLabel(gradeAt(u,end))+' · ':''}${mdWd(start)} ~ ${mdWd(end)}</div></div>
     </div>
     ${noteBox}${attBox}${vocabBox}${examBox}${vidBox}
     <div class="pb" style="font-size:11px;color:#9aa1b0;text-align:center;margin-top:18px">정말 쏠쏠한 국어 · 쏠T · ${koDate(start)} ~ ${koDate(end)} 기록</div>

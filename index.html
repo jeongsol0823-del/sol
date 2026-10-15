@@ -196,6 +196,9 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 #play-warn .w.amber{border-color:var(--amber)}
 #play-warn .w button{background:none;border:none;color:#fff;font-size:15px;cursor:pointer;padding:0 2px;line-height:1}
 #play-warn .seek{color:#ffd166;text-decoration:underline;cursor:pointer;white-space:nowrap}
+.exam-timer{position:sticky;top:64px;z-index:15;background:var(--bg2);border:1.5px solid var(--accent);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;font-size:15px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.exam-timer.warn{border-color:var(--amber);color:var(--amber)}
+.exam-timer.danger{border-color:var(--red);color:var(--red)}
 .date-in{padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--font);color-scheme:dark}
 </style>
 </head>
@@ -313,16 +316,17 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     </div>
 
     <div class="section" id="t-exams">
-      <div class="section-head"><h2>새 시험 만들기</h2></div>
+      <div class="section-head"><h2 id="ex-form-title">새 시험 만들기</h2></div>
       <div class="card">
         <div class="admin-form">
           <div class="form-group"><label>시험 이름</label><input class="form-input" id="ex-name" placeholder="예: 3월 모의고사"></div>
           <div class="form-group"><label>구분</label><select class="form-select" id="ex-category"><option value="school">내신</option><option value="mock">모의고사</option></select></div>
+          <div class="form-group"><label>제한시간 (분, 비우면 제한 없음)</label><input class="form-input" id="ex-time" type="number" min="0" placeholder="예: 50"></div>
         </div>
         <div style="margin:12px 0 4px;font-size:11px;color:var(--text2)">번호 / 유형 / 배점 / 정답 / 해설(선택)</div>
         <div id="ex-q-rows"></div>
         <button class="btn sm" onclick="addExamQRow()">+ 문항 추가</button>
-        <button class="btn blue" style="margin-top:10px" onclick="saveExam()">시험 저장</button>
+        <div style="display:flex;gap:6px;margin-top:10px"><button class="btn blue" id="ex-save-btn" onclick="saveExam()">시험 저장</button><button class="btn" id="ex-cancel-btn" style="display:none" onclick="resetExamForm()">수정 취소</button></div>
       </div>
       <div class="section-head" style="margin-top:24px"><h2>만든 시험 목록</h2></div>
       <div id="exam-list"></div>
@@ -741,7 +745,7 @@ async function doSignup(){
 function normName(n){return String(n||'').replace(/\s+/g,'').toLowerCase();}
 function nameTaken(name,exceptId){return db.users.some(u=>u.id!==exceptId&&normName(u.name)===normName(name));}
 function doLogout(){
-  closePlay();
+  closePlay();stopExamTimers();
   session=null;
   localStorage.removeItem('sk_kr_sess');
   showPage('page-login');
@@ -1412,8 +1416,31 @@ function renderMyQaFree(){
   </div>`;
 }
 
+/* ===================== 시험 — 공통 ===================== */
+let editingExamId=null;           // 수정 중인 시험
+let examTick=null,examPoll=null,examDraftTimer=null; // 학생 응시 타이머들
+function isSubmitted(r){return !(r&&r.thoughts&&r.thoughts.__submitted===false);}
+function examObjTotal(ex){return (ex.questions||[]).filter(q=>q.type==='obj').reduce((n,q)=>n+(q.points||0),0);}
+function examHasDesc(ex){return (ex.questions||[]).some(q=>q.type==='desc');}
+function descPending(ex,r){return !!ex&&examHasDesc(ex)&&!(r&&r.thoughts&&r.thoughts.__descPoints);}
+// 답안 + 주관식 점수로 채점 (주관식 점수가 없으면 0점으로 계산)
+function gradeExam(ex,answers,descPoints){
+  let pointsEarned=0,pointsTotal=0,correctCount=0;
+  (ex.questions||[]).forEach(q=>{
+    pointsTotal+=q.points||0;
+    if(q.type==='obj'){if(String(answers[q.num]||'').trim()!==''&&String(answers[q.num]).trim()===String(q.answer).trim()){pointsEarned+=q.points||0;correctCount++;}}
+    else if(descPoints&&descPoints[q.num]!=null){pointsEarned+=Math.min(descPoints[q.num],q.points||0);}
+  });
+  return{correct_count:correctCount,points_earned:pointsEarned,points_total:pointsTotal,total_q:(ex.questions||[]).length,score:pointsTotal>0?Math.round(pointsEarned/pointsTotal*100):0};
+}
+function examScoreText(ex,r){
+  if(descPending(ex,r))return `객관식 ${r.points_earned}/${examObjTotal(ex)}점 · <span class="pill amber">주관식 채점 대기</span>`;
+  return `${r.points_earned}/${r.points_total}점 (${r.score}%)`;
+}
+function fmtLeft(sec){sec=Math.max(0,Math.floor(sec));return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;}
+
 /* ===================== 시험 — 강사 ===================== */
-function addExamQRow(){
+function addExamQRow(q){
   examRowSeq++;
   const wrap=document.getElementById('ex-q-rows');
   const div=document.createElement('div');
@@ -1423,17 +1450,41 @@ function addExamQRow(){
     <div style="text-align:center;color:var(--text2)">${wrap.children.length+1}</div>
     <select class="form-select exq-type"><option value="obj">객관식</option><option value="desc">주관식</option></select>
     <input class="form-input exq-points" type="number" value="2">
-    <input class="form-input exq-answer" placeholder="정답">
+    <input class="form-input exq-answer" placeholder="정답 (객관식은 숫자)">
     <input class="form-input exq-expl" placeholder="해설(선택)">
     <button class="btn red sm" type="button" onclick="this.closest('.exq-row').remove();renumberExamRows()">삭제</button>`;
+  if(q){div.querySelector('.exq-type').value=q.type;div.querySelector('.exq-points').value=q.points;div.querySelector('.exq-answer').value=q.answer||'';div.querySelector('.exq-expl').value=q.explanation||'';}
   wrap.appendChild(div);
 }
 function renumberExamRows(){
   document.querySelectorAll('#ex-q-rows .exq-row').forEach((row,i)=>{row.firstElementChild.textContent=i+1;});
 }
+function resetExamForm(){
+  editingExamId=null;
+  document.getElementById('ex-name').value='';document.getElementById('ex-time').value='';
+  document.getElementById('ex-q-rows').innerHTML='';
+  document.getElementById('ex-form-title').textContent='새 시험 만들기';
+  document.getElementById('ex-save-btn').textContent='시험 저장';
+  document.getElementById('ex-cancel-btn').style.display='none';
+}
+function editExam(id){
+  const ex=db.exams.find(x=>x.id===id);if(!ex)return;
+  editingExamId=id;
+  document.getElementById('ex-name').value=ex.name||'';
+  document.getElementById('ex-category').value=ex.category||'school';
+  document.getElementById('ex-time').value=ex.time_limit||'';
+  document.getElementById('ex-q-rows').innerHTML='';
+  (ex.questions||[]).forEach(q=>addExamQRow(q));
+  document.getElementById('ex-form-title').textContent=`시험 수정 중: ${ex.name}`;
+  document.getElementById('ex-save-btn').textContent='수정 내용 저장';
+  document.getElementById('ex-cancel-btn').style.display='';
+  document.getElementById('t-exams').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function readTimeLimit(v){const n=parseInt(v,10);return isNaN(n)||n<=0?null:Math.min(n,600);}
 async function saveExam(){
   const name=document.getElementById('ex-name').value.trim();
   const category=document.getElementById('ex-category').value;
+  const timeLimit=readTimeLimit(document.getElementById('ex-time').value);
   const rows=[...document.querySelectorAll('#ex-q-rows .exq-row')];
   if(!name){notify('시험 이름을 입력하세요.','error');return;}
   if(!rows.length){notify('문항을 1개 이상 추가하세요.','error');return;}
@@ -1444,24 +1495,70 @@ async function saveExam(){
     answer:row.querySelector('.exq-answer').value.trim(),
     explanation:row.querySelector('.exq-expl').value.trim()
   }));
-  const{data,error}=await sb.from('exams').insert({name,total_q:questions.length,questions,teacher_id:session.id,category}).select();
+  const fields={name,total_q:questions.length,questions,category,time_limit:timeLimit};
+  const tryWrite=async f=>editingExamId?await sb.from('exams').update(f).eq('id',editingExamId).select():await sb.from('exams').insert(Object.assign({teacher_id:session.id},f)).select();
+  let{data,error}=await tryWrite(fields);
+  let noTimeCol=false;
+  if(error&&/time_limit/.test(error.message)){noTimeCol=true;delete fields.time_limit;({data,error}=await tryWrite(fields));}
   if(error){notify('저장 실패: '+error.message,'error');return;}
-  const saved=(data&&data[0])||{id:uid('ex_'),name,total_q:questions.length,questions,teacher_id:session.id,category,created_at:new Date().toISOString()};
-  db.exams.unshift(saved);
-  document.getElementById('ex-name').value='';
-  document.getElementById('ex-q-rows').innerHTML='';
+  if(editingExamId){
+    const ex=db.exams.find(x=>x.id===editingExamId);Object.assign(ex,fields);
+    // 정답이 바뀌었을 수 있으니 이미 제출한 답안을 다시 채점 (주관식 점수는 유지)
+    const resps=db.examResponses.filter(r=>r.exam_id===ex.id&&isSubmitted(r));
+    for(const r of resps){
+      const dp=r.thoughts&&r.thoughts.__descPoints;
+      let keep=null;
+      if(dp){keep={};questions.filter(q=>q.type==='desc').forEach(q=>{if(dp[q.num]!=null)keep[q.num]=Math.min(dp[q.num],q.points||0);});}
+      const g=gradeExam(ex,r.answers||{},keep);
+      const thoughts=Object.assign({},r.thoughts);if(keep&&examHasDesc(ex))thoughts.__descPoints=keep;else delete thoughts.__descPoints;
+      const{error:e2}=await sb.from('exam_responses').update(Object.assign({},g,{thoughts})).eq('exam_id',ex.id).eq('student_name',r.student_name);
+      if(!e2)Object.assign(r,g,{thoughts});
+    }
+    notify(`시험을 수정했어요${resps.length?` (제출 ${resps.length}건 다시 채점)`:''}.`+(noTimeCol?' 제한시간은 SQL을 실행해야 저장돼요.':''),noTimeCol?'error':'success');
+  }else{
+    const saved=(data&&data[0])||Object.assign({id:uid('ex_'),teacher_id:session.id,created_at:new Date().toISOString()},fields);
+    db.exams.unshift(saved);
+    notify('시험이 저장되었습니다. 공유코드: '+String(saved.id).slice(0,8).toUpperCase()+(noTimeCol?' (제한시간은 SQL을 실행해야 저장돼요)':''),noTimeCol?'error':'success');
+  }
+  resetExamForm();
   renderExamAdmin();
-  notify('시험이 저장되었습니다. 공유코드: '+String(saved.id).slice(0,8).toUpperCase(),'success');
+}
+async function setExamTimeLimit(id){
+  const ex=db.exams.find(x=>x.id===id);if(!ex)return;
+  const v=readTimeLimit(document.getElementById('extime-'+id).value);
+  const{error}=await sb.from('exams').update({time_limit:v}).eq('id',id);
+  if(error){notify('저장 실패: '+error.message+(/time_limit/.test(error.message)?' (schema_add6.sql을 실행해주세요)':''),'error');return;}
+  ex.time_limit=v;renderExamAdmin();
+  notify(v?`제한시간을 ${v}분으로 바꿨어요. 응시 중인 학생에게도 1분 안에 반영돼요.`:'제한시간을 없앴어요.','success');
+}
+async function deleteExam(id){
+  const ex=db.exams.find(x=>x.id===id);if(!ex)return;
+  const n=db.examResponses.filter(r=>r.exam_id===id).length;
+  if(!confirm(`"${ex.name}" 시험을 삭제할까요?${n?`\n응시 기록 ${n}건도 함께 지워지고 성적표에서도 빠져요.`:''}`))return;
+  await sb.from('exam_responses').delete().eq('exam_id',id);
+  const{error}=await sb.from('exams').delete().eq('id',id);
+  if(error){notify('삭제 실패: '+error.message,'error');return;}
+  db.examResponses=db.examResponses.filter(r=>r.exam_id!==id);db.exams=db.exams.filter(x=>x.id!==id);
+  if(editingExamId===id)resetExamForm();
+  document.getElementById('exam-results').innerHTML='';
+  renderExamAdmin();notify('시험을 삭제했습니다.','info');
 }
 function renderExamAdmin(){
   const el=document.getElementById('exam-list');
   if(!db.exams.length){el.innerHTML='<div class="empty-hint">만든 시험이 없습니다.</div>';return;}
   el.innerHTML=db.exams.map(ex=>{
     const code=String(ex.id).slice(0,8).toUpperCase();
-    const cnt=db.examResponses.filter(r=>r.exam_id===ex.id).length;
-    return `<div class="card row-between">
-      <div><strong>${esc(ex.name)}</strong> <span style="color:var(--text2)">· 문항 ${ex.total_q}개 · 응시 ${cnt}명</span><div style="font-family:var(--mono);color:var(--accent);margin-top:4px">코드: ${code}</div></div>
-      <button class="btn sm" onclick="renderExamResults('${esc(ex.id)}')">결과 보기</button>
+    const list=db.examResponses.filter(r=>r.exam_id===ex.id);
+    const done=list.filter(isSubmitted).length,doing=list.length-done;
+    const pend=list.filter(r=>isSubmitted(r)&&descPending(ex,r)).length;
+    return `<div class="card">
+      <div class="row-between"><div><strong>${esc(ex.name)}</strong> <span style="color:var(--text2)">· 문항 ${ex.total_q}개 · 제출 ${done}명${doing?` · 응시 중 ${doing}명`:''}</span>${pend?` <span class="pill amber">주관식 채점 대기 ${pend}</span>`:''}
+        <div style="font-family:var(--mono);color:var(--accent);margin-top:4px">코드: ${code}</div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" onclick="renderExamResults('${esc(ex.id)}')">결과 보기</button><button class="btn sm" onclick="editExam('${esc(ex.id)}')">수정</button><button class="btn red sm" onclick="deleteExam('${esc(ex.id)}')">삭제</button></div></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--text2);flex-wrap:wrap">제한시간
+        <input type="number" min="0" class="date-in" style="width:70px" id="extime-${esc(ex.id)}" value="${ex.time_limit||''}" placeholder="없음"> 분
+        <button class="btn sm" onclick="setExamTimeLimit('${esc(ex.id)}')">적용</button>
+        <span>${ex.time_limit?`현재 ${ex.time_limit}분`:'현재 제한 없음'} · 비우면 제한 없음</span></div>
     </div>`;
   }).join('');
 }
@@ -1469,10 +1566,24 @@ function renderExamResults(examId){
   const el=document.getElementById('exam-results');
   const ex=db.exams.find(x=>x.id===examId);
   const list=db.examResponses.filter(r=>r.exam_id===examId);
-  const hasDesc=ex&&(ex.questions||[]).some(q=>q.type==='desc');
-  if(!list.length){el.innerHTML='<div class="empty-hint">아직 응시한 학생이 없습니다.</div>';return;}
-  const rows=list.map(r=>`<tr><td>${esc(r.student_name)}</td><td>${r.correct_count}/${r.total_q}</td><td>${r.points_earned}/${r.points_total}점</td><td>${r.score}%</td><td>${hasDesc?`<button class="btn sm" onclick="openGradeDesc('${esc(examId)}','${esc(r.student_name)}')">주관식 채점</button>`:''}</td></tr>`).join('');
-  el.innerHTML=`<div class="card"><strong>${esc(ex?ex.name:'')}</strong></div><table class="simple"><thead><tr><th>학생</th><th>정답수</th><th>점수</th><th>백분율</th><th></th></tr></thead><tbody>${rows}</tbody></table><div id="desc-grade-area" style="margin-top:12px"></div>`;
+  const hasDesc=ex&&examHasDesc(ex);
+  if(!list.length){el.innerHTML=`<div class="card"><strong>${esc(ex?ex.name:'')}</strong></div><div class="empty-hint">아직 응시한 학생이 없습니다.</div>`;return;}
+  const rows=list.map(r=>{
+    const sub=isSubmitted(r);
+    let state;
+    if(!sub){const st=r.thoughts&&r.thoughts.__startedAt;const left=ex&&ex.time_limit&&st?ex.time_limit*60-(Date.now()-new Date(st))/1000:null;state=`<span class="pill blue">응시 중${left!=null?` · 남은 ${fmtLeft(left)}`:''}</span>`;}
+    else state=examScoreText(ex,r);
+    return `<tr><td>${esc(r.student_name)}</td><td>${sub?`${r.correct_count}/${r.total_q}`:'-'}</td><td>${state}</td>
+      <td style="white-space:nowrap">${sub&&hasDesc?`<button class="btn sm" onclick="openGradeDesc('${esc(examId)}','${esc(r.student_name)}')">주관식 채점</button> `:''}<button class="btn sm" onclick="allowRetake('${esc(examId)}','${esc(r.student_name)}')">재응시 허용</button></td></tr>`;
+  }).join('');
+  el.innerHTML=`<div class="card"><strong>${esc(ex?ex.name:'')}</strong> <span style="color:var(--text2);font-size:12px">학생은 한 번만 제출할 수 있어요. 다시 보게 하려면 "재응시 허용"을 누르세요.</span></div><div style="overflow-x:auto"><table class="simple" style="min-width:520px"><thead><tr><th>학생</th><th>정답수</th><th>점수</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><div id="desc-grade-area" style="margin-top:12px"></div>`;
+}
+async function allowRetake(examId,studentName){
+  if(!confirm(`${studentName} 학생의 이 시험 기록을 지우고 다시 응시할 수 있게 할까요?\n지금까지의 답안과 점수는 사라져요.`))return;
+  const{error}=await sb.from('exam_responses').delete().eq('exam_id',examId).eq('student_name',studentName);
+  if(error){notify('처리 실패: '+error.message,'error');return;}
+  db.examResponses=db.examResponses.filter(r=>!(r.exam_id===examId&&r.student_name===studentName));
+  renderExamResults(examId);renderExamAdmin();notify('재응시를 허용했어요.','success');
 }
 function openGradeDesc(examId,studentName){
   const ex=db.exams.find(x=>x.id===examId);
@@ -1482,8 +1593,8 @@ function openGradeDesc(examId,studentName){
   const partial=(resp.thoughts&&resp.thoughts.__descPoints)||{};
   const rows=descQs.map(q=>`
     <div class="card">
-      <div class="row-between"><strong>${q.num}번</strong><span style="color:var(--text2)">배점 ${q.points}점</span></div>
-      <div style="margin:6px 0;padding:8px;background:var(--bg2);border-radius:var(--radius-sm)">${esc((resp.answers&&resp.answers[q.num])||'(무응답)')}</div>
+      <div class="row-between"><strong>${q.num}번</strong><span style="color:var(--text2)">배점 ${q.points}점${q.answer?` · 모범답안: ${esc(q.answer)}`:''}</span></div>
+      <div style="margin:6px 0;padding:8px;background:var(--bg2);border-radius:var(--radius-sm);white-space:pre-wrap">${esc((resp.answers&&resp.answers[q.num])||'(무응답)')}</div>
       <div class="form-group"><label>부여 점수</label><input class="form-input desc-pt" data-num="${q.num}" data-max="${q.points}" type="number" min="0" max="${q.points}" value="${partial[q.num]!=null?partial[q.num]:''}"></div>
     </div>`).join('');
   document.getElementById('desc-grade-area').innerHTML=`<div class="card"><strong>${esc(studentName)} 학생 주관식 채점</strong></div>${rows}<button class="btn blue" onclick="saveDescGrade('${esc(examId)}','${esc(studentName)}')">채점 저장</button>`;
@@ -1498,81 +1609,143 @@ async function saveDescGrade(examId,studentName){
     let val=parseInt(inp.value);if(isNaN(val))val=0;
     descPoints[num]=Math.max(0,Math.min(val,max));
   });
-  let objPoints=0,objTotal=0,descTotal=0,descEarned=0;
-  (ex.questions||[]).forEach(q=>{
-    if(q.type==='obj'){
-      objTotal+=q.points||0;
-      if(String(resp.answers[q.num]||'').trim()===String(q.answer).trim())objPoints+=q.points||0;
-    }else{
-      descTotal+=q.points||0;
-      descEarned+=descPoints[q.num]||0;
-    }
-  });
-  const pointsTotal=objTotal+descTotal,pointsEarned=objPoints+descEarned;
-  const score=pointsTotal>0?Math.round((pointsEarned/pointsTotal)*100):0;
+  const g=gradeExam(ex,resp.answers||{},descPoints);
   const thoughts=Object.assign({},resp.thoughts,{__descPoints:descPoints});
-  const{error}=await sb.from('exam_responses').update({points_earned:pointsEarned,points_total:pointsTotal,score,thoughts}).eq('exam_id',examId).eq('student_name',studentName);
+  const{error}=await sb.from('exam_responses').update({points_earned:g.points_earned,points_total:g.points_total,score:g.score,thoughts}).eq('exam_id',examId).eq('student_name',studentName);
   if(error){notify('저장 실패: '+error.message,'error');return;}
-  Object.assign(resp,{points_earned:pointsEarned,points_total:pointsTotal,score,thoughts});
-  renderExamResults(examId);
+  Object.assign(resp,{points_earned:g.points_earned,points_total:g.points_total,score:g.score,thoughts});
+  renderExamResults(examId);renderExamAdmin();
   notify('주관식 채점을 저장했습니다.','success');
 }
 
 /* ===================== 시험 — 학생 ===================== */
-function loadExamByCode(){
+function stopExamTimers(){[examTick,examPoll].forEach(t=>t&&clearInterval(t));if(examDraftTimer)clearTimeout(examDraftTimer);examTick=examPoll=examDraftTimer=null;}
+function myResp(ex){return db.examResponses.find(r=>r.exam_id===ex.id&&r.student_name===session.name);}
+async function loadExamByCode(){
   const code=document.getElementById('ex-code').value.trim().toUpperCase();
   if(!code){notify('공유코드를 입력하세요.','error');return;}
   const ex=db.exams.find(x=>String(x.id).slice(0,8).toUpperCase()===code);
   if(!ex){notify('해당 코드의 시험을 찾을 수 없어요.','error');return;}
+  stopExamTimers();
+  // 다른 기기에서 이미 제출했는지 서버에서 다시 확인
+  const{data:fresh}=await sb.from('exam_responses').select('*').eq('exam_id',ex.id).eq('student_name',session.name);
+  if(fresh&&fresh[0]){const old=myResp(ex);if(old)Object.assign(old,fresh[0]);else db.examResponses.push(fresh[0]);}
+  const{data:exFresh}=await sb.from('exams').select('*').eq('id',ex.id);
+  if(exFresh&&exFresh[0])Object.assign(ex,exFresh[0]);
   currentExamTaking=ex;
-  renderExamTake(ex);
+  const mine=myResp(ex);
+  if(mine&&isSubmitted(mine)){renderExamTake(ex,true);return;}
+  if(ex.time_limit){
+    if(!mine){
+      if(!confirm(`이 시험은 제한시간이 ${ex.time_limit}분이에요.\n시작하면 타이머가 멈추지 않고, 시간이 끝나면 자동으로 제출돼요.\n제출은 한 번만 할 수 있어요. 시작할까요?`)){currentExamTaking=null;return;}
+      const now=new Date().toISOString();
+      const row={exam_id:ex.id,student_name:session.name,answers:{},score:0,correct_count:0,total_q:ex.total_q,points_earned:0,points_total:0,submitted_at:now,thoughts:{__submitted:false,__startedAt:now}};
+      const{error}=await sb.from('exam_responses').upsert(row,{onConflict:'exam_id,student_name'});
+      if(error){notify('시작 실패: '+error.message,'error');currentExamTaking=null;return;}
+      db.examResponses.push(row);
+    }else if(examTimeLeft(ex,myResp(ex))<=0){
+      renderExamTake(ex,false);await submitExam(true);return;
+    }
+  }
+  renderExamTake(ex,false);
+  if(ex.time_limit)startExamTimers(ex);
 }
-function renderExamTake(ex){
+function examTimeLeft(ex,r){
+  if(!ex.time_limit||!r||!r.thoughts||!r.thoughts.__startedAt)return Infinity;
+  return ex.time_limit*60-(Date.now()-new Date(r.thoughts.__startedAt).getTime())/1000;
+}
+function startExamTimers(ex){
+  const tick=()=>{
+    const el=document.getElementById('exam-timer');if(!el){stopExamTimers();return;}
+    const left=examTimeLeft(ex,myResp(ex));
+    if(!isFinite(left)){el.style.display='none';return;}
+    el.style.display='';el.className='exam-timer'+(left<=60?' danger':left<=300?' warn':'');
+    el.innerHTML=`⏱ 남은 시간 <b>${fmtLeft(left)}</b> <span style="font-size:12px;opacity:.75">/ 제한 ${ex.time_limit}분</span>`;
+    if(left<=0){stopExamTimers();submitExam(true);}
+  };
+  tick();examTick=setInterval(tick,1000);
+  // 쏠T가 제한시간을 바꾸면 응시 중에도 반영 (30초마다 확인)
+  examPoll=setInterval(async()=>{
+    const{data}=await sb.from('exams').select('time_limit').eq('id',ex.id);
+    if(data&&data[0]&&data[0].time_limit!==ex.time_limit){
+      const before=ex.time_limit;ex.time_limit=data[0].time_limit;
+      notify(ex.time_limit?`제한시간이 ${before||0}분에서 ${ex.time_limit}분으로 바뀌었어요.`:'제한시간이 없어졌어요.','info');tick();
+    }
+  },30000);
+}
+function collectExamAnswers(ex){
+  const answers={};
+  (ex.questions||[]).forEach(q=>{const el=document.getElementById('eqa-'+q.num);answers[q.num]=el?el.value.trim():'';});
+  return answers;
+}
+// 제한시간 시험은 입력할 때마다 답안을 임시 저장 (새로고침해도 이어서)
+function onExamInput(){
+  const ex=currentExamTaking;if(!ex||!ex.time_limit)return;
+  if(examDraftTimer)clearTimeout(examDraftTimer);
+  examDraftTimer=setTimeout(async()=>{
+    const r=myResp(ex);if(!r||isSubmitted(r))return;
+    const answers=collectExamAnswers(ex);
+    const{error}=await sb.from('exam_responses').update({answers}).eq('exam_id',ex.id).eq('student_name',session.name);
+    if(!error)r.answers=answers;
+  },1500);
+}
+function renderExamTake(ex,readOnly){
   const el=document.getElementById('exam-take-area');
-  const mine=db.examResponses.find(r=>r.exam_id===ex.id&&r.student_name===session.name);
+  const mine=myResp(ex);
   const qs=(ex.questions||[]).map(q=>{
-    const prevAns=mine&&mine.answers?mine.answers[q.num]:'';
+    const prevAns=mine&&mine.answers?(mine.answers[q.num]||''):'';
+    const dis=readOnly?'disabled':'';
     return `<div class="card">
       <div class="row-between"><strong>${q.num}번</strong><span class="pill blue">${q.type==='obj'?'객관식':'주관식'} · ${q.points}점</span></div>
-      ${q.type==='obj'?`<input class="form-input" id="eqa-${q.num}" type="number" min="1" max="5" placeholder="정답(1~5)" value="${esc(prevAns||'')}" style="margin-top:8px">`:`<textarea class="form-input" id="eqa-${q.num}" rows="2" placeholder="답안 입력" style="margin-top:8px">${esc(prevAns||'')}</textarea>`}
+      ${q.type==='obj'?`<input class="form-input" id="eqa-${q.num}" type="number" min="1" max="5" placeholder="정답(1~5)" value="${esc(prevAns)}" style="margin-top:8px" oninput="onExamInput()" ${dis}>`:`<textarea class="form-input" id="eqa-${q.num}" rows="2" placeholder="답안 입력" style="margin-top:8px" oninput="onExamInput()" ${dis}>${esc(prevAns)}</textarea>`}
     </div>`;
   }).join('');
-  el.innerHTML=`<div class="card"><strong>${esc(ex.name)}</strong> <span style="color:var(--text2)">· 총 ${ex.total_q}문항</span></div>${qs}<button class="btn blue" onclick="submitExam()">제출하기</button><div id="exam-result-box" style="margin-top:12px"></div>`;
-  if(mine)renderExamResultBox(ex,mine);
+  el.innerHTML=`${ex.time_limit&&!readOnly?'<div class="exam-timer" id="exam-timer"></div>':''}
+    <div class="card"><strong>${esc(ex.name)}</strong> <span style="color:var(--text2)">· 총 ${ex.total_q}문항${ex.time_limit?` · 제한 ${ex.time_limit}분`:''}</span>
+      ${readOnly?'<div style="margin-top:6px"><span class="pill green">제출 완료</span> <span style="font-size:12px;color:var(--text2)">제출은 한 번만 할 수 있어요. 다시 보려면 쏠T에게 요청하세요.</span></div>':'<div style="margin-top:6px;font-size:12px;color:var(--amber)">제출은 한 번만 할 수 있어요. 제출 전에 답을 꼭 확인하세요.</div>'}</div>
+    ${qs}
+    ${readOnly?'':'<button class="btn blue" id="exam-submit-btn" onclick="submitExam(false)">제출하기</button>'}
+    <div id="exam-result-box" style="margin-top:12px"></div>`;
+  if(readOnly&&mine)renderExamResultBox(ex,mine);
 }
-async function submitExam(){
+async function submitExam(auto){
   const ex=currentExamTaking;if(!ex)return;
-  const answers={};let pointsEarned=0,pointsTotal=0,correctCount=0;
-  (ex.questions||[]).forEach(q=>{
-    const val=document.getElementById('eqa-'+q.num).value.trim();
-    answers[q.num]=val;
-    pointsTotal+=q.points||0;
-    if(q.type==='obj'&&val&&String(val).trim()===String(q.answer).trim()){pointsEarned+=q.points||0;correctCount++;}
-  });
-  const score=pointsTotal>0?Math.round((pointsEarned/pointsTotal)*100):0;
-  const payload={exam_id:ex.id,student_name:session.name,answers,score,correct_count:correctCount,total_q:ex.total_q,points_earned:pointsEarned,points_total:pointsTotal,submitted_at:new Date().toISOString()};
+  if(!auto&&!confirm('제출하면 다시 고칠 수 없어요. 제출할까요?'))return;
+  const btn=document.getElementById('exam-submit-btn');if(btn)btn.disabled=true;
+  // 이미 제출된 기록이 있으면 막기 (다른 기기·새로고침 대비)
+  const{data:fresh}=await sb.from('exam_responses').select('*').eq('exam_id',ex.id).eq('student_name',session.name);
+  if(fresh&&fresh[0]&&isSubmitted(fresh[0])){
+    const old=myResp(ex);if(old)Object.assign(old,fresh[0]);else db.examResponses.push(fresh[0]);
+    stopExamTimers();renderExamTake(ex,true);notify('이미 제출한 시험이에요.','info');return;
+  }
+  const domHasInputs=!!document.getElementById('eqa-1');
+  const answers=domHasInputs?collectExamAnswers(ex):((fresh&&fresh[0]&&fresh[0].answers)||{});
+  const g=gradeExam(ex,answers,null);
+  const startedAt=fresh&&fresh[0]&&fresh[0].thoughts&&fresh[0].thoughts.__startedAt;
+  const payload=Object.assign({exam_id:ex.id,student_name:session.name,answers,submitted_at:new Date().toISOString(),thoughts:Object.assign({__submitted:true},startedAt?{__startedAt:startedAt}:{},auto?{__autoSubmitted:true}:{})},g);
   const{error}=await sb.from('exam_responses').upsert(payload,{onConflict:'exam_id,student_name'});
-  if(error){notify('제출 실패: '+error.message,'error');return;}
-  const exist=db.examResponses.find(r=>r.exam_id===ex.id&&r.student_name===session.name);
+  if(error){notify('제출 실패: '+error.message,'error');if(btn)btn.disabled=false;return;}
+  stopExamTimers();
+  const exist=myResp(ex);
   if(exist)Object.assign(exist,payload);else db.examResponses.push(payload);
-  renderExamResultBox(ex,payload);
-  renderMyExamResults();
-  notify('시험을 제출했습니다.','success');
+  renderExamTake(ex,true);
+  renderMyExamResults();try{renderMyReportCard();}catch(e){}
+  notify(auto?'시간이 끝나 자동으로 제출됐어요.':'시험을 제출했습니다.',auto?'info':'success');
 }
 function renderExamResultBox(ex,resp){
   const box=document.getElementById('exam-result-box');
   if(!box)return;
   const wrongRows=(ex.questions||[]).filter(q=>q.type==='obj'&&String(resp.answers[q.num]||'').trim()!==String(q.answer).trim())
     .map(q=>`<div class="card"><strong>${q.num}번</strong> 오답 · 정답 ${esc(q.answer)}${q.explanation?`<div style="color:var(--text2);margin-top:4px">${esc(q.explanation)}</div>`:''}</div>`).join('');
-  box.innerHTML=`<div class="card"><strong>채점 결과</strong> · ${resp.correct_count}/${resp.total_q} 정답 · ${resp.points_earned}/${resp.points_total}점 (${resp.score}%)</div>${wrongRows}`;
+  box.innerHTML=`<div class="card"><strong>채점 결과</strong> · 객관식 ${resp.correct_count}개 정답 · ${examScoreText(ex,resp)}${resp.thoughts&&resp.thoughts.__autoSubmitted?' <span class="pill amber">시간 종료 자동 제출</span>':''}</div>${wrongRows}`;
 }
 function renderMyExamResults(){
   const el=document.getElementById('my-exam-results');
-  const list=db.examResponses.filter(r=>r.student_name===session.name);
+  const list=db.examResponses.filter(r=>r.student_name===session.name&&isSubmitted(r));
   if(!list.length){el.innerHTML='<div class="empty-hint">아직 응시한 시험이 없습니다.</div>';return;}
   el.innerHTML=list.map(r=>{
     const ex=db.exams.find(x=>x.id===r.exam_id);
-    return `<div class="card row-between"><span>${esc(ex?ex.name:'(삭제된 시험)')}</span><span>${r.correct_count}/${r.total_q} · ${r.score}%</span></div>`;
+    return `<div class="card row-between"><span>${esc(ex?ex.name:'(삭제된 시험)')}</span><span>${ex?examScoreText(ex,r):r.score+'%'}</span></div>`;
   }).join('');
 }
 
@@ -1819,7 +1992,7 @@ async function markAnnouncementRead(annId,box){
 /* ===================== 성적표 ===================== */
 function buildReportData(studentId){
   const student=db.users.find(u=>u.id===studentId);
-  const examRows=db.examResponses.filter(r=>r.student_name===(student?student.name:'__none__'));
+  const examRows=db.examResponses.filter(r=>r.student_name===(student?student.name:'__none__')&&isSubmitted(r));
   const videoList=db.videos.filter(v=>v.category!=='review');
   const watched=videoList.filter(v=>getPct(studentId,v.id)>0).length;
   const avgPct=videoList.length?Math.round(videoList.reduce((a,v)=>a+getPct(studentId,v.id),0)/videoList.length):0;
@@ -1873,7 +2046,7 @@ function renderReportCardHTML(d){
   if(!d.student)return '<div class="empty-hint">학생 정보를 찾을 수 없습니다.</div>';
   const examRowsHtml=d.examRows.length?d.examRows.map(r=>{
     const ex=db.exams.find(x=>x.id===r.exam_id);
-    return `<tr><td>${esc(ex?ex.name:'(삭제된 시험)')}</td><td>${r.correct_count}/${r.total_q}</td><td>${r.score}%</td></tr>`;
+    return `<tr><td>${esc(ex?ex.name:'(삭제된 시험)')}</td><td>${r.correct_count}/${r.total_q}</td><td>${ex&&descPending(ex,r)?`객관식 ${r.points_earned}/${examObjTotal(ex)}점 <span class="pill amber">주관식 채점 대기</span>`:r.score+'%'}</td></tr>`;
   }).join(''):'<tr><td colspan="3" style="color:var(--text2)">응시한 시험이 없습니다</td></tr>';
   return `
     <div class="card"><strong>${esc(d.student.name)}</strong> <span style="color:var(--text2)">(${esc(d.student.id)})</span></div>

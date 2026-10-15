@@ -1165,7 +1165,7 @@ function toRanges(set){
   return out;
 }
 /* ---- 학생 화면 경고: 1.8배 이상 / 건너뛴 구간 1분 이상 ---- */
-const STU_FAST_WARN=1.8, STU_SKIP_WARN=60;
+const STU_FAST_WARN=1.75, STU_SKIP_WARN=60;
 let skipWarnDismissed=0;
 function skippedNow(){
   const R=toRanges(watchedSet);const out=[];

@@ -191,6 +191,11 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 .ann-card.unread{border-color:var(--accent)}
 .chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none}
 .chk input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+#play-warn{position:absolute;left:8px;right:8px;top:8px;width:auto;height:auto;z-index:5;display:none;flex-direction:column;gap:6px}
+#play-warn .w{background:rgba(18,20,26,.93);border:1.5px solid var(--red);color:#fff;border-radius:8px;padding:8px 10px;font-size:13px;line-height:1.5;display:flex;justify-content:space-between;gap:8px;align-items:flex-start;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+#play-warn .w.amber{border-color:var(--amber)}
+#play-warn .w button{background:none;border:none;color:#fff;font-size:15px;cursor:pointer;padding:0 2px;line-height:1}
+#play-warn .seek{color:#ffd166;text-decoration:underline;cursor:pointer;white-space:nowrap}
 .date-in{padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--font);color-scheme:dark}
 </style>
 </head>
@@ -547,7 +552,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <h3 id="play-title"></h3>
       <button class="btn sm" onclick="closePlay()">닫기 ✕</button>
     </div>
-    <div class="player-wrap"><div id="yt-player"></div></div>
+    <div class="player-wrap"><div id="yt-player"></div><div id="play-warn"></div></div>
     <div class="track-row">
       <span class="live-dot" id="live-dot"></span>
       <span id="trk-pct">0%</span>
@@ -1095,7 +1100,7 @@ function initYT(videoId){
   ytPlayer=new YT.Player('yt-player',{
     videoId,width:'100%',height:'100%',
     playerVars:{rel:0,modestbranding:1,playsinline:1,start:startSec},
-    events:{onReady:onYTReady,onStateChange:onYTState}
+    events:{onReady:onYTReady,onStateChange:onYTState,onPlaybackRateChange:e=>{if(e.data>maxRateSeen)maxRateSeen=e.data;checkPlayWarnings(e.data);}}
   });
 }
 function onYTReady(e){
@@ -1109,6 +1114,7 @@ function onYTReady(e){
       if(prog&&Array.isArray(prog.watched_ranges)&&prog.watched_ranges.length){
         prog.watched_ranges.forEach(([a,b])=>{for(let i=a;i<=b;i++)watchedSet.add(i);});
         updateTrackUI(Math.min(Math.round(watchedSet.size/totalDur*100),100));
+        checkPlayWarnings(1);
       }else{
         const pct=getPct(session.id,currentVid);
         if(pct>0){const ws=Math.floor((pct/100)*totalDur);for(let i=0;i<ws;i++)watchedSet.add(i);updateTrackUI(pct);}
@@ -1134,7 +1140,9 @@ function startTracking(){
     if(lastPos>=0&&cur>lastPos&&cur-lastPos<=3){for(let i=lastPos;i<=cur;i++)watchedSet.add(i);}
     else{watchedSet.add(cur);}
     lastPos=cur;
-    try{const rate=ytPlayer.getPlaybackRate();if(rate>maxRateSeen)maxRateSeen=rate;const k=String(rate);rateSec[k]=(rateSec[k]||0)+1;}catch(e){}
+    let rateNow=1;
+    try{const rate=ytPlayer.getPlaybackRate();rateNow=rate;if(rate>maxRateSeen)maxRateSeen=rate;const k=String(rate);rateSec[k]=(rateSec[k]||0)+1;}catch(e){}
+    checkPlayWarnings(rateNow);
     const pct=Math.min(Math.round((watchedSet.size/totalDur)*100),100);
     updateTrackUI(pct);scheduleSave();
   },1000);
@@ -1156,6 +1164,30 @@ function toRanges(set){
   xs.forEach(x=>{const last=out[out.length-1];if(last&&x<=last[1]+1)last[1]=Math.max(last[1],x);else out.push([x,x]);});
   return out;
 }
+/* ---- 학생 화면 경고: 1.8배 이상 / 건너뛴 구간 1분 이상 ---- */
+const STU_FAST_WARN=1.8, STU_SKIP_WARN=60;
+let skipWarnDismissed=0;
+function skippedNow(){
+  const R=toRanges(watchedSet);const out=[];
+  if(!R.length)return out;
+  if(R[0][0]>3)out.push([0,R[0][0]-1]);
+  for(let i=1;i<R.length;i++){if(R[i][0]-R[i-1][1]-1>2)out.push([R[i-1][1]+1,R[i][0]-1]);}
+  return out;
+}
+function checkPlayWarnings(rate){
+  const el=document.getElementById('play-warn');
+  if(!el||!session||session.role!=='student'||!currentVid)return;
+  const parts=[];
+  if(rate>=STU_FAST_WARN)parts.push(`<div class="w"><span>⚠️ 지금 <b>${rate}배속</b>으로 보고 있어요. 배속 기록은 쏠T 선생님께 전달돼요. 내용을 놓치지 않게 속도를 낮춰 주세요.</span></div>`);
+  const sk=skippedNow();const total=sk.reduce((n,[a,b])=>n+b-a+1,0);
+  if(total>=STU_SKIP_WARN&&total>skipWarnDismissed){
+    const links=sk.slice(0,4).map(([a,b])=>`<span class="seek" onclick="seekPlay(${a})">${fmtClock(a)}~${fmtClock(b)}</span>`).join(', ')+(sk.length>4?' 외':'');
+    parts.push(`<div class="w amber"><span>⏭ 건너뛴 구간이 <b>${fmtTime(total)}</b>예요: ${links}<br>건너뛴 기록은 쏠T 선생님께 전달돼요. 구간을 누르면 그 부분부터 볼 수 있어요.</span><button title="닫기" onclick="dismissSkipWarn(${total})">✕</button></div>`);
+  }
+  el.innerHTML=parts.join('');el.style.display=parts.length?'flex':'none';
+}
+function dismissSkipWarn(total){skipWarnDismissed=total;checkPlayWarnings(ytPlayer&&ytPlayer.getPlaybackRate?ytPlayer.getPlaybackRate():1);}
+function seekPlay(sec){try{if(ytPlayer){ytPlayer.seekTo(sec,true);ytPlayer.playVideo();}}catch(e){}}
 function progressExtra(){
   const merged=Object.assign({},baseRateSec);
   Object.entries(rateSec).forEach(([k,v])=>{merged[k]=(merged[k]||0)+v;});
@@ -1178,6 +1210,7 @@ async function closePlay(){
   document.getElementById('yt-player').innerHTML='';
   document.getElementById('modal-play').classList.remove('show');
   currentVid=null;currentStartPos=0;watchedSet=new Set();lastPos=-1;totalDur=0;maxRateSeen=1;rateSec={};baseRateSec={};
+  skipWarnDismissed=0;const pw=document.getElementById('play-warn');if(pw){pw.innerHTML='';pw.style.display='none';}
   if(session&&session.role==='student'){renderLectures();renderReviewGrid();}
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closePlay();});

@@ -836,10 +836,12 @@ function renderSchoolAdmin(){
   fillSchoolSelect('v-school','전체 학교',false,document.getElementById('v-school')?document.getElementById('v-school').value:null);
   fillSchoolSelect('att-school','전체 학교',false,document.getElementById('att-school')?document.getElementById('att-school').value:null);
 }
-async function updateStudentInfo(id){
+async function updateStudentInfo(id,changed){
   const u=db.users.find(x=>x.id===id);if(!u)return;
   const school=document.getElementById('st-school-'+id).value||null;
-  const grade=parseGrade(document.getElementById('st-grade-'+id).value);
+  let grade=parseGrade(document.getElementById('st-grade-'+id).value);
+  // 중학교 → 고등학교로 바꾸면 학년을 자동으로 고1(1~2월은 예비 고1)로 맞춰요
+  if(changed==='school'&&school&&u.school&&schoolLevel(u.school)==='중'&&schoolLevel(school)==='고'&&(grade==null||grade>=3))grade=isPrePeriod(todayStr())?0:1;
   const patch={school,grade,grade_year:academicYear(todayStr())};
   const{error}=await sb.from('users').update(patch).eq('id',id);
   if(error){notify('저장 실패: '+error.message+(/school|grade/.test(error.message)?' (schema_add10.sql을 실행해주세요)':''),'error');return;}
@@ -903,7 +905,7 @@ function renderActive(){
     const fast=flags.filter(f=>f.fast).length,skip=flags.filter(f=>f.skip).length;
     return `<tr>
       <td>${esc(u.name)}${nameTaken(u.name,u.id)?' <span class="pill red">동명이인</span>':''}<div style="font-size:11px;color:var(--text3)">${esc(u.id)}</div></td>
-      <td style="white-space:nowrap"><select class="date-in" id="st-school-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}')"><option value="">학교 미입력</option>${[...new Set(schoolNames().concat(u.school?[u.school]:[]))].map(n=>`<option value="${esc(n)}"${u.school===n?' selected':''}>${esc(n)}</option>`).join('')}</select>
+      <td style="white-space:nowrap"><select class="date-in" id="st-school-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}','school')"><option value="">학교 미입력</option>${[...new Set(schoolNames().concat(u.school?[u.school]:[]))].map(n=>`<option value="${esc(n)}"${u.school===n?' selected':''}>${esc(n)}</option>`).join('')}</select>
         <select class="date-in" id="st-grade-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}')">${gradeOptionsHtml(todayStr(),gradeAt(u),'학년')}</select></td>
       <td>${watched} / ${db.videoAccess.filter(a=>a.student_id===u.id).length}개 시청</td>
       <td>${avg}%</td>

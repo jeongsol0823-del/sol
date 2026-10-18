@@ -231,7 +231,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
         <div class="form-group"><label>이름</label><input class="form-input" id="su-name" placeholder="이름"></div>
         <div class="form-group"><label>학교</label><select class="form-select" id="su-school" onchange="onSuSchoolChange()"></select>
           <input class="form-input" id="su-school-other" placeholder="학교 이름 (예: 수지고)" style="display:none;margin-top:6px"></div>
-        <div class="form-group"><label>학년</label><select class="form-select" id="su-grade"><option value="">학년 선택</option><option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option></select></div>
+        <div class="form-group"><label>학년</label><select class="form-select" id="su-grade"></select></div>
         <div class="form-group"><label>아이디</label><input class="form-input" id="su-id" placeholder="영문/숫자/밑줄"></div>
         <div class="form-group"><label>비밀번호</label><input class="form-input" id="su-pw" type="password" placeholder="4자 이상"></div>
         <div class="form-group"><label>비밀번호 확인</label><input class="form-input" id="su-pw2" type="password" placeholder="비밀번호 확인"></div>
@@ -282,9 +282,9 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
         <div class="admin-form">
           <div class="full form-group"><label>제목</label><input class="form-input" id="v-title" placeholder="강의 제목"></div>
           <div class="full form-group"><label>유튜브 URL</label><input class="form-input" id="v-url" placeholder="https://youtu.be/..."></div>
-          <div class="form-group"><label>수업 날짜</label><input class="form-input" id="v-date" type="date"></div>
+          <div class="form-group"><label>수업 날짜</label><input class="form-input" id="v-date" type="date" onchange="fillVideoGrade()"></div>
           <div class="form-group"><label>학교</label><select class="form-select" id="v-school"></select></div>
-          <div class="form-group"><label>학년</label><select class="form-select" id="v-grade"><option value="">전체 학년</option><option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option></select></div>
+          <div class="form-group"><label>학년</label><select class="form-select" id="v-grade"></select></div>
           <div class="full vhint" style="margin:0">수업 날짜 · 학교 · 학년이 맞는 학생 중 그날 <b>결석</b>으로 저장된 학생에게 자동으로 열려요.</div>
           <div class="form-group"><label>설명 (선택)</label><input class="form-input" id="v-desc" placeholder="간단한 설명"></div>
         </div>
@@ -742,9 +742,10 @@ async function doLogin(){
   finally{btn.disabled=false;btn.textContent='로그인';}
 }
 function showSignup(){document.getElementById('form-login').style.display='none';document.getElementById('form-signup').style.display='block';
-  const fill=()=>{fillSchoolSelect('su-school','학교 선택',true);onSuSchoolChange();};fill();
+  const fill=()=>{fillSchoolSelect('su-school','학교 선택',true);onSuSchoolChange();fillSignupGrade();};fill();
   if(!db.users.length)loadAll().then(fill).catch(()=>{}); // 로그아웃 직후엔 학교 목록을 다시 불러옴
 }
+function fillSignupGrade(){const el=document.getElementById('su-grade');if(el)el.innerHTML=gradeOptionsHtml(todayStr(),null,'학년 선택');}
 function onSuSchoolChange(){const v=document.getElementById('su-school').value;document.getElementById('su-school-other').style.display=v==='__other'?'':'none';}
 function showLogin(){document.getElementById('form-signup').style.display='none';document.getElementById('form-login').style.display='block';selectRole('student');}
 async function doSignup(){
@@ -757,10 +758,10 @@ async function doSignup(){
   err.textContent='';
   const schoolSel=document.getElementById('su-school').value;
   const school=(schoolSel==='__other'?document.getElementById('su-school-other').value:schoolSel).trim();
-  const grade=parseInt(document.getElementById('su-grade').value,10)||null;
+  const grade=parseGrade(document.getElementById('su-grade').value);
   if(!name||!id||!pw||!pw2){err.textContent='모든 항목을 입력하세요.';return;}
   if(!school){err.textContent='학교를 선택하거나 입력하세요.';return;}
-  if(!grade){err.textContent='학년을 선택하세요.';return;}
+  if(grade==null){err.textContent='학년을 선택하세요.';return;}
   if(!/^[a-zA-Z0-9_]+$/.test(id)){err.textContent='아이디는 영문/숫자/밑줄만 가능합니다.';return;}
   if(pw.length<4){err.textContent='비밀번호는 4자 이상이어야 합니다.';return;}
   if(pw!==pw2){err.textContent='비밀번호가 일치하지 않습니다.';return;}
@@ -773,7 +774,7 @@ async function doSignup(){
     let{error}=await sb.from('users').insert(row);
     if(error&&/school|grade/.test(error.message)){['school','grade','grade_year'].forEach(k=>delete row[k]);({error}=await sb.from('users').insert(row));} // SQL 실행 전이면 학교 없이라도 가입
     if(error){err.textContent='가입 실패: '+error.message;return;}
-    ['su-name','su-id','su-pw','su-pw2','su-school-other'].forEach(i=>document.getElementById(i).value='');document.getElementById('su-grade').value='';
+    ['su-name','su-id','su-pw','su-pw2','su-school-other'].forEach(i=>document.getElementById(i).value='');fillSignupGrade();
     showLogin();
     notify('가입 신청 완료! 쏠T의 승인 후 로그인하세요.','success');
   }catch(e){err.textContent='오류: '+e.message;}
@@ -782,9 +783,32 @@ async function doSignup(){
 /* ---- 학교·학년 ---- */
 // 학년은 3월 1일에 한 학년씩 자동으로 올라가요 (가입·수정한 해 기준)
 function academicYear(d){const [y,m]=d.split('-').map(Number);return m>=3?y:y-1;}
-function gradeAt(u,d){if(!u||!u.grade)return null;const base=u.grade_year||academicYear(todayStr());return u.grade+(academicYear(d||todayStr())-base);}
-function gradeLabel(g){return g==null?'학년 미입력':g>3?'졸업':g+'학년';}
-function studentTag(u){return `${u.school||'학교 미입력'} · ${gradeLabel(gradeAt(u))}`;}
+function gradeAt(u,d){if(!u||u.grade==null)return null;const base=u.grade_year||academicYear(todayStr());return u.grade+(academicYear(d||todayStr())-base);}
+// 1~2월에는 다음 학년을 "예비고2"처럼 보여줘요 (학년 숫자 자체는 3월 1일에 올라가요)
+function schoolLevel(school){return /중(학교)?$/.test(String(school||'').trim())?'중':'고';}
+function isPrePeriod(d){const m=Number((d||todayStr()).split('-')[1]);return m===1||m===2;}
+function gradeName(g,d,school){
+  if(g==null||isNaN(g))return'학년 미입력';
+  d=d||todayStr();const lv=schoolLevel(school);
+  if(isPrePeriod(d)){
+    const nx=g+1;
+    if(nx>3)return lv==='중'?'예비고1':`${lv}3 (졸업 예정)`;
+    return `예비${lv}${nx}`;
+  }
+  if(g<=0)return `예비${lv}1`;
+  if(g>3)return lv==='중'?'고등학교 진학':'졸업';
+  return g+'학년';
+}
+function gradeLabel(g){return gradeName(g);}
+function studentTag(u){return `${u.school||'학교 미입력'} · ${gradeName(gradeAt(u),todayStr(),u.school)}`;}
+function parseGrade(v){return v===''||v==null?null:parseInt(v,10);}
+// 학년 고르는 칸의 선택지: 1~2월이면 예비 학년으로 보여줘요 (값은 그 시점의 현재 학년)
+function gradeOptions(d){
+  return isPrePeriod(d)?[[0,'예비 1학년 (3월에 1학년)'],[1,'예비 2학년 (현재 1학년)'],[2,'예비 3학년 (현재 2학년)'],[3,'3학년 (졸업 예정)']]:[[1,'1학년'],[2,'2학년'],[3,'3학년']];
+}
+function gradeOptionsHtml(d,selected,firstLabel){
+  return `<option value="">${esc(firstLabel)}</option>`+gradeOptions(d).map(([v,l])=>`<option value="${v}"${selected===v?' selected':''}>${esc(l)}</option>`).join('');
+}
 function schoolNames(){const set=new Set(db.schools.map(s=>s.name));db.users.forEach(u=>{if(u.role==='student'&&u.school)set.add(u.school);});return [...set].sort((a,b)=>a.localeCompare(b,'ko'));}
 function fillSchoolSelect(id,firstLabel,withOther,value){
   const el=document.getElementById(id);if(!el)return;
@@ -815,7 +839,7 @@ function renderSchoolAdmin(){
 async function updateStudentInfo(id){
   const u=db.users.find(x=>x.id===id);if(!u)return;
   const school=document.getElementById('st-school-'+id).value||null;
-  const grade=parseInt(document.getElementById('st-grade-'+id).value,10)||null;
+  const grade=parseGrade(document.getElementById('st-grade-'+id).value);
   const patch={school,grade,grade_year:academicYear(todayStr())};
   const{error}=await sb.from('users').update(patch).eq('id',id);
   if(error){notify('저장 실패: '+error.message+(/school|grade/.test(error.message)?' (schema_add10.sql을 실행해주세요)':''),'error');return;}
@@ -839,7 +863,7 @@ function doLogout(){
 function launchTeacher(){
   document.getElementById('teacher-name').textContent=session.name+' 선생님';
   showPage('page-teacher');
-  renderSchoolAdmin();renderPending();renderActive();renderVideoAdmin();
+  renderSchoolAdmin();fillVideoGrade();renderPending();renderActive();renderVideoAdmin();
   renderAccessAdmin();
   renderQaSchools();renderQaWeeks();renderQaQuestions();renderQaFreeAdmin();
   renderExamAdmin();
@@ -880,7 +904,7 @@ function renderActive(){
     return `<tr>
       <td>${esc(u.name)}${nameTaken(u.name,u.id)?' <span class="pill red">동명이인</span>':''}<div style="font-size:11px;color:var(--text3)">${esc(u.id)}</div></td>
       <td style="white-space:nowrap"><select class="date-in" id="st-school-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}')"><option value="">학교 미입력</option>${[...new Set(schoolNames().concat(u.school?[u.school]:[]))].map(n=>`<option value="${esc(n)}"${u.school===n?' selected':''}>${esc(n)}</option>`).join('')}</select>
-        <select class="date-in" id="st-grade-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}')"><option value="">학년</option>${[1,2,3].map(g=>`<option value="${g}"${gradeAt(u)===g?' selected':''}>${g}학년</option>`).join('')}</select></td>
+        <select class="date-in" id="st-grade-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}')">${gradeOptionsHtml(todayStr(),gradeAt(u),'학년')}</select></td>
       <td>${watched} / ${db.videoAccess.filter(a=>a.student_id===u.id).length}개 시청</td>
       <td>${avg}%</td>
       <td>${fast?`<span class="pill amber">배속 ${fast}</span> `:''}${skip?`<span class="pill red">건너뜀 ${skip}</span>`:''}${!fast&&!skip?'<span style="color:var(--text3)">-</span>':''}</td>
@@ -954,7 +978,7 @@ async function addVideo(){
   const category='review'; // 모든 영상은 허락받은 학생만 볼 수 있어요
   const classDate=document.getElementById('v-date').value||null;
   const vSchool=document.getElementById('v-school').value||null;
-  const vGrade=parseInt(document.getElementById('v-grade').value,10)||null;
+  const vGrade=parseGrade(document.getElementById('v-grade').value);
   if(!title||!url){notify('제목과 URL을 입력하세요.','error');return;}
   if(!ytId(url)){notify('유효한 유튜브 URL을 입력하세요.','error');return;}
   const id=uid('v');
@@ -964,7 +988,7 @@ async function addVideo(){
   if(error&&/class_date|school|grade/.test(error.message)){noDateCol=true;['class_date','school','grade'].forEach(k=>delete row[k]);({error}=await sb.from('videos').insert(row));}
   if(error){notify('등록 실패: '+error.message,'error');return;}
   db.videos.push(Object.assign({created_at:new Date().toISOString()},row));
-  ['v-title','v-url','v-desc','v-date'].forEach(i=>document.getElementById(i).value='');document.getElementById('v-grade').value='';
+  ['v-title','v-url','v-desc','v-date'].forEach(i=>document.getElementById(i).value='');fillVideoGrade();
   const n=classDate&&!noDateCol?await autoGrantAbsentees(classDate):0;
   notify(noDateCol?'영상은 등록했지만 수업 날짜·학교·학년은 SQL(schema_add10)을 실행해야 저장돼요.':`영상을 등록했어요.${n?` 그날 결석한 학생 ${n}명에게 열어줬어요.`:''}`,noDateCol?'error':'success');
   renderVideoAdmin();
@@ -992,7 +1016,7 @@ async function revokeAccess(sid,vid){
 function videoFor(v,u){
   if(!u)return false;
   if(v.school&&v.school!==u.school)return false;
-  if(v.grade&&gradeAt(u,v.class_date||todayStr())!==v.grade)return false;
+  if(v.grade!=null&&gradeAt(u,v.class_date||todayStr())!==v.grade)return false;
   return true;
 }
 async function autoGrantAbsentees(date){
@@ -1006,7 +1030,7 @@ async function setVideoDate(vid){
   const v=db.videos.find(x=>x.id===vid);if(!v)return;
   const d=document.getElementById('vdate-'+vid).value||null;
   const sch=document.getElementById('vschool-'+vid).value||null;
-  const gr=parseInt(document.getElementById('vgrade-'+vid).value,10)||null;
+  const gr=parseGrade(document.getElementById('vgrade-'+vid).value);
   const{error}=await sb.from('videos').update({class_date:d,school:sch,grade:gr}).eq('id',vid);
   if(error){notify('저장 실패: '+error.message+(/class_date|school|grade/.test(error.message)?' (schema_add10.sql을 실행해주세요)':''),'error');return;}
   v.class_date=d;v.school=sch;v.grade=gr;
@@ -1014,7 +1038,8 @@ async function setVideoDate(vid){
   renderVideoAdmin();renderVideoWatchDetail(vid);renderAccessAdmin();
   notify(`${videoClassLabel(v)}(으)로 저장했어요.${n?` 결석한 학생 ${n}명에게 열어줬어요.`:''}`,'success');
 }
-function videoClassLabel(v){return [v.school||'전체 학교',v.grade?v.grade+'학년':'',v.class_date?mdWd(v.class_date)+' 수업':'날짜 없음'].filter(Boolean).join(' · ');}
+function fillVideoGrade(){const el=document.getElementById('v-grade');if(!el)return;const cur=parseGrade(el.value);el.innerHTML=gradeOptionsHtml(document.getElementById('v-date').value||todayStr(),cur,'전체 학년');}
+function videoClassLabel(v){return [v.school||'전체 학교',v.grade!=null?gradeName(v.grade,v.class_date||todayStr(),v.school):'',v.class_date?mdWd(v.class_date)+' 수업':'날짜 없음'].filter(Boolean).join(' · ');}
 async function toggleAccess(sid,vid){
   if(hasAccess(sid,vid)){await revokeAccess(sid,vid);notify(`${userName(sid)} 학생의 시청 권한을 닫았어요.`,'info');}
   else{await grantAccess(sid,vid);notify(`${userName(sid)} 학생에게 영상을 열어줬어요.`,'success');}
@@ -1099,7 +1124,7 @@ function renderVideoWatchDetail(vid){
   el.innerHTML=`<div class="card"><strong>${esc(v?v.title:'')}</strong> <span style="color:var(--text2)">시청 권한·기록</span>
       <div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:12px;color:var(--text2)">수업 날짜 <input type="date" class="date-in" id="vdate-${esc(vid)}" value="${esc((v&&v.class_date)||'')}">
         <select class="date-in" id="vschool-${esc(vid)}"><option value="">전체 학교</option>${schoolNames().concat(v&&v.school&&!schoolNames().includes(v.school)?[v.school]:[]).map(n=>`<option value="${esc(n)}"${v&&v.school===n?' selected':''}>${esc(n)}</option>`).join('')}</select>
-        <select class="date-in" id="vgrade-${esc(vid)}"><option value="">전체 학년</option>${[1,2,3].map(g=>`<option value="${g}"${v&&v.grade===g?' selected':''}>${g}학년</option>`).join('')}</select>
+        <select class="date-in" id="vgrade-${esc(vid)}">${gradeOptionsHtml((v&&v.class_date)||todayStr(),v?v.grade:null,'전체 학년')}</select>
         <button class="btn sm" onclick="setVideoDate('${esc(vid)}')">적용</button><span>맞는 학생 중 그날 결석한 학생에게 자동으로 열려요</span></div>
       <div class="vhint" style="margin:6px 0 0">"열어주기"로 결석하지 않은 학생에게도 직접 열 수 있어요. 건너뛴 구간 = 앞까지 봤는데 중간에 안 본 부분이에요.</div></div>
     <div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple" style="min-width:640px"><thead><tr><th>학생</th><th>시청 권한</th><th>진도</th><th>배속</th><th>건너뛴 구간</th><th>최근</th></tr></thead><tbody>${rows||'<tr><td colspan="6">학생이 없습니다</td></tr>'}</tbody></table></div>`;
@@ -2336,7 +2361,7 @@ function parentReportHTML(sid,note,start,end){
   return `<div style="width:794px;box-sizing:border-box;padding:44px 48px 40px;background:#fff;color:${C.ink};font-family:'Noto Sans KR',sans-serif">
     <div class="pb" style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid ${C.blue};padding-bottom:14px;margin-bottom:20px">
       <div><div style="font-size:13px;color:${C.blue};font-weight:700;letter-spacing:1px">정말 쏠쏠한 국어</div><div style="font-size:26px;font-weight:800;margin-top:2px">주간 학습 리포트</div></div>
-      <div style="text-align:right"><div style="font-size:20px;font-weight:700">${esc(u?u.name:'')} 학생</div><div style="font-size:13px;color:${C.sub}">${u&&u.school?esc(u.school)+' '+gradeLabel(gradeAt(u,end))+' · ':''}${mdWd(start)} ~ ${mdWd(end)}</div></div>
+      <div style="text-align:right"><div style="font-size:20px;font-weight:700">${esc(u?u.name:'')} 학생</div><div style="font-size:13px;color:${C.sub}">${u&&u.school?esc(u.school)+' '+gradeName(gradeAt(u,end),end,u.school)+' · ':''}${mdWd(start)} ~ ${mdWd(end)}</div></div>
     </div>
     ${noteBox}${attBox}${vocabBox}${examBox}${vidBox}
     <div class="pb" style="font-size:11px;color:#9aa1b0;text-align:center;margin-top:18px">정말 쏠쏠한 국어 · 쏠T · ${koDate(start)} ~ ${koDate(end)} 기록</div>

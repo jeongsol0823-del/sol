@@ -232,7 +232,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
         <div class="form-group"><label>비밀번호</label><input class="form-input" id="login-pw" type="password" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doLogin()"></div>
         <div class="err-text" id="login-err"></div>
         <button class="btn-primary" id="login-btn" onclick="doLogin()">로그인</button>
-        <div class="link-text" id="signup-link" onclick="showSignup()">학생이신가요? <span>회원가입</span></div>
+        <div class="link-text" id="signup-link" style="cursor:default">학생 계정은 쏠T가 만들어 줘요. 아이디·비밀번호를 쏠T에게 받으세요.</div>
       </div>
       <div id="form-signup" style="display:none">
         <div class="form-group"><label>이름</label><input class="form-input" id="su-name" placeholder="이름"></div>
@@ -272,11 +272,25 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
   <div class="content">
 
     <div class="section active" id="t-students">
-      <div class="card"><div style="font-weight:600;margin-bottom:6px">학교 목록</div>
+      <div class="section-head"><h2>학생 계정 만들기</h2></div>
+      <div class="card">
+        <div class="admin-form">
+          <div class="form-group"><label>이름</label><input class="form-input" id="na-name" placeholder="예: 김민준"></div>
+          <div class="form-group"><label>아이디</label><input class="form-input" id="na-id" placeholder="영문/숫자 (예: minjun)"></div>
+          <div class="form-group"><label>학교</label><select class="form-select" id="na-school"></select></div>
+          <div class="form-group"><label>학년</label><select class="form-select" id="na-grade"></select></div>
+          <div class="full form-group"><label>비밀번호</label><div style="display:flex;gap:6px"><input class="form-input" id="na-pw" style="flex:1;font-family:var(--mono,monospace)"><button class="btn sm" onclick="document.getElementById('na-pw').value=randomPw()">새로 뽑기</button></div></div>
+        </div>
+        <div class="err-text" id="na-err"></div>
+        <button class="btn blue" style="margin-top:6px" onclick="createStudent()">계정 만들기</button>
+        <div class="vhint" style="margin:8px 0 0">학교가 목록에 없으면 아래 <b>학교 목록</b>에서 먼저 추가하세요. 만든 계정은 바로 로그인할 수 있어요.</div>
+      </div>
+      <div id="na-result"></div>
+      <div class="card" style="margin-top:20px"><div style="font-weight:600;margin-bottom:6px">학교 목록</div>
         <div id="school-list" style="display:flex;gap:6px;flex-wrap:wrap"></div>
         <div style="display:flex;gap:6px;margin-top:10px"><input class="form-input" id="school-new" placeholder="예: 수지고" style="flex:1"><button class="btn sm" onclick="addSchool()">학교 추가</button></div>
         <div class="vhint" style="margin:8px 0 0">학년은 매년 3월 1일에 한 학년씩 자동으로 올라가요.</div></div>
-      <div class="section-head" style="margin-top:20px"><h2>가입 승인 대기</h2></div>
+      <div class="section-head" id="pending-head" style="margin-top:20px"><h2>가입 승인 대기</h2></div>
       <div id="pending-list"></div>
       <div class="section-head" style="margin-top:24px"><h2>학생 목록 &amp; 진도</h2></div>
       <div id="active-list"></div>
@@ -805,6 +819,68 @@ async function doSignup(){
   }catch(e){err.textContent='오류: '+e.message;}
   finally{btn.disabled=false;btn.textContent='가입 신청';}
 }
+
+/* ---- 학생 계정: 쏠T가 만들어 주고 비밀번호도 정해 줌 ---- */
+const SITE_URL='https://jeongsol0823-del.github.io/sol/';
+function randomPw(){let s='';const c=window.crypto&&crypto.getRandomValues?crypto.getRandomValues(new Uint32Array(6)):null;for(let i=0;i<6;i++)s+=String((c?c[i]:Math.floor(Math.random()*1e9))%10);return s;}
+function fillNewAccountForm(){
+  fillSchoolSelect('na-school','학교 선택',false,document.getElementById('na-school')?document.getElementById('na-school').value:null);
+  const g=document.getElementById('na-grade');if(g)g.innerHTML=gradeOptionsHtml(todayStr(),parseGrade(g.value),'학년 선택');
+  const pw=document.getElementById('na-pw');if(pw&&!pw.value)pw.value=randomPw();
+}
+function accountText(u){return `[정말 쏠쏠한 국어] ${u.name} 학생 계정\n주소: ${SITE_URL}\n아이디: ${u.id}\n비밀번호: ${u.pw}\n로그인할 때 '학생'을 누르고 입력하세요.`;}
+function accountCardHTML(u,title){
+  return `<div class="card" style="border:1.5px solid var(--green);margin-top:10px"><div class="row-between"><strong>${esc(title)}</strong><button class="btn sm" onclick="this.closest('.card').remove()">닫기</button></div>
+    <div style="margin-top:8px;line-height:1.9;font-size:14px">${esc(u.name)} 학생<br>아이디 <b style="font-size:16px">${esc(u.id)}</b><br>비밀번호 <b style="font-size:16px;letter-spacing:1px">${esc(u.pw)}</b></div>
+    <button class="btn green sm" style="margin-top:8px" onclick="copyAccount('${esc(u.id)}')">문자용으로 복사</button>
+    <div class="vhint" style="margin:6px 0 0">복사한 뒤 문자나 카톡에 붙여넣어 학생(또는 학부모님)께 보내세요.</div></div>`;
+}
+async function copyAccount(id){
+  const u=db.users.find(x=>x.id===id);if(!u)return;
+  try{await navigator.clipboard.writeText(accountText(u));notify('복사했어요. 문자에 붙여넣으세요.','success');}
+  catch(e){prompt('아래 내용을 복사하세요',accountText(u));}
+}
+async function createStudent(){
+  const err=document.getElementById('na-err');err.textContent='';
+  const name=document.getElementById('na-name').value.trim();
+  const id=document.getElementById('na-id').value.trim();
+  const school=document.getElementById('na-school').value||null;
+  const grade=parseGrade(document.getElementById('na-grade').value);
+  const pw=document.getElementById('na-pw').value.trim();
+  if(!name||!id){err.textContent='이름과 아이디를 입력하세요.';return;}
+  if(!/^[a-zA-Z0-9_]+$/.test(id)){err.textContent='아이디는 영문/숫자/밑줄만 쓸 수 있어요.';return;}
+  if(!school){err.textContent='학교를 고르세요. 목록에 없으면 아래 학교 목록에서 먼저 추가하세요.';return;}
+  if(grade==null){err.textContent='학년을 고르세요.';return;}
+  if(pw.length<4){err.textContent='비밀번호는 4자 이상이어야 해요.';return;}
+  await loadAll();
+  if(db.users.some(u=>u.id===id)){err.textContent='이미 있는 아이디예요. 다른 아이디를 쓰세요.';return;}
+  if(nameTaken(name)){err.textContent='같은 이름의 학생이 이미 있어요. 이름 뒤에 학교명이나 숫자를 붙여 주세요. 예) '+name+'(수지고), '+name+'2';return;}
+  const row={id,name,pw,role:'student',status:'active',school,grade,grade_year:academicYear(todayStr())};
+  const{error}=await sb.from('users').insert(row);
+  if(error){err.textContent='만들기 실패: '+error.message;return;}
+  db.users.push(row);
+  ['na-name','na-id'].forEach(i=>document.getElementById(i).value='');document.getElementById('na-pw').value=randomPw();
+  document.getElementById('na-result').innerHTML=accountCardHTML(row,'계정을 만들었어요');
+  renderActive();renderReportSelect();renderAttendanceForm();renderGrammarAdmin();
+  notify(`${name} 학생 계정을 만들었어요.`,'success');
+}
+function showStudentPw(id){
+  const u=db.users.find(x=>x.id===id);const el=document.getElementById('pw-'+id);if(!u||!el)return;
+  if(el.innerHTML){el.innerHTML='';return;}
+  el.innerHTML=`비밀번호 <b style="font-size:14px;letter-spacing:1px">${esc(u.pw||'')}</b> <button class="btn sm" onclick="copyAccount('${esc(id)}')">복사</button>`;
+}
+async function resetStudentPw(id){
+  const u=db.users.find(x=>x.id===id);if(!u)return;
+  const v=prompt(`${u.name} 학생의 새 비밀번호 (그대로 두면 자동으로 정한 번호)`,randomPw());
+  if(v==null)return;const pw=v.trim();
+  if(pw.length<4){notify('비밀번호는 4자 이상이어야 해요.','error');return;}
+  const{error}=await sb.from('users').update({pw}).eq('id',id);
+  if(error){notify('변경 실패: '+error.message,'error');return;}
+  u.pw=pw;
+  document.getElementById('na-result').innerHTML=accountCardHTML(u,'비밀번호를 바꿨어요');
+  document.getElementById('na-result').scrollIntoView({behavior:'smooth',block:'nearest'});
+  notify(`${u.name} 학생 비밀번호를 바꿨어요.`,'success');
+}
 /* ---- 학교·학년 ---- */
 // 학년은 3월 1일에 한 학년씩 자동으로 올라가요 (가입·수정한 해 기준)
 function academicYear(d){const [y,m]=d.split('-').map(Number);return m>=3?y:y-1;}
@@ -859,6 +935,7 @@ function renderSchoolAdmin(){
   const el=document.getElementById('school-list');if(!el)return;
   el.innerHTML=db.schools.length?db.schools.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko')).map(s=>`<span class="chip" style="cursor:default">${esc(s.name)} <span style="cursor:pointer;margin-left:4px" onclick="deleteSchool('${esc(s.id)}')">✕</span></span>`).join(' '):'<span style="font-size:12px;color:var(--text3)">아직 학교가 없어요. 추가하면 학생이 가입할 때 목록에서 고를 수 있어요.</span>';
   fillSchoolSelect('v-school','전체 학교',false,document.getElementById('v-school')?document.getElementById('v-school').value:null);
+  fillSchoolSelect('na-school','학교 선택',false,document.getElementById('na-school')?document.getElementById('na-school').value:null);
   fillSchoolSelect('att-school','전체 학교',false,document.getElementById('att-school')?document.getElementById('att-school').value:null);
 }
 async function updateStudentInfo(id,changed){
@@ -890,7 +967,7 @@ function doLogout(){
 function launchTeacher(){
   document.getElementById('teacher-name').textContent=session.name+' 선생님';
   showPage('page-teacher');
-  renderSchoolAdmin();fillVideoGrade();renderPending();renderActive();renderVideoAdmin();
+  renderSchoolAdmin();fillVideoGrade();fillNewAccountForm();renderPending();renderActive();renderVideoAdmin();
   renderAccessAdmin();onVideoKindChange();
   renderQaSchools();renderQaWeeks();renderQaQuestions();renderQaFreeAdmin();
   renderExamAdmin();
@@ -907,7 +984,8 @@ function launchTeacher(){
 function renderPending(){
   const el=document.getElementById('pending-list');
   const pending=db.users.filter(u=>u.role==='student'&&u.status==='pending');
-  if(!pending.length){el.innerHTML='<div class="empty-hint">대기 중인 가입 신청이 없습니다.</div>';return;}
+  const ph=document.getElementById('pending-head');if(ph)ph.style.display=pending.length?'':'none';
+  if(!pending.length){el.innerHTML='';return;}
   el.innerHTML=pending.map(u=>`
     <div class="card row-between">
       <div><strong>${esc(u.name)}</strong> <span style="color:var(--text2)">(${esc(u.id)})</span>${nameTaken(u.name,u.id)?' <span class="pill red">동명이인</span>':''}<div style="font-size:12px;color:var(--text2)">${esc(studentTag(u))}</div></div>
@@ -935,10 +1013,10 @@ function renderActive(){
       <td>${watched} / ${db.videos.filter(v=>hasAccess(u.id,v.id)).length}개 시청${grammarOk(u.id)?' <span class="pill blue">문법</span>':''}</td>
       <td>${avg}%</td>
       <td>${fast?`<span class="pill amber">배속 ${fast}</span> `:''}${skip?`<span class="pill red">건너뜀 ${skip}</span>`:''}${!fast&&!skip?'<span style="color:var(--text3)">-</span>':''}</td>
-      <td style="white-space:nowrap"><button class="btn sm" onclick="renameStudent('${esc(u.id)}')">이름 수정</button> <button class="btn red sm" onclick="removeStudent('${esc(u.id)}')">삭제</button></td>
+      <td style="white-space:nowrap"><button class="btn sm" onclick="showStudentPw('${esc(u.id)}')">비번 보기</button> <button class="btn sm" onclick="resetStudentPw('${esc(u.id)}')">새 비번</button> <button class="btn sm" onclick="renameStudent('${esc(u.id)}')">이름 수정</button> <button class="btn red sm" onclick="removeStudent('${esc(u.id)}')">삭제</button><div id="pw-${esc(u.id)}" style="font-size:12px;margin-top:4px"></div></td>
     </tr>`;
   }).join('');
-  el.innerHTML=`<div style="overflow-x:auto"><table class="simple" style="min-width:720px"><thead><tr><th>이름</th><th>학교·학년</th><th>시청 현황</th><th>평균 진도</th><th>영상 확인</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  el.innerHTML=`<div style="overflow-x:auto"><table class="simple" style="min-width:860px"><thead><tr><th>이름</th><th>학교·학년</th><th>시청 현황</th><th>평균 진도</th><th>영상 확인</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 async function renameStudent(id){
   const u=db.users.find(x=>x.id===id);if(!u)return;

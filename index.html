@@ -252,7 +252,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
   <div class="tabnav">
     <button class="active" data-t="t-students" onclick="switchTab('teacher','t-students')">학생 관리</button>
     <button data-t="t-videos" onclick="switchTab('teacher','t-videos')">영상 관리<span id="video-tab-badge"></span></button>
-    <button data-t="t-access" onclick="switchTab('teacher','t-access')">복습 승인</button>
+    <button data-t="t-access" onclick="switchTab('teacher','t-access')">영상 승인<span id="access-tab-badge"></span></button>
     <button data-t="t-qa" onclick="switchTab('teacher','t-qa')">질문답변</button>
     <button data-t="t-exams" onclick="switchTab('teacher','t-exams')">시험</button>
     <button data-t="t-vocab" onclick="switchTab('teacher','t-vocab')">어휘<span id="vocab-tab-badge"></span></button>
@@ -280,12 +280,15 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div class="section-head"><h2>새 영상 등록</h2></div>
       <div class="card">
         <div class="admin-form">
+          <div class="full form-group"><label>영상 종류</label><select class="form-select" id="v-kind" onchange="onVideoKindChange()"><option value="review">복습 영상 (결석생 · 학교별 수업)</option><option value="grammar">문법 기초 (학교 상관없음 · 수강 승인한 학생)</option></select></div>
           <div class="full form-group"><label>제목</label><input class="form-input" id="v-title" placeholder="강의 제목"></div>
           <div class="full form-group"><label>유튜브 URL</label><input class="form-input" id="v-url" placeholder="https://youtu.be/..."></div>
-          <div class="form-group"><label>수업 날짜</label><input class="form-input" id="v-date" type="date" onchange="fillVideoGrade()"></div>
-          <div class="form-group"><label>학교</label><select class="form-select" id="v-school"></select></div>
-          <div class="form-group"><label>학년</label><select class="form-select" id="v-grade"></select></div>
-          <div class="full vhint" style="margin:0">수업 날짜 · 학교 · 학년이 맞는 학생 중 그날 <b>결석</b>으로 저장된 학생에게 자동으로 열려요.</div>
+          <div class="form-group rv-only"><label>수업 날짜</label><input class="form-input" id="v-date" type="date" onchange="fillVideoGrade()"></div>
+          <div class="form-group rv-only"><label>학교</label><select class="form-select" id="v-school"></select></div>
+          <div class="form-group rv-only"><label>학년</label><select class="form-select" id="v-grade"></select></div>
+          <div class="full vhint rv-only" style="margin:0">수업 날짜 · 학교 · 학년이 맞는 학생 중 그날 <b>결석</b>으로 저장된 학생에게 자동으로 열려요.</div>
+          <div class="form-group gr-only" style="display:none"><label>강 번호</label><input class="form-input" id="v-no" type="number" min="1" placeholder="예: 1"></div>
+          <div class="full vhint gr-only" style="margin:0;display:none">문법 기초는 학교·학년과 상관없이, <b>영상 승인</b> 탭에서 수강을 승인한 학생 모두에게 열려요. 강 번호 순서대로 보여요.</div>
           <div class="form-group"><label>설명 (선택)</label><input class="form-input" id="v-desc" placeholder="간단한 설명"></div>
         </div>
         <button class="btn blue" style="margin-top:10px" onclick="addVideo()">영상 등록</button>
@@ -296,7 +299,13 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     </div>
 
     <div class="section" id="t-access">
-      <div class="section-head"><h2>복습영상 접근 신청</h2></div>
+      <div class="section-head"><h2>문법 기초 수강 신청</h2></div>
+      <div id="grammar-pending-list"></div>
+      <div class="card" style="margin-top:8px"><div style="font-weight:600;margin-bottom:6px">문법 기초 수강생 <span id="grammar-count" style="color:var(--text2);font-weight:400"></span></div>
+        <div id="grammar-enrolled" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <div style="display:flex;gap:6px;margin-top:10px"><select class="form-select" id="grammar-add-sel" style="flex:1"></select><button class="btn green sm" onclick="grammarAddDirect()">바로 수강 등록</button></div>
+        <div class="vhint" style="margin:8px 0 0">수강생은 문법 기초 강의를 전부 볼 수 있어요. 나중에 올리는 강의도 자동으로 열려요.</div></div>
+      <div class="section-head" style="margin-top:24px"><h2>복습영상 접근 신청</h2></div>
       <div id="access-pending-list"></div>
       <div class="section-head" style="margin-top:24px"><h2>처리 내역</h2></div>
       <div id="access-history-list"></div>
@@ -445,7 +454,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div class="form-group"><select class="form-select" id="report-student-sel" onchange="renderReportCard()"></select></div>
       <div class="card" style="margin-top:12px">
         <div style="font-weight:600;margin-bottom:4px">주간 성적표 (학부모님께 PDF로 보내기)</div>
-        <div class="vhint">고른 기간의 <b>출석(날짜별)</b>, <b>어휘 미션</b>, <b>시험 성적</b>이 들어가요. 보충 강의는 그 기간에 본 학생만 들어가요. 아래 미리보기 모양 그대로 PDF가 돼요.</div>
+        <div class="vhint">고른 기간의 <b>출석(날짜별)</b>, <b>어휘 미션</b>, <b>시험 성적</b>이 들어가요. <b>문법 기초</b>는 수강생만, 보충 강의(복습 영상)는 그 기간에 본 학생만 들어가요. 아래 미리보기 모양 그대로 PDF가 돼요.</div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
           <input type="date" class="date-in" id="rp-start" onchange="renderReportCard()"> ~ <input type="date" class="date-in" id="rp-end" onchange="renderReportCard()">
           <button class="btn sm" onclick="setReportRange('last7')">최근 7일</button><button class="btn sm" onclick="setReportRange('thisweek')">이번 주</button><button class="btn sm" onclick="setReportRange('lastweek')">지난주</button>
@@ -471,6 +480,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
   </div>
   <div class="tabnav">
     <button class="active" data-t="s-review" onclick="switchTab('student','s-review')">복습 영상</button>
+    <button data-t="s-grammar" onclick="switchTab('student','s-grammar')">문법 기초</button>
     <button data-t="s-qa" onclick="switchTab('student','s-qa')">질문답변</button>
     <button data-t="s-exams" onclick="switchTab('student','s-exams')">시험</button>
     <button data-t="s-vocab" onclick="switchTab('student','s-vocab')">어휘</button>
@@ -486,6 +496,12 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div class="section-head"><h2>복습 영상</h2></div>
       <div id="review-hint"></div>
       <div class="video-grid" id="review-grid"></div>
+    </div>
+
+    <div class="section" id="s-grammar">
+      <div class="section-head"><h2>문법 기초</h2></div>
+      <div id="grammar-head"></div>
+      <div class="video-grid" id="grammar-grid"></div>
     </div>
 
     <div class="section" id="s-qa">
@@ -598,7 +614,7 @@ let currentRole='teacher';
 let session=null;
 const emptyDb=()=>({
   users:[],videos:[],progress:[],
-  videoAccess:[],accessRequests:[],
+  videoAccess:[],accessRequests:[],grammarEnroll:[],
   qaSchools:[],qaWeeks:[],qaQuestions:[],
   exams:[],examResponses:[],
   clinicSlots:[],clinicRequests:[],
@@ -654,7 +670,7 @@ async function selectAll(table,orderCols=['id']){
 }
 async function loadAll(attempt=0){
   try{
-    const [u,v,p,va,ar,qs,qw,qq,ex,er,cs,cr,cw,ci,csu,att,an,arr,vs2,vw2,va2,rl,sc]=await Promise.all([
+    const [u,v,p,va,ar,qs,qw,qq,ex,er,cs,cr,cw,ci,csu,att,an,arr,vs2,vw2,va2,rl,sc,ge]=await Promise.all([
       sb.from('users').select('*'),
       sb.from('videos').select('*').order('created_at'),
       selectAll('progress',['student_id','video_id']),
@@ -677,7 +693,8 @@ async function loadAll(attempt=0){
       selectAll('vocab_words'),
       selectAll('vocab_attempts'),
       sb.from('report_links').select('*').order('created_at',{ascending:false}),
-      sb.from('schools').select('*')
+      sb.from('schools').select('*'),
+      sb.from('grammar_enroll').select('*')
     ]);
     if(u.error)throw new Error(u.error.message);
     if(v.error)throw new Error(v.error.message);
@@ -691,6 +708,7 @@ async function loadAll(attempt=0){
     db.attendance=(att.data)||[];db.announcements=(an.data)||[];db.announcementReads=(arr.data)||[];
     db.vocabSets=(vs2.data)||[];db.vocabWords=(vw2.data)||[];db.vocabAttempts=(va2.data)||[];
     db.reportLinks=(rl&&rl.data)||[];db.schools=(sc&&sc.data)||[];
+    db.grammarEnroll=(ge&&ge.data)||[];db.grammarMissing=!!(ge&&ge.error);
   }catch(e){
     if(attempt<3){
       document.querySelector('.loading-text').textContent=`재연결 중... (${attempt+1}/3)`;
@@ -866,7 +884,7 @@ function launchTeacher(){
   document.getElementById('teacher-name').textContent=session.name+' 선생님';
   showPage('page-teacher');
   renderSchoolAdmin();fillVideoGrade();renderPending();renderActive();renderVideoAdmin();
-  renderAccessAdmin();
+  renderAccessAdmin();onVideoKindChange();
   renderQaSchools();renderQaWeeks();renderQaQuestions();renderQaFreeAdmin();
   renderExamAdmin();
   renderClinicAdmin();
@@ -907,7 +925,7 @@ function renderActive(){
       <td>${esc(u.name)}${nameTaken(u.name,u.id)?' <span class="pill red">동명이인</span>':''}<div style="font-size:11px;color:var(--text3)">${esc(u.id)}</div></td>
       <td style="white-space:nowrap"><select class="date-in" id="st-school-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}','school')"><option value="">학교 미입력</option>${[...new Set(schoolNames().concat(u.school?[u.school]:[]))].map(n=>`<option value="${esc(n)}"${u.school===n?' selected':''}>${esc(n)}</option>`).join('')}</select>
         <select class="date-in" id="st-grade-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}')">${gradeOptionsHtml(todayStr(),gradeAt(u),'학년')}</select></td>
-      <td>${watched} / ${db.videoAccess.filter(a=>a.student_id===u.id).length}개 시청</td>
+      <td>${watched} / ${db.videos.filter(v=>hasAccess(u.id,v.id)).length}개 시청${grammarOk(u.id)?' <span class="pill blue">문법</span>':''}</td>
       <td>${avg}%</td>
       <td>${fast?`<span class="pill amber">배속 ${fast}</span> `:''}${skip?`<span class="pill red">건너뜀 ${skip}</span>`:''}${!fast&&!skip?'<span style="color:var(--text3)">-</span>':''}</td>
       <td style="white-space:nowrap"><button class="btn sm" onclick="renameStudent('${esc(u.id)}')">이름 수정</button> <button class="btn red sm" onclick="removeStudent('${esc(u.id)}')">삭제</button></td>
@@ -950,9 +968,9 @@ async function rejectStudent(id){
 }
 async function removeStudent(id){
   const u=db.users.find(x=>x.id===id);if(!u)return;
-  if(!confirm(`${u.name} 학생을 삭제할까요?\n\n영상 진도, 복습 신청, 질문과 사진, 시험, 어휘 미션, 클리닉 예약, 인증 제출과 사진, 출석, 공지 확인 기록까지 모두 지워지고 되돌릴 수 없어요.`))return;
+  if(!confirm(`${u.name} 학생을 삭제할까요?\n\n영상 진도, 복습 신청, 문법 기초 수강, 질문과 사진, 시험, 어휘 미션, 클리닉 예약, 인증 제출과 사진, 출석, 공지 확인 기록까지 모두 지워지고 되돌릴 수 없어요.`))return;
   const sameName=db.users.some(x=>x.id!==id&&x.name===u.name);
-  const jobs=[['progress','student_id',id],['video_access','student_id',id],['access_requests','student_id',id],['qa_questions','student_id',id],['clinic_requests','student_id',id],['cert_submissions','student_id',id],['attendance','student_id',id],['announcement_reads','student_id',id],['vocab_attempts','student_id',id]];
+  const jobs=[['progress','student_id',id],['video_access','student_id',id],['access_requests','student_id',id],['qa_questions','student_id',id],['clinic_requests','student_id',id],['cert_submissions','student_id',id],['attendance','student_id',id],['announcement_reads','student_id',id],['vocab_attempts','student_id',id],['grammar_enroll','student_id',id]];
   if(!sameName)jobs.push(['exam_responses','student_name',u.name]); // 동명이인이 있으면 시험 기록은 구분할 수 없어 남김
   const fails=[];
   for(const [t,c,v] of jobs){const{error}=await sb.from(t).delete().eq(c,v);if(error)fails.push(t);}
@@ -966,7 +984,7 @@ async function removeStudent(id){
   const keep=r=>r.student_id!==id;
   db.progress=db.progress.filter(keep);db.videoAccess=db.videoAccess.filter(keep);db.accessRequests=db.accessRequests.filter(keep);
   db.qaQuestions=db.qaQuestions.filter(keep);db.clinicRequests=db.clinicRequests.filter(keep);db.certSubmissions=db.certSubmissions.filter(keep);
-  db.attendance=db.attendance.filter(keep);db.announcementReads=db.announcementReads.filter(keep);db.vocabAttempts=db.vocabAttempts.filter(keep);
+  db.attendance=db.attendance.filter(keep);db.announcementReads=db.announcementReads.filter(keep);db.vocabAttempts=db.vocabAttempts.filter(keep);db.grammarEnroll=db.grammarEnroll.filter(keep);
   if(!sameName)db.examResponses=db.examResponses.filter(r=>r.student_name!==u.name);
   db.users=db.users.filter(x=>x.id!==id);
   renderActive();renderAccessAdmin();renderQaQuestions();renderQaFreeAdmin();renderExamAdmin();renderClinicAdmin();renderCertAdmin();
@@ -977,20 +995,25 @@ async function addVideo(){
   const title=document.getElementById('v-title').value.trim();
   const url=document.getElementById('v-url').value.trim();
   const desc=document.getElementById('v-desc').value.trim();
-  const category='review'; // 모든 영상은 허락받은 학생만 볼 수 있어요
-  const classDate=document.getElementById('v-date').value||null;
-  const vSchool=document.getElementById('v-school').value||null;
-  const vGrade=parseGrade(document.getElementById('v-grade').value);
+  const category=document.getElementById('v-kind').value==='grammar'?'grammar':'review'; // 모든 영상은 허락받은 학생만 볼 수 있어요
+  const gram=category==='grammar';
+  const classDate=gram?null:document.getElementById('v-date').value||null;
+  const vSchool=gram?null:document.getElementById('v-school').value||null;
+  const vGrade=gram?null:parseGrade(document.getElementById('v-grade').value);
+  const sortNo=gram?parseGrade(document.getElementById('v-no').value):null;
   if(!title||!url){notify('제목과 URL을 입력하세요.','error');return;}
   if(!ytId(url)){notify('유효한 유튜브 URL을 입력하세요.','error');return;}
   const id=uid('v');
   const row={id,title,url,description:desc,category,class_date:classDate,school:vSchool,grade:vGrade};
+  if(gram)row.sort_no=sortNo!=null?sortNo:nextGrammarNo();
   let{error}=await sb.from('videos').insert(row);
   let noDateCol=false;
+  if(error&&/sort_no/.test(error.message)){delete row.sort_no;({error}=await sb.from('videos').insert(row));if(!error)notify('강 번호는 SQL(schema_add11)을 실행해야 저장돼요. 지금은 올린 순서대로 보여요.','error');}
   if(error&&/class_date|school|grade/.test(error.message)){noDateCol=true;['class_date','school','grade'].forEach(k=>delete row[k]);({error}=await sb.from('videos').insert(row));}
   if(error){notify('등록 실패: '+error.message,'error');return;}
   db.videos.push(Object.assign({created_at:new Date().toISOString()},row));
-  ['v-title','v-url','v-desc','v-date'].forEach(i=>document.getElementById(i).value='');fillVideoGrade();
+  ['v-title','v-url','v-desc','v-date','v-no'].forEach(i=>document.getElementById(i).value='');fillVideoGrade();onVideoKindChange();
+  if(gram){notify(`문법 기초 ${grammarNo(db.videos[db.videos.length-1])}강을 등록했어요. 수강생 ${grammarStudents().length}명에게 열렸어요.`,'success');renderVideoAdmin();return;}
   const n=classDate&&!noDateCol?await autoGrantAbsentees(classDate):0;
   notify(noDateCol?'영상은 등록했지만 수업 날짜·학교·학년은 SQL(schema_add10)을 실행해야 저장돼요.':`영상을 등록했어요.${n?` 그날 결석한 학생 ${n}명에게 열어줬어요.`:''}`,noDateCol?'error':'success');
   renderVideoAdmin();
@@ -1022,7 +1045,7 @@ function videoFor(v,u){
   return true;
 }
 async function autoGrantAbsentees(date){
-  const vids=db.videos.filter(v=>v.class_date===date);if(!vids.length)return 0;
+  const vids=db.videos.filter(v=>v.class_date===date&&!isGrammar(v));if(!vids.length)return 0;
   const absent=db.attendance.filter(a=>a.date===date&&a.status==='absent').map(a=>a.student_id);
   const who=new Set();
   for(const sid of absent){const u=db.users.find(x=>x.id===sid);for(const v of vids){if(videoFor(v,u)&&await grantAccess(sid,v.id))who.add(sid);}}
@@ -1043,21 +1066,27 @@ async function setVideoDate(vid){
 function fillVideoGrade(){const el=document.getElementById('v-grade');if(!el)return;const cur=parseGrade(el.value);el.innerHTML=gradeOptionsHtml(document.getElementById('v-date').value||todayStr(),cur,'전체 학년');}
 function videoClassLabel(v){return [v.school||'전체 학교',v.grade!=null?gradeName(v.grade,v.class_date||todayStr(),v.school):'',v.class_date?mdWd(v.class_date)+' 수업':'날짜 없음'].filter(Boolean).join(' · ');}
 async function toggleAccess(sid,vid){
+  if(isGrammar(db.videos.find(v=>v.id===vid))){await grammarSet(sid,grammarOk(sid)?null:'approved');renderVideoWatchDetail(vid);renderVideoAdmin();return;}
   if(hasAccess(sid,vid)){await revokeAccess(sid,vid);notify(`${userName(sid)} 학생의 시청 권한을 닫았어요.`,'info');}
   else{await grantAccess(sid,vid);notify(`${userName(sid)} 학생에게 영상을 열어줬어요.`,'success');}
   renderVideoWatchDetail(vid);renderVideoAdmin();renderAccessAdmin();
 }
 function renderVideoAdmin(){
   const el=document.getElementById('video-admin-list');
-  if(!db.videos.length){el.innerHTML='<div class="empty-hint">등록된 영상이 없습니다.</div>';return;}
-  el.innerHTML=db.videos.slice().reverse().map(v=>`
+  if(!db.videos.length){el.innerHTML='<div class="empty-hint">등록된 영상이 없습니다.</div>';renderVideoAlerts();return;}
+  const card=v=>{const gram=isGrammar(v);const n=gram?grammarStudents().length:db.videoAccess.filter(a=>a.video_id===v.id).length;
+    const done=gram?grammarStudents().filter(u=>getPct(u.id,v.id)>=GRAMMAR_DONE).length:0;
+    return `
     <div class="card row-between">
       <div style="display:flex;gap:10px;align-items:center">
         <img src="${thumb(v.url)}" style="width:80px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;background:var(--bg3)" alt="">
-        <div><strong>${esc(v.title)}</strong> <span class="pill ${v.class_date?'blue':'amber'}">${esc(videoClassLabel(v))}</span><div style="color:var(--text2);font-size:12px">시청 가능 ${db.videoAccess.filter(a=>a.video_id===v.id).length}명${v.description?' · '+esc(v.description):''}</div></div>
+        <div><strong>${esc(v.title)}</strong> <span class="pill ${gram?'green':v.class_date?'blue':'amber'}">${esc(gram?`문법 기초 · ${grammarNo(v)}강`:videoClassLabel(v))}</span><div style="color:var(--text2);font-size:12px">${gram?`수강생 ${n}명 · 완강 ${done}명`:`시청 가능 ${n}명`}${v.description?' · '+esc(v.description):''}</div></div>
       </div>
-      <div style="display:flex;gap:6px"><button class="btn sm" onclick="renderVideoWatchDetail('${esc(v.id)}')">시청 권한·기록</button><button class="btn red sm" onclick="deleteVideo('${esc(v.id)}')">삭제</button></div>
-    </div>`).join('');
+      <div style="display:flex;gap:6px"><button class="btn sm" onclick="renderVideoWatchDetail('${esc(v.id)}')">시청 ${gram?'기록':'권한·기록'}</button><button class="btn red sm" onclick="deleteVideo('${esc(v.id)}')">삭제</button></div>
+    </div>`;};
+  const gv=grammarVideos(),rv=db.videos.filter(v=>!isGrammar(v)).reverse();
+  el.innerHTML=(gv.length?`<div style="font-weight:600;margin:4px 0 8px">문법 기초 <span style="color:var(--text2);font-weight:400">${gv.length}강</span></div>`+gv.map(card).join(''):'')
+    +(rv.length?`<div style="font-weight:600;margin:${gv.length?'18px':'4px'} 0 8px">복습 영상 <span style="color:var(--text2);font-weight:400">${rv.length}개</span></div>`+rv.map(card).join(''):'');
   renderVideoAlerts();
 }
 /* ---- 영상 시청 분석: 배속 · 건너뛴 구간 ---- */
@@ -1113,22 +1142,28 @@ function renderVideoAlerts(){
 }
 function renderVideoWatchDetail(vid){
   const el=document.getElementById('video-watch-detail');const v=db.videos.find(x=>x.id===vid);
-  const students=db.users.filter(u=>u.role==='student'&&u.status==='active').sort((a,b)=>(videoFor(v,b)?1:0)-(videoFor(v,a)?1:0)); // 이 수업 학생 먼저
-  const accCell=u=>{const ok=hasAccess(u.id,vid);const abs=v&&v.class_date&&db.attendance.some(a=>a.student_id===u.id&&a.date===v.class_date&&a.status==='absent');const req=accessReqStatus(u.id,vid);
+  const gram=isGrammar(v);
+  const mineFirst=u=>gram?(grammarOk(u.id)?1:0):(videoFor(v,u)?1:0);
+  const students=db.users.filter(u=>u.role==='student'&&u.status==='active').sort((a,b)=>mineFirst(b)-mineFirst(a)); // 이 수업 학생 먼저
+  const accCell=u=>{
+    if(gram){const ok=grammarOk(u.id);const st=grammarStatus(u.id);
+      return `<td style="white-space:nowrap">${ok?'<span class="pill green">수강생</span>':st&&st.status==='pending'?'<span class="pill amber">신청함</span>':'<span class="pill" style="color:var(--text3)">미수강</span>'}<div style="margin-top:4px"><button class="btn sm${ok?'':' green'}" onclick="toggleAccess('${esc(u.id)}','${esc(vid)}')">${ok?'수강 취소':'수강 승인'}</button></div></td>`;}const ok=hasAccess(u.id,vid);const abs=v&&v.class_date&&db.attendance.some(a=>a.student_id===u.id&&a.date===v.class_date&&a.status==='absent');const req=accessReqStatus(u.id,vid);
     return `<td style="white-space:nowrap">${ok?'<span class="pill green">열림</span>':req&&req.status==='pending'?'<span class="pill amber">신청함</span>':'<span class="pill" style="color:var(--text3)">닫힘</span>'}${abs?' <span style="font-size:11px;color:var(--red)">결석</span>':''}<div style="margin-top:4px"><button class="btn sm${ok?'':' green'}" onclick="toggleAccess('${esc(u.id)}','${esc(vid)}')">${ok?'닫기':'열어주기'}</button></div></td>`;};
   const rows=students.map(u=>{const p=db.progress.find(x=>x.student_id===u.id&&x.video_id===vid);const f=watchInfo(p);
-    const nm=`<td>${esc(u.name)}<div style="font-size:11px;color:${videoFor(v,u)?'var(--text2)':'var(--text3)'}">${esc(studentTag(u))}</div></td>`;
+    const nm=`<td>${esc(u.name)}<div style="font-size:11px;color:${mineFirst(u)?'var(--text2)':'var(--text3)'}">${esc(studentTag(u))}</div></td>`;
     if(!f)return `<tr>${nm}${accCell(u)}<td colspan="4" style="color:var(--text3)">아직 안 봄</td></tr>`;
     const skipTxt=!f.hasRanges?'<span style="color:var(--text3)">기록 없음</span>':f.skips.length?`<span style="color:${f.skip?'var(--red)':'var(--text2)'}">${fmtTime(f.skipTotal)}</span><div style="font-size:11px;color:var(--text2)">${f.skips.map(([a,b])=>fmtClock(a)+'~'+fmtClock(b)).join(', ')}</div>`:'없음';
     return `<tr>${nm}${accCell(u)}<td>${f.pct}%${f.remaining>5?`<div style="font-size:11px;color:var(--text3)">남은 ${fmtTime(f.remaining)}</div>`:''}</td>
       <td><span style="color:${f.fast?'var(--amber)':'inherit'}">최고 ${f.maxRate}배</span><div style="font-size:11px;color:var(--text2)">${ratesText(f.rates)}</div></td>
       <td>${skipTxt}</td><td style="font-size:12px;color:var(--text2)">${p.updated_at?fmtMD(ymd(new Date(p.updated_at))):''}</td></tr>`;}).join('');
   el.innerHTML=`<div class="card"><strong>${esc(v?v.title:'')}</strong> <span style="color:var(--text2)">시청 권한·기록</span>
+      ${gram?`<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:12px;color:var(--text2)">문법 기초 <input type="number" min="1" class="date-in" style="width:70px" id="vno-${esc(vid)}" value="${grammarNo(v)}">강 <button class="btn sm" onclick="setGrammarNo('${esc(vid)}')">적용</button><span>수강 승인한 학생 모두에게 열려요 (학교 상관없음)</span></div>
+      <div class="vhint" style="margin:6px 0 0">수강 승인·취소는 여기나 <b>영상 승인</b> 탭에서 할 수 있어요. ${GRAMMAR_DONE}% 이상 보면 완강으로 쳐요. 건너뛴 구간 = 앞까지 봤는데 중간에 안 본 부분이에요.</div></div>`:`
       <div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:12px;color:var(--text2)">수업 날짜 <input type="date" class="date-in" id="vdate-${esc(vid)}" value="${esc((v&&v.class_date)||'')}">
         <select class="date-in" id="vschool-${esc(vid)}"><option value="">전체 학교</option>${schoolNames().concat(v&&v.school&&!schoolNames().includes(v.school)?[v.school]:[]).map(n=>`<option value="${esc(n)}"${v&&v.school===n?' selected':''}>${esc(n)}</option>`).join('')}</select>
         <select class="date-in" id="vgrade-${esc(vid)}">${gradeOptionsHtml((v&&v.class_date)||todayStr(),v?v.grade:null,'전체 학년')}</select>
         <button class="btn sm" onclick="setVideoDate('${esc(vid)}')">적용</button><span>맞는 학생 중 그날 결석한 학생에게 자동으로 열려요</span></div>
-      <div class="vhint" style="margin:6px 0 0">"열어주기"로 결석하지 않은 학생에게도 직접 열 수 있어요. 건너뛴 구간 = 앞까지 봤는데 중간에 안 본 부분이에요.</div></div>
+      <div class="vhint" style="margin:6px 0 0">"열어주기"로 결석하지 않은 학생에게도 직접 열 수 있어요. 건너뛴 구간 = 앞까지 봤는데 중간에 안 본 부분이에요.</div></div>`}
     <div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple" style="min-width:640px"><thead><tr><th>학생</th><th>시청 권한</th><th>진도</th><th>배속</th><th>건너뛴 구간</th><th>최근</th></tr></thead><tbody>${rows||'<tr><td colspan="6">학생이 없습니다</td></tr>'}</tbody></table></div>`;
   el.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
@@ -1147,13 +1182,14 @@ async function deleteVideo(id){
 }
 
 /* ===================== 복습영상 접근 승인 ===================== */
-function hasAccess(sid,vid){return db.videoAccess.some(a=>a.student_id===sid&&a.video_id===vid);}
+function hasAccess(sid,vid){const v=db.videos.find(x=>x.id===vid);if(isGrammar(v))return grammarOk(sid);return db.videoAccess.some(a=>a.student_id===sid&&a.video_id===vid);}
 function accessReqStatus(sid,vid){
   const reqs=db.accessRequests.filter(r=>r.student_id===sid&&r.video_id===vid);
   if(!reqs.length)return null;
   return reqs.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
 }
 function renderAccessAdmin(){
+  renderGrammarAdmin();
   const pendingEl=document.getElementById('access-pending-list');
   const histEl=document.getElementById('access-history-list');
   const pending=db.accessRequests.filter(r=>r.status==='pending');
@@ -1190,11 +1226,118 @@ async function rejectAccessReq(reqId){
   notify('신청을 거절했습니다.','info');
 }
 
+/* ===================== 문법 기초 (학교 상관없음 · 수강 승인제) ===================== */
+const GRAMMAR_DONE=95; // 이만큼 보면 완강
+function isGrammar(v){return !!v&&v.category==='grammar';}
+function grammarVideos(){
+  return db.videos.filter(isGrammar).map((v,i)=>({v,i})).sort((a,b)=>((a.v.sort_no??1e6+a.i)-(b.v.sort_no??1e6+b.i))).map(x=>x.v);
+}
+function grammarNo(v){if(v&&v.sort_no!=null)return v.sort_no;return grammarVideos().indexOf(v)+1;}
+function nextGrammarNo(){return grammarVideos().reduce((m,v)=>Math.max(m,grammarNo(v)),0)+1;}
+function grammarStatus(sid){return db.grammarEnroll.filter(r=>r.student_id===sid).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')))[0]||null;}
+function grammarOk(sid){const r=grammarStatus(sid);return !!r&&r.status==='approved';}
+function grammarStudents(){return db.users.filter(u=>u.role==='student'&&u.status==='active'&&grammarOk(u.id));}
+function grammarSummary(sid){
+  const list=grammarVideos();
+  const items=list.map(v=>({v,no:grammarNo(v),pct:getPct(sid,v.id),p:db.progress.find(p=>p.student_id===sid&&p.video_id===v.id)}));
+  const done=items.filter(x=>x.pct>=GRAMMAR_DONE).length;
+  const avg=items.length?Math.round(items.reduce((n,x)=>n+Math.min(x.pct,100),0)/items.length):0;
+  const next=items.find(x=>x.pct<GRAMMAR_DONE)||null;
+  return{items,done,total:items.length,avg,next};
+}
+const GRAMMAR_SQL_MSG=' (schema_add11.sql을 실행해주세요)';
+// status: 'approved' | 'pending' | 'rejected' | null(수강 취소 = 기록 삭제)
+async function grammarSet(sid,status){
+  const id='ge_'+sid;
+  if(status==null){
+    const{error}=await sb.from('grammar_enroll').delete().eq('student_id',sid);
+    if(error){notify('처리 실패: '+error.message,'error');return false;}
+    db.grammarEnroll=db.grammarEnroll.filter(r=>r.student_id!==sid);
+    notify(`${userName(sid)} 학생의 문법 기초 수강을 취소했어요.`,'info');
+  }else{
+    const now=new Date().toISOString();
+    const ex=db.grammarEnroll.find(r=>r.id===id);
+    const patch=status==='pending'?{status,created_at:now,decided_at:null}:{status,decided_at:now};
+    const{error}=ex?await sb.from('grammar_enroll').update(patch).eq('id',id):await sb.from('grammar_enroll').insert(Object.assign({id,student_id:sid,created_at:now},patch));
+    if(error){notify('처리 실패: '+error.message+(/grammar_enroll/.test(error.message)?GRAMMAR_SQL_MSG:''),'error');return false;}
+    if(ex)Object.assign(ex,patch);else db.grammarEnroll.push(Object.assign({id,student_id:sid,created_at:now},patch));
+    if(session&&session.role!=='student')notify(status==='approved'?`${userName(sid)} 학생에게 문법 기초를 열어줬어요.`:status==='rejected'?'신청을 거절했어요.':'','success');
+  }
+  if(session&&session.role!=='student'){renderGrammarAdmin();renderActive();renderVideoAdmin();}
+  return true;
+}
+function renderGrammarAdmin(){
+  const pe=document.getElementById('grammar-pending-list');if(!pe)return;
+  const students=db.users.filter(u=>u.role==='student'&&u.status==='active');
+  const pending=students.filter(u=>{const r=grammarStatus(u.id);return r&&r.status==='pending';});
+  pe.innerHTML=db.grammarMissing?`<div class="card alert-card">문법 기초 수강 관리를 쓰려면 Supabase에서 <b>schema_add11.sql</b>을 실행해야 해요.</div>`
+    :pending.length?pending.map(u=>`<div class="card row-between"><div><strong>${esc(u.name)}</strong> <span style="font-size:12px;color:var(--text2)">${esc(studentTag(u))} · ${fmtMD(ymd(new Date(grammarStatus(u.id).created_at||Date.now())))} 신청</span></div>
+      <div style="display:flex;gap:6px"><button class="btn green sm" onclick="grammarSet('${esc(u.id)}','approved')">승인</button><button class="btn red sm" onclick="grammarSet('${esc(u.id)}','rejected')">거절</button></div></div>`).join('')
+    :'<div class="empty-hint">대기 중인 수강 신청이 없습니다.</div>';
+  const en=grammarStudents();
+  document.getElementById('grammar-count').textContent=`${en.length}명`;
+  document.getElementById('grammar-enrolled').innerHTML=en.length?en.map(u=>{const g=grammarSummary(u.id);return `<span class="chip" style="cursor:default">${esc(u.name)} <span style="font-size:11px;color:var(--text2)">${g.done}/${g.total}강</span> <span style="cursor:pointer;margin-left:4px" title="수강 취소" onclick="if(confirm('${esc(u.name)} 학생의 문법 기초 수강을 취소할까요? 시청 기록은 남아요.'))grammarSet('${esc(u.id)}',null)">✕</span></span>`;}).join(' '):'<span style="font-size:12px;color:var(--text3)">아직 수강생이 없어요.</span>';
+  const sel=document.getElementById('grammar-add-sel');
+  const rest=students.filter(u=>!grammarOk(u.id));
+  sel.innerHTML=rest.length?'<option value="">학생 선택</option>'+rest.map(u=>`<option value="${esc(u.id)}">${esc(u.name)} · ${esc(studentTag(u))}</option>`).join(''):'<option value="">모든 학생이 수강 중이에요</option>';
+  const badge=document.getElementById('access-tab-badge');
+  if(badge){const n=pending.length+db.accessRequests.filter(r=>r.status==='pending').length;badge.innerHTML=n?`<span class="tab-badge">${n}</span>`:'';}
+}
+async function grammarAddDirect(){
+  const sid=document.getElementById('grammar-add-sel').value;
+  if(!sid){notify('학생을 고르세요.','error');return;}
+  await grammarSet(sid,'approved');
+}
+async function setGrammarNo(vid){
+  const v=db.videos.find(x=>x.id===vid);if(!v)return;
+  const n=parseGrade(document.getElementById('vno-'+vid).value);
+  if(n==null||n<1){notify('강 번호를 1 이상으로 입력하세요.','error');return;}
+  const{error}=await sb.from('videos').update({sort_no:n}).eq('id',vid);
+  if(error){notify('저장 실패: '+error.message+(/sort_no/.test(error.message)?GRAMMAR_SQL_MSG:''),'error');return;}
+  v.sort_no=n;renderVideoAdmin();renderVideoWatchDetail(vid);notify(`${n}강으로 저장했어요.`,'success');
+}
+function onVideoKindChange(){
+  const k=document.getElementById('v-kind');if(!k)return;const gram=k.value==='grammar';
+  document.querySelectorAll('#t-videos .rv-only').forEach(e=>e.style.display=gram?'none':'');
+  document.querySelectorAll('#t-videos .gr-only').forEach(e=>e.style.display=gram?'':'none');
+  const no=document.getElementById('v-no');if(gram&&no&&!no.value)no.placeholder='비우면 '+nextGrammarNo()+'강';
+}
+// 학생 화면
+function renderGrammarGrid(){
+  const head=document.getElementById('grammar-head'),grid=document.getElementById('grammar-grid');if(!head||!grid)return;
+  const ok=grammarOk(session.id),st=grammarStatus(session.id),g=grammarSummary(session.id);
+  if(ok){
+    head.innerHTML=g.total?`<div class="card"><div class="row-between"><strong>내 진도</strong><span>완강 <b>${g.done}</b>/${g.total}강 · 진도율 ${g.avg}%</span></div>
+      <div class="progress-bar"><div class="progress-bar-fill" style="width:${g.avg}%;background:var(--green)"></div></div>
+      ${g.next?`<div class="row-between" style="margin-top:10px;gap:8px"><span style="font-size:13px">다음 강의: <b>${g.next.no}강</b> ${esc(g.next.v.title)}</span><button class="btn blue sm" onclick="openPlay('${esc(g.next.v.id)}')">${g.next.pct>0?'이어서 보기':'보기'}</button></div>`:'<div style="margin-top:10px;font-size:13px;color:var(--green);font-weight:600">🎉 모든 강의를 다 들었어요!</div>'}
+      <div class="vhint" style="margin:8px 0 0">${STU_FAST_WARN}배속 이상으로 보거나 1분 넘게 건너뛰면 경고가 뜨고 부모님 성적표에 기록돼요.</div></div>`:'';
+  }else{
+    const pend=st&&st.status==='pending',rej=st&&st.status==='rejected';
+    head.innerHTML=`<div class="card"><div style="font-weight:600;margin-bottom:6px">문법 기초 강의 ${g.total?`<span style="color:var(--text2);font-weight:400">(${g.total}강)</span>`:''}</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px">${pend?'수강 신청을 보냈어요. 쏠T가 승인하면 모든 강의를 볼 수 있어요.':rej?'수강 신청이 거절되었어요. 필요하면 쏠T에게 이야기하고 다시 신청하세요.':'수강 신청을 하고 쏠T가 승인하면 모든 강의를 볼 수 있어요.'}</div>
+      ${pend?'<span class="pill amber">승인 대기 중</span>':`<button class="btn blue" onclick="requestGrammar()">${rej?'다시 신청':'수강 신청'}</button>`}</div>`;
+  }
+  if(!g.total){grid.innerHTML='<div class="empty-hint">아직 올라온 문법 기초 강의가 없어요.</div>';return;}
+  grid.innerHTML=g.items.map(x=>`<div class="video-card"${ok?` onclick="openPlay('${esc(x.v.id)}')"`:' style="cursor:default"'}>
+      <img class="video-thumb" src="${thumb(x.v.url)}" alt=""${ok?'':' style="filter:grayscale(.7) brightness(.7)"'}>
+      <div class="video-info">
+        <div class="vt"><span style="color:var(--blue)">${x.no}강</span> ${esc(x.v.title)}</div>
+        ${ok?`<div class="progress-bar"><div class="progress-bar-fill" style="width:${Math.min(x.pct,100)}%"></div></div>
+        <div class="video-meta"><span>${x.pct}% 시청</span>${x.pct>=GRAMMAR_DONE?'<span class="pill green">완강</span>':x.pct>0?'<span class="pill amber">시청중</span>':'<span class="pill blue">미시청</span>'}</div>`
+        :'<div class="video-meta"><span style="color:var(--text3)">🔒 수강 승인 후 볼 수 있어요</span></div>'}
+      </div></div>`).join('');
+}
+async function requestGrammar(){
+  const st=grammarStatus(session.id);
+  if(st&&st.status==='pending'){notify('이미 신청했어요. 승인을 기다려주세요.','info');return;}
+  if(await grammarSet(session.id,'pending')){renderGrammarGrid();notify('수강을 신청했어요. 쏠T가 승인하면 볼 수 있어요.','success');}
+}
+
 /* ===================== 학생 화면 ===================== */
 function launchStudent(){
   document.getElementById('student-name').textContent=session.name+' 학생';
   showPage('page-student');
-  renderLectures();renderReviewGrid();
+  renderLectures();renderReviewGrid();renderGrammarGrid();
   populateSqSelects();renderMyQa();renderMyQaFree();
   renderMyExamResults();
   renderClinicBook();renderMyClinic();
@@ -1223,7 +1366,7 @@ function renderLectures(){
 function renderReviewGrid(){
   const el=document.getElementById('review-grid');
   const me=db.users.find(u=>u.id===session.id)||session;
-  const list=db.videos.filter(v=>hasAccess(session.id,v.id)||videoFor(v,me)).sort((a,b)=>String(b.class_date||b.created_at||'').localeCompare(String(a.class_date||a.created_at||'')));
+  const list=db.videos.filter(v=>!isGrammar(v)&&(hasAccess(session.id,v.id)||videoFor(v,me))).sort((a,b)=>String(b.class_date||b.created_at||'').localeCompare(String(a.class_date||a.created_at||'')));
   if(!list.length){el.innerHTML='<div class="empty-hint">우리 학교 수업 영상이 아직 없어요.</div>';return;}
   // 볼 수 있는 영상을 앞으로
   const mine=list.filter(v=>hasAccess(session.id,v.id)),rest=list.filter(v=>!hasAccess(session.id,v.id));
@@ -1398,7 +1541,7 @@ async function closePlay(){
   document.getElementById('modal-play').classList.remove('show');
   currentVid=null;currentStartPos=0;watchedSet=new Set();lastPos=-1;totalDur=0;maxRateSeen=1;rateSec={};baseRateSec={};
   skipWarnDismissed=0;const pw=document.getElementById('play-warn');if(pw){pw.innerHTML='';pw.style.display='none';}
-  if(session&&session.role==='student'){renderLectures();renderReviewGrid();}
+  if(session&&session.role==='student'){renderLectures();renderReviewGrid();renderGrammarGrid();}
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closePlay();});
 document.getElementById('modal-play').addEventListener('click',e=>{if(e.target===e.currentTarget)closePlay();});
@@ -2196,14 +2339,15 @@ async function markAnnouncementRead(annId,box){
 function buildReportData(studentId){
   const student=db.users.find(u=>u.id===studentId);
   const examRows=db.examResponses.filter(r=>r.student_name===(student?student.name:'__none__')&&isSubmitted(r));
-  const videoList=db.videos.filter(v=>hasAccess(studentId,v.id)); // 이 학생에게 열린 영상
+  const videoList=db.videos.filter(v=>!isGrammar(v)&&hasAccess(studentId,v.id)); // 이 학생에게 열린 복습 영상
   const watched=videoList.filter(v=>getPct(studentId,v.id)>0).length;
   const avgPct=videoList.length?Math.round(videoList.reduce((a,v)=>a+getPct(studentId,v.id),0)/videoList.length):0;
   const attRecs=db.attendance.filter(a=>a.student_id===studentId);
   const present=attRecs.filter(a=>a.status==='present').length;
   const late=attRecs.filter(a=>a.status==='late').length;
   const absent=attRecs.filter(a=>a.status==='absent').length;
-  return{student,examRows,watched,total:videoList.length,avgPct,present,late,absent,vocab:vocabReport(studentId)};
+  const grammar=(grammarOk(studentId)||db.progress.some(p=>p.student_id===studentId&&isGrammar(db.videos.find(v=>v.id===p.video_id))))?grammarSummary(studentId):null;
+  return{student,examRows,watched,total:videoList.length,avgPct,present,late,absent,vocab:vocabReport(studentId),grammar};
 }
 // 성적표용 어휘 미션 요약: 이번 주 미션, 수행 여부, 수행률(열린 미션 중 클리어한 비율)
 function vocabReport(sid){
@@ -2260,6 +2404,9 @@ function renderReportCardHTML(d){
     </div>
     <div class="card row-between"><span>출석</span><span>출석 ${d.present} · 지각 ${d.late} · 결석 ${d.absent}</span></div>
     ${vocabReportHTML(d.vocab)}
+    ${d.grammar&&d.grammar.total?`<div class="card"><div class="row-between"><strong>문법 기초</strong><span>완강 <b>${d.grammar.done}</b>/${d.grammar.total}강 · 진도율 ${d.grammar.avg}%</span></div>
+      <div class="progress-bar"><div class="progress-bar-fill" style="width:${d.grammar.avg}%;background:var(--green)"></div></div>
+      <div style="font-size:12px;color:var(--text2);margin-top:8px">${d.grammar.next?`다음 강의: ${d.grammar.next.no}강 ${esc(d.grammar.next.v.title)}`:'모든 강의 완강'}</div></div>`:''}
     <div class="section-head" style="margin-top:16px"><h2 style="font-size:13px">시험 성적</h2></div>
     <table class="simple"><thead><tr><th>시험명</th><th>정답수</th><th>점수</th></tr></thead><tbody>${examRowsHtml}</tbody></table>`;
 }
@@ -2304,7 +2451,10 @@ function weeklyReportData(sid,start,end){
   // 출석: 기간 안의 날짜별 기록
   const att=db.attendance.filter(a=>a.student_id===sid&&a.date>=start&&a.date<=end).sort((a,b)=>a.date.localeCompare(b.date));
   // 보충 강의: 기간 안에 시청 기록이 있는 강의만
-  const vids=db.progress.filter(p=>p.student_id===sid&&inRange(p.updated_at,start,end)).map(p=>({p,v:db.videos.find(x=>x.id===p.video_id),f:watchInfo(p)})).filter(x=>x.v);
+  const vids=db.progress.filter(p=>p.student_id===sid&&inRange(p.updated_at,start,end)).map(p=>({p,v:db.videos.find(x=>x.id===p.video_id),f:watchInfo(p)})).filter(x=>x.v&&!isGrammar(x.v));
+  // 문법 기초: 수강생이거나 그 기간에 본 기록이 있으면
+  const gWeek=db.progress.filter(p=>p.student_id===sid&&inRange(p.updated_at,start,end)).map(p=>({p,v:db.videos.find(x=>x.id===p.video_id),f:watchInfo(p)})).filter(x=>isGrammar(x.v)).map(x=>Object.assign(x,{no:grammarNo(x.v)})).sort((a,b)=>a.no-b.no);
+  const grammar=(grammarOk(sid)||gWeek.length)&&grammarVideos().length?Object.assign(grammarSummary(sid),{week:gWeek}):null;
   // 어휘: 기간 안에 열린 미션 (없으면 기간 끝 기준 진행 중이던 미션)
   const endTs=new Date(end+'T23:59:59').getTime();
   const bestBy=(setId)=>{let b=null;db.vocabAttempts.forEach(a=>{if(a.set_id===setId&&a.student_id===sid&&a.total>0&&new Date(a.submitted_at).getTime()<=endTs&&(!b||ratio(a)>ratio(b)))b=a;});return b;};
@@ -2323,7 +2473,7 @@ function weeklyReportData(sid,start,end){
   });
   // 시험: 기간 안에 제출한 시험
   const exams=db.examResponses.filter(r=>u&&r.student_name===u.name&&isSubmitted(r)&&inRange(r.submitted_at,start,end)).map(r=>({r,ex:db.exams.find(x=>x.id===r.exam_id)}));
-  return{u,att,vids,vocab,vocabStarted:!!myTrack,exams};
+  return{u,att,vids,vocab,vocabStarted:!!myTrack,exams,grammar};
 }
 // 학부모용 A4 주간 성적표 (밝은 화면, 이 모양 그대로 PDF가 돼요)
 function parentReportHTML(sid,note,start,end){
@@ -2341,6 +2491,16 @@ function parentReportHTML(sid,note,start,end){
       const notes=[];if(f&&f.fast)notes.push(`<span style="color:${C.amber}">${FAST_RATE}배 초과 ${fmtTime(f.fastSec)}</span>`);if(f&&f.skip)notes.push(`<span style="color:${C.red}">건너뜀 ${fmtTime(f.skipTotal)}</span>`);
       const pct=f?f.pct:0;
       return `<tr class="pb"><td style="padding:7px 8px;border-top:1px solid ${C.line}">${esc(v.title)}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};text-align:right;font-weight:600;white-space:nowrap;color:${pct>=100?C.green:C.ink}">${pct}%</td><td style="padding:7px 8px;border-top:1px solid ${C.line};font-size:12px;white-space:nowrap">${notes.join(' · ')||'<span style="color:#b0b6c3">정상 시청</span>'}</td></tr>`;}).join('')}</table>`):'';
+  // 문법 기초 (수강생만): 이번 주 본 강의 + 누적 완강
+  const gram=d.grammar;
+  const gramBox=gram?box('문법 기초 강의',(gram.week.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">${gram.week.map(({p,v,f,no})=>{
+      const notes=[];if(f&&f.fast)notes.push(`<span style="color:${C.amber}">${FAST_RATE}배 초과 ${fmtTime(f.fastSec)}</span>`);if(f&&f.skip)notes.push(`<span style="color:${C.red}">건너뜀 ${fmtTime(f.skipTotal)}</span>`);
+      const pct=f?f.pct:0;
+      return `<tr class="pb"><td style="padding:7px 8px;border-top:1px solid ${C.line}"><b style="color:${C.blue}">${no}강</b> ${esc(v.title)}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};text-align:right;font-weight:600;white-space:nowrap;color:${pct>=GRAMMAR_DONE?C.green:C.ink}">${pct>=GRAMMAR_DONE?'완강':pct+'%'}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};font-size:12px;white-space:nowrap">${notes.join(' · ')||'<span style="color:#b0b6c3">정상 시청</span>'}</td></tr>`;}).join('')}</table>`
+      :`<div style="color:${C.red};font-size:14px;font-weight:600">이 기간에 시청한 강의가 없어요.</div>`)+
+      `<div style="margin-top:12px"><div style="height:8px;border-radius:4px;background:${C.soft};overflow:hidden"><div style="height:100%;width:${gram.avg}%;background:${C.green}"></div></div>
+      <div style="font-size:12px;color:${C.sub};margin-top:6px">전체 진도율 ${gram.avg}%${gram.next?` · 다음 들을 강의 <b style="color:${C.ink}">${gram.next.no}강 ${esc(gram.next.v.title)}</b>`:` · <b style="color:${C.green}">모든 강의 완강</b>`}</div></div>`,
+      `누적 완강 <b style="color:${C.ink}">${gram.done}/${gram.total}강</b>`):'';
   // 어휘
   const vocabBox=!d.vocabStarted?box('어휘 미션',empty('아직 어휘 미션을 시작하지 않았어요.')):d.vocab.map(t=>{
     const done=t.items.filter(x=>x.cleared).length;
@@ -2365,7 +2525,7 @@ function parentReportHTML(sid,note,start,end){
       <div><div style="font-size:13px;color:${C.blue};font-weight:700;letter-spacing:1px">정말 쏠쏠한 국어</div><div style="font-size:26px;font-weight:800;margin-top:2px">주간 학습 리포트</div></div>
       <div style="text-align:right"><div style="font-size:20px;font-weight:700">${esc(u?u.name:'')} 학생</div><div style="font-size:13px;color:${C.sub}">${u&&u.school?esc(u.school)+' '+gradeName(gradeAt(u,end),end,u.school)+' · ':''}${mdWd(start)} ~ ${mdWd(end)}</div></div>
     </div>
-    ${noteBox}${attBox}${vocabBox}${examBox}${vidBox}
+    ${noteBox}${attBox}${vocabBox}${examBox}${gramBox}${vidBox}
     <div class="pb" style="font-size:11px;color:#9aa1b0;text-align:center;margin-top:18px">정말 쏠쏠한 국어 · 쏠T · ${koDate(start)} ~ ${koDate(end)} 기록</div>
   </div>`;
 }

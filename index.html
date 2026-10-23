@@ -1849,7 +1849,7 @@ const DEFAULT_EXAM_TAGS=[
 // 문제 자체의 세부유형 (함정 종류 등) → app_settings.exam_subtypes
 const DEFAULT_EXAM_SUBTAGS=[
   '개념 확인','함정 · 주어 바꾸기','함정 · 목적어 바꾸기','함정 · 수식어 바꾸기','함정 · 인과 관계 뒤집기','함정 · 범위 바꾸기 (모두/일부)',
-  '모두 고르시오','적절하지 않은 것 고르기','<보기> ㄱ~ㄹ 고르기','짝짓기·연결하기'
+  '모두 고르시오','적절하지 않은 것 고르기','<보기> ㄱ~ㄹ 고르기','짝짓기·연결하기','사례 적용 (규칙을 예시에 잘못 적용)'
 ];
 const TAG_KIND={tag:{key:'exam_types',def:()=>DEFAULT_EXAM_TAGS,box:'ex-tag-text',label:'갈래'},sub:{key:'exam_subtypes',def:()=>DEFAULT_EXAM_SUBTAGS,box:'ex-sub-text',label:'세부유형'}};
 function examTags(kind='tag'){const k=TAG_KIND[kind];const v=db.settings&&db.settings[k.key];return Array.isArray(v)&&v.length?v:k.def();}

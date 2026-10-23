@@ -284,7 +284,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     <button class="active" data-t="t-students" onclick="switchTab('teacher','t-students')">학생 관리</button>
     <button data-t="t-videos" onclick="switchTab('teacher','t-videos')">영상 관리<span id="video-tab-badge"></span></button>
     <button data-t="t-access" onclick="switchTab('teacher','t-access')">영상 승인<span id="access-tab-badge"></span></button>
-    <button data-t="t-qa" onclick="switchTab('teacher','t-qa')">질문답변</button>
+    <button data-t="t-qa" onclick="switchTab('teacher','t-qa')">질문답변<span id="qa-tab-badge"></span></button>
     <button data-t="t-exams" onclick="switchTab('teacher','t-exams')">시험</button>
     <button data-t="t-vocab" onclick="switchTab('teacher','t-vocab')">어휘<span id="vocab-tab-badge"></span></button>
     <button data-t="t-cert" onclick="switchTab('teacher','t-cert')">인증</button>
@@ -356,27 +356,15 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     </div>
 
     <div class="section" id="t-qa">
-      <div class="section-head"><h2>학교/반 관리</h2></div>
-      <div class="card"><div style="display:flex;gap:8px"><input class="form-input" id="qa-school-name" placeholder="학교/반 이름" style="flex:1"><button class="btn blue sm" onclick="addQaSchool()">추가</button></div></div>
-      <div id="qa-school-list" style="margin:10px 0"></div>
-
-      <div class="section-head" style="margin-top:24px"><h2>주차 관리</h2></div>
-      <div class="card">
-        <div class="admin-form">
-          <div class="form-group"><label>학교/반</label><select class="form-select" id="qa-week-school"></select></div>
-          <div class="form-group"><label>주차 이름</label><input class="form-input" id="qa-week-name" placeholder="예: 3주차 모의고사"></div>
-          <div class="form-group full"><label>문제 수</label><input class="form-input" id="qa-week-count" type="number" value="20"></div>
-        </div>
-        <button class="btn blue sm" style="margin-top:8px" onclick="addQaWeek()">주차 추가</button>
+      <div class="section-head"><h2>학생 질문</h2><button class="btn sm" onclick="loadQa().then(renderQaAdmin)">새로고침</button></div>
+      <div class="vhint" style="margin-top:0">학생이 올린 질문이 학교별 · 날짜별로 모여요. 학생은 자기 질문만 볼 수 있어요.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
+        <select class="form-select" id="qa-f-school" style="max-width:200px" onchange="renderQaAdmin()"></select>
+        <select class="form-select" id="qa-f-status" style="max-width:160px" onchange="renderQaAdmin()">
+          <option value="pending">답변 대기</option><option value="answered">답변 완료</option><option value="">전체</option>
+        </select>
       </div>
-      <div id="qa-week-list" style="margin:10px 0"></div>
-
-      <div class="section-head" style="margin-top:24px"><h2>문항별 질문</h2></div>
-      <div class="form-group"><select class="form-select" id="qa-view-week" onchange="renderQaQuestions()"></select></div>
-      <div id="qa-question-list" style="margin-top:10px"></div>
-
-      <div class="section-head" style="margin-top:24px"><h2>자유 질문</h2></div>
-      <div id="qa-free-list"></div>
+      <div id="qa-question-list"></div>
     </div>
 
     <div class="section" id="t-exams">
@@ -538,10 +526,10 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     <div class="section" id="s-qa">
       <div class="section-head"><h2>질문하기</h2></div>
       <div class="card">
+        <div class="vhint" style="margin-top:0">내 질문은 <b>나와 쏠T만</b> 볼 수 있어요. 다른 친구들은 볼 수 없어요.</div>
         <div class="admin-form">
-          <div class="form-group"><label>학교/반</label><select class="form-select" id="sq-school" onchange="onSqSchoolChange()"></select></div>
-          <div class="form-group"><label>주차</label><select class="form-select" id="sq-week"></select></div>
-          <div class="form-group full"><label>문제 번호</label><input class="form-input" id="sq-prob" placeholder="예: 12"></div>
+          <div class="form-group"><label>교재 / 시험지</label><input class="form-input" id="sq-source" placeholder="예: 수능특강 문학, 10월 모의고사"></div>
+          <div class="form-group"><label>문제 번호</label><input class="form-input" id="sq-prob" placeholder="예: 12"></div>
         </div>
         <div class="form-group" style="margin-top:6px">
           <label>문제 사진 (필수)</label>
@@ -557,7 +545,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 
       <div class="section-head" style="margin-top:24px"><h2>자유 질문</h2></div>
       <div class="card">
-        <textarea class="form-input" id="sq-free-text" rows="3" placeholder="주차와 상관없는 자유 질문 (다시 등록하면 이전 질문을 덮어써요)"></textarea>
+        <textarea class="form-input" id="sq-free-text" rows="3" placeholder="문제와 상관없는 질문도 괜찮아요 (공부 방법, 수업 내용 등)"></textarea>
         <div class="form-group" style="margin-top:8px"><label>사진 (선택 · 문제에 대한 질문이면 지문·문제·선지가 보이게)</label>
           <input type="file" id="sq-free-photo" accept="image/*" onchange="previewPhoto('sq-free-photo','sq-free-photo-prev')"><div id="sq-free-photo-prev"></div></div>
         <button class="btn blue sm" id="sq-free-submit" onclick="submitQaFree()">자유 질문 등록</button>
@@ -645,7 +633,7 @@ let session=null;
 const emptyDb=()=>({
   users:[],videos:[],progress:[],
   videoAccess:[],accessRequests:[],grammarEnroll:[],
-  qaSchools:[],qaWeeks:[],qaQuestions:[],
+  qaQuestions:[],
   exams:[],examResponses:[],
   certWeeks:[],certItems:[],certSubmissions:[],
   attendance:[],announcements:[],announcementReads:[],
@@ -699,15 +687,12 @@ async function selectAll(table,orderCols=['id']){
 }
 async function loadAll(attempt=0){
   try{
-    const [u,v,p,va,ar,qs,qw,qq,ex,er,cw,ci,csu,att,an,arr,vs2,vw2,va2,rl,sc,ge]=await Promise.all([
+    const [u,v,p,va,ar,ex,er,cw,ci,csu,att,an,arr,vs2,vw2,va2,rl,sc,ge]=await Promise.all([
       sb.from('users').select(USER_COLS), // 비밀번호 칸은 읽지 않아요 (서버에서도 막혀 있어요)
       sb.from('videos').select('*').order('created_at'),
       selectAll('progress',['student_id','video_id']),
       sb.from('video_access').select('*'),
       sb.from('access_requests').select('*').order('created_at',{ascending:false}),
-      sb.from('qa_schools').select('*'),
-      sb.from('qa_weeks').select('*'),
-      sb.from('qa_questions').select('*').order('created_at',{ascending:false}),
       sb.from('exams').select('*').order('created_at',{ascending:false}),
       selectAll('exam_responses'),
       sb.from('cert_weeks').select('*'),
@@ -728,7 +713,6 @@ async function loadAll(attempt=0){
     if(p.error)throw new Error(p.error.message);
     db.users=u.data||[];db.videos=v.data||[];db.progress=p.data||[];
     db.videoAccess=(va.data)||[];db.accessRequests=(ar.data)||[];
-    db.qaSchools=(qs.data)||[];db.qaWeeks=(qw.data)||[];db.qaQuestions=(qq.data)||[];
     db.exams=(ex.data)||[];db.examResponses=(er.data)||[];
     db.certWeeks=(cw.data)||[];db.certItems=(ci.data)||[];db.certSubmissions=(csu.data)||[];
     db.attendance=(att.data)||[];db.announcements=(an.data)||[];db.announcementReads=(arr.data)||[];
@@ -997,7 +981,7 @@ function launchTeacher(){
   showPage('page-teacher');
   renderSchoolAdmin();fillVideoGrade();fillNewAccountForm();renderPending();renderActive();renderVideoAdmin();
   renderAccessAdmin();onVideoKindChange();
-  renderQaSchools();renderQaWeeks();renderQaQuestions();renderQaFreeAdmin();
+  loadQa().then(renderQaAdmin); // 질문은 강사 토큰으로 서버에서 받아와요
   renderExamAdmin();
   renderCertAdmin();
   renderAttendanceForm();
@@ -1058,10 +1042,9 @@ async function renameStudent(id){
     await sb.from('exam_responses').update({student_name:nn}).eq('student_name',old);
     db.examResponses.forEach(r=>{if(r.student_name===old)r.student_name=nn;});
   }
-  await sb.from('qa_questions').update({student_name:nn}).eq('student_id',id);
   db.qaQuestions.forEach(q=>{if(q.student_id===id)q.student_name=nn;});
   u.name=nn;
-  renderPending();renderActive();renderReportSelect();renderAttendanceForm();renderQaQuestions();renderQaFreeAdmin();
+  renderPending();renderActive();renderReportSelect();renderAttendanceForm();renderQaAdmin();
   notify(`이름을 "${nn}"(으)로 바꿨습니다.`,'success');
 }
 async function approveStudent(id){
@@ -1083,7 +1066,7 @@ async function removeStudent(id){
   const u=db.users.find(x=>x.id===id);if(!u)return;
   if(!confirm(`${u.name} 학생을 삭제할까요?\n\n영상 진도, 복습 신청, 문법 기초 수강, 질문과 사진, 시험, 어휘 미션, 인증 제출과 사진, 출석, 공지 확인 기록까지 모두 지워지고 되돌릴 수 없어요.`))return;
   const sameName=db.users.some(x=>x.id!==id&&x.name===u.name);
-  const jobs=[['progress','student_id',id],['video_access','student_id',id],['access_requests','student_id',id],['qa_questions','student_id',id],['clinic_requests','student_id',id],['cert_submissions','student_id',id],['attendance','student_id',id],['announcement_reads','student_id',id],['vocab_attempts','student_id',id],['grammar_enroll','student_id',id]];
+  const jobs=[['progress','student_id',id],['video_access','student_id',id],['access_requests','student_id',id],['clinic_requests','student_id',id],['cert_submissions','student_id',id],['attendance','student_id',id],['announcement_reads','student_id',id],['vocab_attempts','student_id',id],['grammar_enroll','student_id',id]];
   if(!sameName)jobs.push(['exam_responses','student_name',u.name]); // 동명이인이 있으면 시험 기록은 구분할 수 없어 남김
   const fails=[];
   for(const [t,c,v] of jobs){const{error}=await sb.from(t).delete().eq(c,v);if(error)fails.push(t);}
@@ -1100,7 +1083,7 @@ async function removeStudent(id){
   db.attendance=db.attendance.filter(keep);db.announcementReads=db.announcementReads.filter(keep);db.vocabAttempts=db.vocabAttempts.filter(keep);db.grammarEnroll=db.grammarEnroll.filter(keep);
   if(!sameName)db.examResponses=db.examResponses.filter(r=>r.student_name!==u.name);
   db.users=db.users.filter(x=>x.id!==id);
-  renderActive();renderAccessAdmin();renderQaQuestions();renderQaFreeAdmin();renderExamAdmin();renderCertAdmin();
+  renderActive();renderAccessAdmin();renderQaAdmin();renderExamAdmin();renderCertAdmin();
   renderAttendanceForm();renderAnnounceAdmin();renderReportSelect();renderVocabAdmin();renderVideoAlerts();
   notify(fails.length?`삭제했지만 일부 기록은 지우지 못했어요: ${fails.join(', ')}`:`${u.name} 학생과 모든 기록을 삭제했습니다.`,fails.length?'error':'info');
 }
@@ -1451,7 +1434,7 @@ function launchStudent(){
   document.getElementById('student-name').textContent=session.name+' 학생';
   showPage('page-student');
   renderLectures();renderReviewGrid();renderGrammarGrid();
-  populateSqSelects();renderMyQa();renderMyQaFree();
+  loadQa().then(()=>{renderMyQa();renderMyQaFree();}); // 내 질문만 서버에서 받아와요
   renderMyExamResults();
   renderCertMy();
   renderMyAttendance();
@@ -1658,95 +1641,70 @@ async function closePlay(){
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closePlay();});
 document.getElementById('modal-play').addEventListener('click',e=>{if(e.target===e.currentTarget)closePlay();});
 
+/* ===================== 질문답변 (QA) — 공통 ===================== */
+// 질문은 서버 함수로만 주고받아요: 학생은 자기 질문만, 강사는 전체 (schema_add15.sql)
+async function loadQa(){
+  if(!session||!sessionToken){db.qaQuestions=[];return;}
+  const fn=session.role==='teacher'?'teacher_qa_list':'student_qa_list';
+  const{data,error}=await sb.rpc(fn,{p_token:sessionToken});
+  db.qaQuestions=error?[]:(data||[]);
+}
+function qaDate(q){return q.created_at?ymd(new Date(q.created_at)):'';}
+function qaTitle(q){
+  if(q.category==='free')return '자유 질문';
+  return `${q.source?esc(q.source)+' · ':''}${esc(q.prob_num||'')}번`;
+}
+function qaStatusPill(q){return q.status==='answered'?'<span class="pill green">답변완료</span>':'<span class="pill amber">대기중</span>';}
+
 /* ===================== 질문답변 (QA) — 강사 ===================== */
-async function addQaSchool(){
-  const name=document.getElementById('qa-school-name').value.trim();
-  if(!name){notify('학교/반 이름을 입력하세요.','error');return;}
-  const row={id:uid('sc_'),name};
-  const{error}=await sb.from('qa_schools').insert(row);
-  if(error){notify('추가 실패: '+error.message,'error');return;}
-  db.qaSchools.push(row);
-  document.getElementById('qa-school-name').value='';
-  renderQaSchools();renderQaWeeks();populateSqSelects();
-  notify('학교/반이 추가되었습니다.','success');
-}
-function renderQaSchools(){
-  const el=document.getElementById('qa-school-list');
-  el.innerHTML=db.qaSchools.length?db.qaSchools.map(s=>`<div class="card row-between"><span>${esc(s.name)}</span></div>`).join(''):'<div class="empty-hint">등록된 학교/반이 없습니다.</div>';
-  const sel=document.getElementById('qa-week-school');
-  sel.innerHTML=db.qaSchools.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')||'<option value="">학교/반을 먼저 추가하세요</option>';
-}
-async function addQaWeek(){
-  const schoolId=document.getElementById('qa-week-school').value;
-  const name=document.getElementById('qa-week-name').value.trim();
-  const count=parseInt(document.getElementById('qa-week-count').value)||0;
-  if(!schoolId){notify('학교/반을 먼저 추가하세요.','error');return;}
-  if(!name){notify('주차 이름을 입력하세요.','error');return;}
-  const row={id:uid('w_'),school_id:schoolId,name,prob_count:count};
-  const{error}=await sb.from('qa_weeks').insert(row);
-  if(error){notify('추가 실패: '+error.message,'error');return;}
-  db.qaWeeks.push(row);
-  document.getElementById('qa-week-name').value='';
-  renderQaWeeks();populateSqSelects();
-  notify('주차가 추가되었습니다.','success');
-}
-function renderQaWeeks(){
-  const el=document.getElementById('qa-week-list');
-  el.innerHTML=db.qaWeeks.length?db.qaWeeks.map(w=>{
-    const sc=db.qaSchools.find(s=>s.id===w.school_id);
-    return `<div class="card row-between"><span>${esc(sc?sc.name:'?')} · ${esc(w.name)} (문제 ${w.prob_count||0}개)</span></div>`;
-  }).join(''):'<div class="empty-hint">등록된 주차가 없습니다.</div>';
-  const sel=document.getElementById('qa-view-week');
-  const prevVal=sel.value;
-  sel.innerHTML=db.qaWeeks.map(w=>{
-    const sc=db.qaSchools.find(s=>s.id===w.school_id);
-    return `<option value="${esc(w.id)}">${esc(sc?sc.name:'?')} · ${esc(w.name)}</option>`;
-  }).join('')||'<option value="">주차를 먼저 추가하세요</option>';
-  if(prevVal)sel.value=prevVal;
-}
-function renderQaQuestions(){
-  const el=document.getElementById('qa-question-list');
-  const weekId=document.getElementById('qa-view-week').value;
-  const list=db.qaQuestions.filter(q=>q.week_id===weekId&&q.category!=='free');
-  if(!weekId){el.innerHTML='<div class="empty-hint">주차를 선택하세요.</div>';return;}
-  if(!list.length){el.innerHTML='<div class="empty-hint">등록된 질문이 없습니다.</div>';return;}
-  el.innerHTML=list.map(q=>`
+function renderQaAdmin(){
+  const el=document.getElementById('qa-question-list');if(!el)return;
+  const schoolSel=document.getElementById('qa-f-school');
+  const schools=[...new Set(db.qaQuestions.map(q=>q.school_id||'학교 미입력'))].sort((a,b)=>a.localeCompare(b,'ko'));
+  const prev=schoolSel.value;
+  const pendingBy=s=>db.qaQuestions.filter(q=>(q.school_id||'학교 미입력')===s&&q.status!=='answered').length;
+  schoolSel.innerHTML=`<option value="">전체 학교</option>`+schools.map(s=>`<option value="${esc(s)}">${esc(s)}${pendingBy(s)?` (대기 ${pendingBy(s)})`:''}</option>`).join('');
+  if(schools.includes(prev))schoolSel.value=prev;
+  const school=schoolSel.value,status=document.getElementById('qa-f-status').value;
+  const list=db.qaQuestions.filter(q=>(!school||(q.school_id||'학교 미입력')===school)&&(!status||(status==='answered'?q.status==='answered':q.status!=='answered')));
+  const badge=document.getElementById('qa-tab-badge');const nPend=db.qaQuestions.filter(q=>q.status!=='answered').length;
+  if(badge)badge.innerHTML=nPend?`<span class="tab-badge">${nPend}</span>`:'';
+  if(!list.length){el.innerHTML=`<div class="empty-hint">${status==='pending'?'답변을 기다리는 질문이 없어요.':'질문이 없어요.'}</div>`;return;}
+  // 날짜별로 묶기 (최근 날짜 먼저)
+  const byDate={};list.forEach(q=>{const d=qaDate(q)||'날짜 없음';(byDate[d]=byDate[d]||[]).push(q);});
+  el.innerHTML=Object.keys(byDate).sort().reverse().map(d=>`
+    <div style="font-size:13px;font-weight:700;color:var(--text2);margin:16px 0 6px">${d==='날짜 없음'?d:mdWd(d)}</div>
+    ${byDate[d].map(q=>`
     <div class="card">
-      <div class="row-between"><strong>${esc(q.prob_num)}번 · ${esc(q.student_name||userName(q.student_id))}</strong>${q.status==='answered'?'<span class="pill green">답변완료</span>':'<span class="pill amber">대기중</span>'}</div>
+      <div class="row-between" style="gap:8px"><strong>${qaTitle(q)}</strong>${qaStatusPill(q)}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px">${esc(q.school_id||'학교 미입력')} · ${esc(q.student_name||userName(q.student_id))}</div>
       ${photoHtml(q.photo_url)}
-      <div style="margin-top:6px">${esc(q.question)}</div>
+      <div style="margin-top:6px;white-space:pre-wrap">${esc(q.question)}</div>
       ${q.teacher_reply?`<div class="reply-box">${esc(q.teacher_reply)}</div>`:''}
       <div style="display:flex;gap:6px;margin-top:8px">
         <input class="form-input" id="reply-${esc(q.id)}" placeholder="답변 입력" value="${esc(q.teacher_reply||'')}">
         <button class="btn blue sm" onclick="answerQaQuestion('${esc(q.id)}')">답변 등록</button>
+        <button class="btn red sm" onclick="deleteQaQuestion('${esc(q.id)}')">삭제</button>
       </div>
-    </div>`).join('');
-}
-function renderQaFreeAdmin(){
-  const el=document.getElementById('qa-free-list');
-  const list=db.qaQuestions.filter(q=>q.category==='free');
-  if(!list.length){el.innerHTML='<div class="empty-hint">등록된 자유 질문이 없습니다.</div>';return;}
-  el.innerHTML=list.map(q=>`
-    <div class="card">
-      <div class="row-between"><strong>${esc(q.student_name||userName(q.student_id))}</strong>${q.status==='answered'?'<span class="pill green">답변완료</span>':'<span class="pill amber">대기중</span>'}</div>
-      ${photoHtml(q.photo_url)}
-      <div style="margin-top:6px">${esc(q.question)}</div>
-      ${q.teacher_reply?`<div class="reply-box">${esc(q.teacher_reply)}</div>`:''}
-      <div style="display:flex;gap:6px;margin-top:8px">
-        <input class="form-input" id="reply-${esc(q.id)}" placeholder="답변 입력" value="${esc(q.teacher_reply||'')}">
-        <button class="btn blue sm" onclick="answerQaQuestion('${esc(q.id)}')">답변 등록</button>
-      </div>
-    </div>`).join('');
+    </div>`).join('')}`).join('');
 }
 async function answerQaQuestion(qid){
   const val=document.getElementById('reply-'+qid).value.trim();
   if(!val){notify('답변을 입력하세요.','error');return;}
-  const{error}=await sb.from('qa_questions').update({teacher_reply:val,status:'answered',badge:'teacher'}).eq('id',qid);
-  if(error){notify('저장 실패: '+error.message,'error');return;}
+  const fail=await teacherRpc('teacher_qa_answer',{p_id:qid,p_reply:val});
+  if(fail){notify('저장 실패: '+fail,'error');return;}
   const q=db.qaQuestions.find(x=>x.id===qid);
   if(q){q.teacher_reply=val;q.status='answered';q.badge='teacher';}
-  renderQaQuestions();renderQaFreeAdmin();
+  renderQaAdmin();
   notify('답변을 등록했습니다.','success');
+}
+async function deleteQaQuestion(qid){
+  if(!confirm('이 질문을 삭제할까요? 되돌릴 수 없어요.'))return;
+  const fail=await teacherRpc('teacher_qa_delete',{p_id:qid});
+  if(fail){notify('삭제 실패: '+fail,'error');return;}
+  db.qaQuestions=db.qaQuestions.filter(x=>x.id!==qid);
+  renderQaAdmin();
+  notify('질문을 삭제했습니다.','info');
 }
 
 /* ===================== 사진 올리기 공통 ===================== */
@@ -1778,51 +1736,43 @@ function previewPhoto(inputId,boxId){
 function photoHtml(url){return url?`<a href="${esc(url)}" target="_blank" rel="noopener"><img class="qa-photo" src="${esc(url)}" alt="문제 사진" loading="lazy"></a>`:'';}
 
 /* ===================== 질문답변 (QA) — 학생 ===================== */
-function populateSqSelects(){
-  const schoolSel=document.getElementById('sq-school');
-  schoolSel.innerHTML=db.qaSchools.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')||'<option value="">학교/반이 없습니다</option>';
-  onSqSchoolChange();
-}
-function onSqSchoolChange(){
-  const schoolId=document.getElementById('sq-school').value;
-  const weekSel=document.getElementById('sq-week');
-  weekSel.innerHTML=db.qaWeeks.filter(w=>w.school_id===schoolId).map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')||'<option value="">주차가 없습니다</option>';
+async function submitQaRow(row){
+  const{data,error}=await sb.rpc('student_qa_submit',{p_token:sessionToken,p_row:row});
+  if(error)return error.message;
+  if(data==='forbidden')return '다시 로그인해 주세요.';
+  return data||null;
 }
 async function submitQaQuestion(){
-  const weekId=document.getElementById('sq-week').value;
+  const source=document.getElementById('sq-source').value.trim();
   const probNum=document.getElementById('sq-prob').value.trim();
   const text=document.getElementById('sq-text').value.trim();
-  const schoolId=document.getElementById('sq-school').value;
   const file=document.getElementById('sq-photo').files[0];
-  if(!weekId||!probNum||!text){notify('주차/문제번호/질문 내용을 모두 입력하세요.','error');return;}
+  if(!source||!probNum||!text){notify('교재/시험지, 문제 번호, 질문 내용을 모두 입력하세요.','error');return;}
   if(!file){notify('지문·문제·선지가 모두 보이는 사진을 올려 주세요.','error');return;}
   const btn=document.getElementById('sq-submit');btn.disabled=true;btn.textContent='사진 올리는 중...';
   let photoUrl;
   try{photoUrl=await uploadPhoto('qa-photos',file);}catch(e){notify(e.message,'error');btn.disabled=false;btn.textContent='질문 등록';return;}
-  const row={id:uid('q_'),school_id:schoolId,week_id:weekId,prob_num:probNum,student_id:session.id,student_name:session.name,question:text,status:'pending',badge:'pending',photo_url:photoUrl,teacher_reply:null};
-  const{error}=await sb.from('qa_questions').upsert(row,{onConflict:'week_id,prob_num,student_id'});
+  const row={id:uid('q_'),source,prob_num:probNum,question:text,photo_url:photoUrl,category:null};
+  const fail=await submitQaRow(row);
   btn.disabled=false;btn.textContent='질문 등록';
-  if(error){notify('등록 실패: '+error.message+(/photo_url/.test(error.message)?' (schema_add5.sql을 실행했는지 확인해주세요)':''),'error');return;}
-  document.getElementById('sq-photo').value='';document.getElementById('sq-photo-prev').innerHTML='';
-  const ex2=db.qaQuestions.find(q=>q.week_id===weekId&&q.prob_num===probNum&&q.student_id===session.id);
-  if(ex2)Object.assign(ex2,row);else db.qaQuestions.push(row);
-  document.getElementById('sq-prob').value='';document.getElementById('sq-text').value='';
-  renderMyQa();
+  if(fail){notify('등록 실패: '+fail,'error');return;}
+  ['sq-photo','sq-prob','sq-text'].forEach(i=>document.getElementById(i).value='');document.getElementById('sq-photo-prev').innerHTML='';
+  await loadQa();renderMyQa();renderMyQaFree();
   notify('질문을 등록했습니다.','success');
+}
+function myQaCard(q){
+  return `<div class="card">
+      <div class="row-between" style="gap:8px"><strong>${qaTitle(q)}</strong>${qaStatusPill(q)}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px">${qaDate(q)?mdWd(qaDate(q))+' 질문':''}</div>
+      ${photoHtml(q.photo_url)}
+      <div style="margin-top:6px;white-space:pre-wrap">${esc(q.question)}</div>
+      ${q.teacher_reply?`<div class="reply-box">쏠T: ${esc(q.teacher_reply)}</div>`:''}
+    </div>`;
 }
 function renderMyQa(){
   const el=document.getElementById('my-qa-list');
   const list=db.qaQuestions.filter(q=>q.student_id===session.id&&q.category!=='free');
-  if(!list.length){el.innerHTML='<div class="empty-hint">등록한 질문이 없습니다.</div>';return;}
-  el.innerHTML=list.map(q=>{
-    const w=db.qaWeeks.find(x=>x.id===q.week_id);
-    return `<div class="card">
-      <div class="row-between"><strong>${esc(w?w.name:'')} · ${esc(q.prob_num)}번</strong>${q.status==='answered'?'<span class="pill green">답변완료</span>':'<span class="pill amber">대기중</span>'}</div>
-      ${photoHtml(q.photo_url)}
-      <div style="margin-top:6px">${esc(q.question)}</div>
-      ${q.teacher_reply?`<div class="reply-box">쏠T: ${esc(q.teacher_reply)}</div>`:''}
-    </div>`;
-  }).join('');
+  el.innerHTML=list.length?list.map(myQaCard).join(''):'<div class="empty-hint">등록한 질문이 없습니다.</div>';
 }
 async function submitQaFree(){
   const text=document.getElementById('sq-free-text').value.trim();
@@ -1831,27 +1781,17 @@ async function submitQaFree(){
   const btn=document.getElementById('sq-free-submit');btn.disabled=true;
   let photoUrl=null;
   if(file){btn.textContent='사진 올리는 중...';try{photoUrl=await uploadPhoto('qa-photos',file);}catch(e){notify(e.message,'error');btn.disabled=false;btn.textContent='자유 질문 등록';return;}}
-  const row={id:uid('q_'),school_id:null,week_id:'free',prob_num:'자유',student_id:session.id,student_name:session.name,question:text,status:'pending',badge:'pending',category:'free',teacher_reply:null,photo_url:photoUrl};
-  let{error}=await sb.from('qa_questions').upsert(row,{onConflict:'week_id,prob_num,student_id'});
-  if(error&&!photoUrl&&/photo_url/.test(error.message)){delete row.photo_url;({error}=await sb.from('qa_questions').upsert(row,{onConflict:'week_id,prob_num,student_id'}));}
+  const fail=await submitQaRow({id:uid('q_'),source:null,prob_num:'자유',question:text,photo_url:photoUrl,category:'free'});
   btn.disabled=false;btn.textContent='자유 질문 등록';
-  if(error){notify('등록 실패: '+error.message,'error');return;}
+  if(fail){notify('등록 실패: '+fail,'error');return;}
   document.getElementById('sq-free-text').value='';document.getElementById('sq-free-photo').value='';document.getElementById('sq-free-photo-prev').innerHTML='';
-  const ex2=db.qaQuestions.find(q=>q.week_id==='free'&&q.prob_num==='자유'&&q.student_id===session.id);
-  if(ex2)Object.assign(ex2,row);else db.qaQuestions.push(row);
-  renderMyQaFree();
+  await loadQa();renderMyQaFree();
   notify('자유 질문을 등록했습니다.','success');
 }
 function renderMyQaFree(){
   const el=document.getElementById('my-qa-free');
-  const q=db.qaQuestions.find(x=>x.student_id===session.id&&x.category==='free');
-  if(!q){el.innerHTML='';return;}
-  el.innerHTML=`<div class="card">
-    <div class="row-between"><strong>내 자유 질문</strong>${q.status==='answered'?'<span class="pill green">답변완료</span>':'<span class="pill amber">대기중</span>'}</div>
-    ${photoHtml(q.photo_url)}
-    <div style="margin-top:6px">${esc(q.question)}</div>
-    ${q.teacher_reply?`<div class="reply-box">쏠T: ${esc(q.teacher_reply)}</div>`:''}
-  </div>`;
+  const list=db.qaQuestions.filter(x=>x.student_id===session.id&&x.category==='free');
+  el.innerHTML=list.map(myQaCard).join('');
 }
 
 /* ===================== 시험 — 공통 ===================== */

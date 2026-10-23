@@ -3341,19 +3341,19 @@ async function submitVocabTest(){
 
 /* --- 바나나 우유 보상: 미션 20개 클리어할 때마다 --- */
 const REWARD_EVERY=20;
-// 단지 모양 바나나맛 우유 그림
-function bananaMilkSvg(h){return `<svg height="${h}" viewBox="0 0 100 132" aria-label="바나나맛 우유" role="img" style="display:inline-block;vertical-align:middle">
+// 단지(달항아리) 모양 바나나맛 우유 그림: 진초록 뚜껑, 크림빛 노란 병, 초록 글씨
+function bananaMilkSvg(h){return `<svg height="${h}" viewBox="0 0 100 134" aria-label="바나나맛 우유" role="img" style="display:inline-block;vertical-align:middle">
   <defs>
-    <radialGradient id="bm-body" cx="38%" cy="55%" r="65%"><stop offset="0" stop-color="#fff3a6"/><stop offset=".55" stop-color="#ffe14d"/><stop offset="1" stop-color="#f2b705"/></radialGradient>
-    <linearGradient id="bm-lid" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9dde3"/></linearGradient>
+    <linearGradient id="bm-body" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#e9d77a"/><stop offset=".3" stop-color="#fbf1b4"/><stop offset=".55" stop-color="#f8ec9e"/><stop offset="1" stop-color="#e3cd6a"/></linearGradient>
+    <linearGradient id="bm-cap" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#0f3d26"/><stop offset=".35" stop-color="#2b6e47"/><stop offset="1" stop-color="#0d3520"/></linearGradient>
   </defs>
-  <path d="M34 22 L66 22 C66 28 65 32 67 36 C87 45 93 70 91 93 C89 116 75 127 50 127 C25 127 11 116 9 93 C7 70 13 45 33 36 C35 32 34 28 34 22 Z" fill="url(#bm-body)" stroke="#d99a00" stroke-width="2"/>
-  <ellipse cx="50" cy="20" rx="19" ry="5.5" fill="url(#bm-lid)" stroke="#b9bfc8" stroke-width="1.5"/>
-  <rect x="31" y="19" width="38" height="6" rx="2.5" fill="url(#bm-lid)" stroke="#b9bfc8" stroke-width="1.5"/>
-  <path d="M24 60 C18 74 18 92 24 104" stroke="#fff" stroke-width="6" stroke-linecap="round" fill="none" opacity=".55"/>
-  <path d="M33 41 C30 44 28 47 27 50" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none" opacity=".5"/>
-  <text x="54" y="82" text-anchor="middle" font-family="'Noto Sans KR',sans-serif" font-weight="800" font-size="14" fill="#8a5a00">바나나맛</text>
-  <text x="54" y="99" text-anchor="middle" font-family="'Noto Sans KR',sans-serif" font-weight="800" font-size="14" fill="#8a5a00">우유</text>
+  <path d="M33 25 C17 29 9 46 10 70 C11 96 13 116 22 125 C26 128 30 129 36 129 L64 129 C70 129 74 128 78 125 C87 116 89 96 90 70 C91 46 83 29 67 25 Z" fill="url(#bm-body)" stroke="#cdb34e" stroke-width="1.5"/>
+  <path d="M30 6 C30 3 33 2 36 2 L64 2 C67 2 70 3 70 6 L70 23 C70 25.5 68 26.5 65 26.5 L35 26.5 C32 26.5 30 25.5 30 23 Z" fill="url(#bm-cap)"/>
+  <path d="M34 6 L66 6" stroke="#5fa47a" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+  <path d="M30 11 L70 11 M30 16 L70 16 M30 21 L70 21" stroke="#0a2c1a" stroke-width="1" opacity=".35"/>
+  <path d="M22 44 C15 58 14 86 18 110" stroke="#fffbe0" stroke-width="5" stroke-linecap="round" fill="none" opacity=".75"/>
+  <text x="50" y="80" text-anchor="middle" font-family="'Noto Sans KR',sans-serif" font-weight="900" font-size="21" fill="#1f8a45" letter-spacing="-1.5">바나나맛</text>
+  <text x="66" y="101" text-anchor="middle" font-family="'Noto Sans KR',sans-serif" font-weight="900" font-size="15" fill="#1f8a45">우유</text>
 </svg>`;}
 // 지금까지 받은 보상: 클리어 개수 20, 40 ... 마다 하나씩, 그 개수를 채운 날짜와 함께
 function rewardsOf(sid){

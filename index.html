@@ -3136,8 +3136,8 @@ function renderVocabPick(){
     const rws=rewardsOf(session.id);
     const toNext=REWARD_EVERY-(cleared%REWARD_EVERY);
     const rewardHtml=`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;font-size:12px;color:var(--text2)">
-      ${rws.map(r=>`<button class="chip" style="border-color:#f2c200;color:#f2c200" onclick="showReward(${r.n})">🍌🥛 ${r.n}개 보상 다시 보기</button>`).join('')}
-      ${cleared<st.length&&cleared+toNext<=st.length?`<span>🍌🥛 바나나 우유까지 ${toNext}개 남았어요</span>`:''}</div>`;
+      ${rws.map(r=>`<button class="chip" style="border-color:#f2c200;color:#f2c200" onclick="showReward(${r.n})">${bananaMilkSvg(16)} ${r.n}개 보상 다시 보기</button>`).join('')}
+      ${cleared<st.length&&cleared+toNext<=st.length?`<span>${bananaMilkSvg(16)} 바나나 우유까지 ${toNext}개 남았어요</span>`:''}</div>`;
     html+=`<div class="m-hero">
       <div class="eyebrow">어휘 미션</div>
       <div class="big">${cleared} / ${st.length} 클리어 <span class="stars" style="font-size:16px;margin-left:6px">★ ${stars}</span></div>
@@ -3341,6 +3341,20 @@ async function submitVocabTest(){
 
 /* --- 바나나 우유 보상: 미션 20개 클리어할 때마다 --- */
 const REWARD_EVERY=20;
+// 단지 모양 바나나맛 우유 그림
+function bananaMilkSvg(h){return `<svg height="${h}" viewBox="0 0 100 132" aria-label="바나나맛 우유" role="img" style="display:inline-block;vertical-align:middle">
+  <defs>
+    <radialGradient id="bm-body" cx="38%" cy="55%" r="65%"><stop offset="0" stop-color="#fff3a6"/><stop offset=".55" stop-color="#ffe14d"/><stop offset="1" stop-color="#f2b705"/></radialGradient>
+    <linearGradient id="bm-lid" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9dde3"/></linearGradient>
+  </defs>
+  <path d="M34 22 L66 22 C66 28 65 32 67 36 C87 45 93 70 91 93 C89 116 75 127 50 127 C25 127 11 116 9 93 C7 70 13 45 33 36 C35 32 34 28 34 22 Z" fill="url(#bm-body)" stroke="#d99a00" stroke-width="2"/>
+  <ellipse cx="50" cy="20" rx="19" ry="5.5" fill="url(#bm-lid)" stroke="#b9bfc8" stroke-width="1.5"/>
+  <rect x="31" y="19" width="38" height="6" rx="2.5" fill="url(#bm-lid)" stroke="#b9bfc8" stroke-width="1.5"/>
+  <path d="M24 60 C18 74 18 92 24 104" stroke="#fff" stroke-width="6" stroke-linecap="round" fill="none" opacity=".55"/>
+  <path d="M33 41 C30 44 28 47 27 50" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none" opacity=".5"/>
+  <text x="54" y="82" text-anchor="middle" font-family="'Noto Sans KR',sans-serif" font-weight="800" font-size="14" fill="#8a5a00">바나나맛</text>
+  <text x="54" y="99" text-anchor="middle" font-family="'Noto Sans KR',sans-serif" font-weight="800" font-size="14" fill="#8a5a00">우유</text>
+</svg>`;}
 // 지금까지 받은 보상: 클리어 개수 20, 40 ... 마다 하나씩, 그 개수를 채운 날짜와 함께
 function rewardsOf(sid){
   const days=missionStates(VOCAB_ALL,sid).filter(m=>m.cleared).map(m=>{
@@ -3354,7 +3368,7 @@ function showReward(n){
   const at=rw?new Date(rw.at):new Date();
   const when=`${at.getFullYear()}. ${at.getMonth()+1}. ${at.getDate()}. ${String(at.getHours()).padStart(2,'0')}:${String(at.getMinutes()).padStart(2,'0')}`;
   document.getElementById('reward-body').innerHTML=`
-    <div class="rw-milk">🍌🥛</div>
+    <div class="rw-milk">${bananaMilkSvg(120)}</div>
     <div class="rw-title">바나나 우유 획득!</div>
     <div class="rw-sub">쏠T에게 이 화면을<br>캡쳐해서 보내세요 📸</div>
     <div class="rw-info"><b>${esc(session.name)}</b><br>어휘 미션 <b>${n}개</b> 클리어<br>${when}</div>

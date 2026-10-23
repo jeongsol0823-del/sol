@@ -700,7 +700,7 @@ async function selectAll(table,orderCols=['id']){
 async function loadAll(attempt=0){
   try{
     const [u,v,p,va,ar,qs,qw,qq,ex,er,cw,ci,csu,att,an,arr,vs2,vw2,va2,rl,sc,ge]=await Promise.all([
-      sb.from('users').select('*'),
+      sb.from('users').select(USER_COLS), // 비밀번호 칸은 읽지 않아요 (서버에서도 막혀 있어요)
       sb.from('videos').select('*').order('created_at'),
       selectAll('progress',['student_id','video_id']),
       sb.from('video_access').select('*'),
@@ -760,6 +760,19 @@ async function upsertProgress(sid,vid,pct,watchSec,lastPosition,maxRate,extra){
 }
 
 /* ===================== AUTH ===================== */
+// 로그인 확인은 서버 함수가 해요. 브라우저에는 비밀번호 대신 서버가 준 무작위 토큰만 저장해요 (schema_add14.sql)
+const USER_COLS='id,name,role,status,school_id,created_at,school,grade,grade_year';
+const TOKEN_KEY='sk_kr_tok';
+let sessionToken=null;
+function saveToken(t){sessionToken=t;try{t?localStorage.setItem(TOKEN_KEY,t):localStorage.removeItem(TOKEN_KEY);localStorage.removeItem('sk_kr_sess');}catch(e){}}
+// 강사 전용 서버 함수 부르기: 성공하면 null, 실패하면 오류 문장
+async function teacherRpc(fn,args){
+  const{data,error}=await sb.rpc(fn,Object.assign({p_token:sessionToken},args));
+  if(error)return error.message;
+  if(data==='forbidden')return '강사 로그인이 필요해요. 다시 로그인해 주세요.';
+  if(data==='duplicate')return '이미 있는 아이디예요.';
+  return data||null;
+}
 function selectRole(r){
   currentRole=r;
   document.getElementById('tab-teacher').classList.toggle('active',r==='teacher');
@@ -775,13 +788,18 @@ async function doLogin(){
   if(!id||!pw){err.textContent='아이디와 비밀번호를 입력하세요.';return;}
   btn.disabled=true;btn.textContent='로그인 중...';
   try{
+    const{data,error}=await sb.rpc('app_login',{p_id:id,p_pw:pw,p_role:currentRole});
+    if(error)throw new Error(error.message);
+    if(!data||data.error){
+      err.textContent=data&&data.error==='pending'?'강사 승인 대기 중입니다.'
+        :data&&data.error==='too_many'?'비밀번호를 여러 번 틀렸어요. 10분 뒤에 다시 해 주세요.'
+        :'아이디 또는 비밀번호가 올바르지 않습니다.';
+      return;
+    }
+    saveToken(data.token);
     await loadAll();
-    const user=db.users.find(u=>u.id===id&&u.pw===pw&&u.role===currentRole);
-    if(!user){err.textContent='아이디 또는 비밀번호가 올바르지 않습니다.';return;}
-    if(user.status==='pending'){err.textContent='강사 승인 대기 중입니다.';return;}
-    session=user;
-    localStorage.setItem('sk_kr_sess',JSON.stringify({id:user.id,role:user.role}));
-    if(user.role==='teacher')launchTeacher();else launchStudent();
+    session=db.users.find(u=>u.id===data.user.id)||data.user;
+    if(session.role==='teacher')launchTeacher();else launchStudent();
   }catch(e){err.textContent='연결 오류: '+e.message;}
   finally{btn.disabled=false;btn.textContent='로그인';}
 }
@@ -842,6 +860,7 @@ function accountCardHTML(u,title){
 }
 async function copyAccount(id){
   const u=db.users.find(x=>x.id===id);if(!u)return;
+  if(!u.pw){const{data}=await sb.rpc('teacher_user_pw',{p_token:sessionToken,p_id:id});if(!data){notify('비밀번호를 불러오지 못했어요. 다시 로그인해 주세요.','error');return;}u.pw=data;}
   try{await navigator.clipboard.writeText(accountText(u));notify('복사했어요. 문자에 붙여넣으세요.','success');}
   catch(e){prompt('아래 내용을 복사하세요',accountText(u));}
 }
@@ -861,17 +880,20 @@ async function createStudent(){
   if(db.users.some(u=>u.id===id)){err.textContent='이미 있는 아이디예요. 다른 아이디를 쓰세요.';return;}
   if(nameTaken(name)){err.textContent='같은 이름의 학생이 이미 있어요. 이름 뒤에 학교명이나 숫자를 붙여 주세요. 예) '+name+'(수지고), '+name+'2';return;}
   const row={id,name,pw,role:'student',status:'active',school,grade,grade_year:academicYear(todayStr())};
-  const{error}=await sb.from('users').insert(row);
-  if(error){err.textContent='만들기 실패: '+error.message;return;}
+  const fail=await teacherRpc('teacher_user_create',{p_row:row});
+  if(fail){err.textContent='만들기 실패: '+fail;return;}
   db.users.push(row);
   ['na-name','na-id'].forEach(i=>document.getElementById(i).value='');document.getElementById('na-pw').value=randomPw();
   document.getElementById('na-result').innerHTML=accountCardHTML(row,'계정을 만들었어요');
   renderActive();renderReportSelect();renderAttendanceForm();renderGrammarAdmin();
   notify(`${name} 학생 계정을 만들었어요.`,'success');
 }
-function showStudentPw(id){
+async function showStudentPw(id){
   const u=db.users.find(x=>x.id===id);const el=document.getElementById('pw-'+id);if(!u||!el)return;
   if(el.innerHTML){el.innerHTML='';return;}
+  const{data}=await sb.rpc('teacher_user_pw',{p_token:sessionToken,p_id:id});
+  if(!data){notify('비밀번호를 불러오지 못했어요. 다시 로그인해 주세요.','error');return;}
+  u.pw=data;
   el.innerHTML=`비밀번호 <b style="font-size:14px;letter-spacing:1px">${esc(u.pw||'')}</b> <button class="btn sm" onclick="copyAccount('${esc(id)}')">복사</button>`;
 }
 async function resetStudentPw(id){
@@ -879,8 +901,8 @@ async function resetStudentPw(id){
   const v=prompt(`${u.name} 학생의 새 비밀번호 (그대로 두면 자동으로 정한 번호)`,randomPw());
   if(v==null)return;const pw=v.trim();
   if(pw.length<4){notify('비밀번호는 4자 이상이어야 해요.','error');return;}
-  const{error}=await sb.from('users').update({pw}).eq('id',id);
-  if(error){notify('변경 실패: '+error.message,'error');return;}
+  const fail=await teacherRpc('teacher_user_update',{p_id:id,p_patch:{pw}});
+  if(fail){notify('변경 실패: '+fail,'error');return;}
   u.pw=pw;
   document.getElementById('na-result').innerHTML=accountCardHTML(u,'비밀번호를 바꿨어요');
   document.getElementById('na-result').scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -950,8 +972,8 @@ async function updateStudentInfo(id,changed){
   // 중학교 → 고등학교로 바꾸면 학년을 자동으로 고1(1~2월은 예비 고1)로 맞춰요
   if(changed==='school'&&school&&u.school&&schoolLevel(u.school)==='중'&&schoolLevel(school)==='고'&&(grade==null||grade>=3))grade=isPrePeriod(todayStr())?0:1;
   const patch={school,grade,grade_year:academicYear(todayStr())};
-  const{error}=await sb.from('users').update(patch).eq('id',id);
-  if(error){notify('저장 실패: '+error.message+(/school|grade/.test(error.message)?' (schema_add10.sql을 실행해주세요)':''),'error');return;}
+  const fail=await teacherRpc('teacher_user_update',{p_id:id,p_patch:patch});
+  if(fail){notify('저장 실패: '+fail,'error');return;}
   Object.assign(u,patch);notify(`${u.name}: ${studentTag(u)}`,'success');renderPending();renderActive();
 }
 function normName(n){return String(n||'').replace(/\s+/g,'').toLowerCase();}
@@ -959,7 +981,8 @@ function nameTaken(name,exceptId){return db.users.some(u=>u.id!==exceptId&&normN
 function doLogout(){
   closePlay();stopExamTimers();
   session=null;
-  localStorage.removeItem('sk_kr_sess');
+  if(sessionToken)sb.rpc('app_logout',{p_token:sessionToken}).then(()=>{},()=>{});
+  saveToken(null);
   showPage('page-login');
   document.getElementById('login-id').value='';
   document.getElementById('login-pw').value='';
@@ -1028,8 +1051,8 @@ async function renameStudent(id){
   if(!nn||nn===u.name)return;
   if(nameTaken(nn,id)){notify('같은 이름의 학생이 이미 있어요. 다른 이름을 써 주세요.','error');return;}
   const old=u.name;
-  const{error}=await sb.from('users').update({name:nn}).eq('id',id);
-  if(error){notify('이름 변경 실패: '+error.message,'error');return;}
+  const fail=await teacherRpc('teacher_user_update',{p_id:id,p_patch:{name:nn}});
+  if(fail){notify('이름 변경 실패: '+fail,'error');return;}
   // 시험 기록은 이름으로 저장돼 있어서 같이 바꿔 줌 (같은 이름이 둘이던 경우는 원래 기록을 나눌 수 없어 그대로 둠)
   if(!db.users.some(x=>x.id!==id&&x.name===old)){
     await sb.from('exam_responses').update({student_name:nn}).eq('student_name',old);
@@ -1042,15 +1065,16 @@ async function renameStudent(id){
   notify(`이름을 "${nn}"(으)로 바꿨습니다.`,'success');
 }
 async function approveStudent(id){
-  const{error}=await sb.from('users').update({status:'active'}).eq('id',id);
-  if(error){notify('처리 실패: '+error.message,'error');return;}
+  const fail=await teacherRpc('teacher_user_update',{p_id:id,p_patch:{status:'active'}});
+  if(fail){notify('처리 실패: '+fail,'error');return;}
   const u=db.users.find(x=>x.id===id);if(u)u.status='active';
   renderPending();renderActive();
   notify('학생을 승인했습니다.','success');
 }
 async function rejectStudent(id){
   if(!confirm('가입 신청을 거절(삭제)하시겠습니까?'))return;
-  await sb.from('users').delete().eq('id',id);
+  const fail=await teacherRpc('teacher_user_delete',{p_id:id});
+  if(fail){notify('처리 실패: '+fail,'error');return;}
   db.users=db.users.filter(u=>u.id!==id);
   renderPending();
   notify('가입 신청을 거절했습니다.','info');
@@ -1068,8 +1092,8 @@ async function removeStudent(id){
   for(const b of ['qa-photos','cert-photos']){
     try{const{data}=await sb.storage.from(b).list(id,{limit:1000});if(data&&data.length)await sb.storage.from(b).remove(data.map(f=>id+'/'+f.name));}catch(e){}
   }
-  const{error}=await sb.from('users').delete().eq('id',id);
-  if(error){notify('학생 삭제 실패: '+error.message,'error');return;}
+  const delFail=await teacherRpc('teacher_user_delete',{p_id:id});
+  if(delFail){notify('학생 삭제 실패: '+delFail,'error');return;}
   const keep=r=>r.student_id!==id;
   db.progress=db.progress.filter(keep);db.videoAccess=db.videoAccess.filter(keep);db.accessRequests=db.accessRequests.filter(keep);
   db.qaQuestions=db.qaQuestions.filter(keep);db.certSubmissions=db.certSubmissions.filter(keep);
@@ -3506,13 +3530,12 @@ async function init(){
   selectRole('teacher');
   try{
     await loadAll();
-    const saved=localStorage.getItem('sk_kr_sess');
-    if(saved){
-      const s=JSON.parse(saved);
-      const user=db.users.find(u=>u.id===s.id&&u.role===s.role&&u.status==='active');
-      if(user){session=user;user.role==='teacher'?launchTeacher():launchStudent();}
-      else{localStorage.removeItem('sk_kr_sess');showPage('page-login');}
-    }else{showPage('page-login');}
+    let saved=null;try{saved=localStorage.getItem(TOKEN_KEY);localStorage.removeItem('sk_kr_sess');}catch(e){}
+    // 저장된 토큰이 진짜인지 서버에 물어봐요 (브라우저에 적힌 아이디만으로는 들어갈 수 없어요)
+    const{data:me}=saved?await sb.rpc('app_session',{p_token:saved}):{data:null};
+    const user=me&&db.users.find(u=>u.id===me.id&&u.status==='active');
+    if(user){sessionToken=saved;session=user;user.role==='teacher'?launchTeacher():launchStudent();}
+    else{saveToken(null);showPage('page-login');}
   }catch(e){
     showPage('page-login');
     document.getElementById('login-err').textContent='서버 연결에 실패했습니다: '+e.message;

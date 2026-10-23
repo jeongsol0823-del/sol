@@ -172,13 +172,21 @@ table.simple tr:last-child td{border-bottom:none}
 .m-tile.tried{border-color:rgba(245,158,11,.5)}
 .m-tile.locked{opacity:.42;cursor:not-allowed}
 .hall-card{background:linear-gradient(135deg,rgba(245,158,11,.18),rgba(79,124,255,.08));border:1px solid rgba(245,158,11,.45);border-radius:var(--radius);padding:16px 18px;margin:4px 0 16px}
-.hall-title{font-weight:700;font-size:16px;margin-bottom:8px}
-.hall-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border);font-size:14px}
-.hall-title+.hall-row{border-top:none}
+.hall-title{font-weight:700;font-size:16px;margin-bottom:12px;text-align:center}
 .hall-medal{font-size:20px;white-space:nowrap}
-.hall-rank{font-family:var(--mono);font-size:12px;color:var(--text2);min-width:28px}
-.hall-school{color:var(--text2);flex:1;min-width:0}
-.hall-name{font-weight:700;font-size:15px;letter-spacing:1px}
+.podium{display:flex;align-items:flex-end;justify-content:center;gap:8px;max-width:420px;margin:0 auto}
+.podium-spot{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center}
+.podium-who{text-align:center;padding:0 2px 8px;min-width:0;width:100%}
+.podium-medal{font-size:30px;line-height:1.1}
+.p1 .podium-medal{font-size:38px}
+.podium-name{font-weight:700;font-size:15px;letter-spacing:1px;margin-top:2px;word-break:keep-all}
+.p1 .podium-name{font-size:17px}
+.podium-school{font-size:12px;color:var(--text2);margin-top:1px;word-break:keep-all}
+.podium-empty{color:var(--text3);font-size:20px}
+.podium-block{width:100%;border-radius:10px 10px 0 0;display:flex;align-items:flex-start;justify-content:center;padding-top:8px;font-family:var(--mono);font-weight:700;font-size:22px;color:rgba(255,255,255,.92)}
+.p1 .podium-block{height:96px;background:linear-gradient(180deg,#f5c542,#d49b12)}
+.p2 .podium-block{height:70px;background:linear-gradient(180deg,#c9d1dc,#8e99a8)}
+.p3 .podium-block{height:52px;background:linear-gradient(180deg,#e0a26b,#b06b33)}
 .hall-edit{display:grid;grid-template-columns:70px 1fr 1fr;gap:8px;align-items:center;margin-top:8px}
 .hall-edit .hall-medal{font-size:14px}
 .stars{color:var(--amber);letter-spacing:1px}
@@ -2738,9 +2746,13 @@ function hallEntry(rank){return db.vocabHall.find(h=>h.rank===rank)||{rank,schoo
 function hallViewHtml(){
   const list=[1,2,3].map(hallEntry).filter(h=>(h.name||'').trim()||(h.school||'').trim());
   if(!list.length)return'';
+  // 시상대: 왼쪽 2등 · 가운데 1등(가장 높음) · 오른쪽 3등
+  const spot=r=>{const h=hallEntry(r);const has=(h.name||'').trim()||(h.school||'').trim();
+    return `<div class="podium-spot p${r}">
+      <div class="podium-who">${has?`<div class="podium-medal">${HALL_MEDALS[r-1]}</div><div class="podium-name">${esc(maskName(h.name))}</div><div class="podium-school">${esc(h.school||'')}</div>`:'<div class="podium-empty">-</div>'}</div>
+      <div class="podium-block">${r}</div></div>`;};
   return `<div class="hall-card"><div class="hall-title">🏆 명예의 전당</div>
-    ${list.map(h=>`<div class="hall-row"><span class="hall-medal">${HALL_MEDALS[h.rank-1]}</span><span class="hall-rank">${h.rank}등</span>
-      <span class="hall-school">${esc(h.school||'')}</span><span class="hall-name">${esc(maskName(h.name))}</span></div>`).join('')}
+    <div class="podium">${spot(2)}${spot(1)}${spot(3)}</div>
   </div>`;
 }
 function renderHallStudent(){const el=document.getElementById('vs-hall');if(el)el.innerHTML=hallViewHtml();}

@@ -135,6 +135,13 @@ table.simple tr:last-child td{border-bottom:none}
 .modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);max-width:720px;width:100%;max-height:90vh;overflow:auto}
 .modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
 .modal-head h3{font-size:14px;font-weight:700}
+.reward-box{max-width:360px;text-align:center;padding:26px 22px;background:linear-gradient(180deg,#fff6c9,#ffe98a);color:#3a2a00;border:3px solid #f2c200}
+.reward-box .rw-milk{font-size:72px;line-height:1;animation:rwpop .5s ease-out}
+.reward-box .rw-title{font-size:24px;font-weight:800;margin-top:10px;letter-spacing:-.5px}
+.reward-box .rw-sub{font-size:15px;font-weight:600;margin-top:10px;line-height:1.5}
+.reward-box .rw-info{margin-top:14px;padding:10px;border-radius:10px;background:rgba(255,255,255,.65);font-size:13px;line-height:1.6}
+.reward-box .rw-info b{font-size:15px}
+@keyframes rwpop{0%{transform:scale(.3) rotate(-15deg);opacity:0}70%{transform:scale(1.15) rotate(5deg)}100%{transform:scale(1) rotate(0)}}
 .modal-body{padding:16px 18px}
 .player-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000}
 .player-wrap iframe,.player-wrap>div{width:100%;height:100%}
@@ -602,6 +609,11 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     </div>
 
   </div>
+</div>
+
+<!-- 바나나 우유 보상 -->
+<div class="modal" id="modal-reward" onclick="if(event.target===this)closeReward()">
+  <div class="modal-box reward-box" id="reward-body"></div>
 </div>
 
 <!-- PLAY MODAL -->
@@ -3121,10 +3133,16 @@ function renderVocabPick(){
       nextHtml=`<div><div style="font-size:12px;color:var(--text2)">지금 도전할 미션 · 다 맞혀야 다음 미션이 열려요</div><div style="font-weight:700">MISSION ${pad2(cur.no)} · ${esc(title)}</div></div><button class="btn blue" onclick="openVocabStudy('${esc(cur.set.id)}')">${cur.tries?'재도전':'도전하기'} ▶</button>`;}
     else if(cleared===st.length&&st.length){nextHtml=`<div style="font-weight:700">🏆 모든 미션을 클리어했어요!</div>`;}
     else nextHtml='';
+    const rws=rewardsOf(session.id);
+    const toNext=REWARD_EVERY-(cleared%REWARD_EVERY);
+    const rewardHtml=`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;font-size:12px;color:var(--text2)">
+      ${rws.map(r=>`<button class="chip" style="border-color:#f2c200;color:#f2c200" onclick="showReward(${r.n})">🍌🥛 ${r.n}개 보상 다시 보기</button>`).join('')}
+      ${cleared<st.length&&cleared+toNext<=st.length?`<span>🍌🥛 바나나 우유까지 ${toNext}개 남았어요</span>`:''}</div>`;
     html+=`<div class="m-hero">
       <div class="eyebrow">어휘 미션</div>
       <div class="big">${cleared} / ${st.length} 클리어 <span class="stars" style="font-size:16px;margin-left:6px">★ ${stars}</span></div>
       <div class="progress-bar" style="height:7px;margin-top:8px"><div class="progress-bar-fill" style="width:${pct}%;background:var(--green)"></div></div>
+      ${rewardHtml}
       ${nextHtml?`<div class="next">${nextHtml}</div>`:''}
     </div>
     <div class="m-grid">${st.map(m=>missionTileHtml(m)).join('')}</div>`;
@@ -3314,7 +3332,36 @@ async function submitVocabTest(){
         <button class="btn" onclick="quitVocabTest()">미션 맵으로</button>
       </div></div>${wrongHtml}</div>`;
   renderVocabTake();
+  // 처음 클리어해서 클리어 개수가 20개, 40개...가 되면 바나나 우유 보상 창
+  if(firstClear&&q.set.track){
+    const n=missionStates(VOCAB_ALL,session.id).filter(m=>m.cleared).length;
+    if(n>0&&n%REWARD_EVERY===0)setTimeout(()=>showReward(n),700);
+  }
 }
+
+/* --- 바나나 우유 보상: 미션 20개 클리어할 때마다 --- */
+const REWARD_EVERY=20;
+// 지금까지 받은 보상: 클리어 개수 20, 40 ... 마다 하나씩, 그 개수를 채운 날짜와 함께
+function rewardsOf(sid){
+  const days=missionStates(VOCAB_ALL,sid).filter(m=>m.cleared).map(m=>{
+    const first=db.vocabAttempts.filter(a=>a.set_id===m.set.id&&a.student_id===sid&&isCleared(a)).sort((a,b)=>new Date(a.submitted_at)-new Date(b.submitted_at))[0];
+    return first?first.submitted_at:null;}).filter(Boolean).sort();
+  const out=[];for(let n=REWARD_EVERY;n<=days.length;n+=REWARD_EVERY)out.push({n,at:days[n-1]});
+  return out;
+}
+function showReward(n){
+  const rw=rewardsOf(session.id).find(r=>r.n===n);
+  const at=rw?new Date(rw.at):new Date();
+  const when=`${at.getFullYear()}. ${at.getMonth()+1}. ${at.getDate()}. ${String(at.getHours()).padStart(2,'0')}:${String(at.getMinutes()).padStart(2,'0')}`;
+  document.getElementById('reward-body').innerHTML=`
+    <div class="rw-milk">🍌🥛</div>
+    <div class="rw-title">바나나 우유 획득!</div>
+    <div class="rw-sub">쏠T에게 이 화면을<br>캡쳐해서 보내세요 📸</div>
+    <div class="rw-info"><b>${esc(session.name)}</b><br>어휘 미션 <b>${n}개</b> 클리어<br>${when}</div>
+    <button class="btn" style="margin-top:16px;background:#fff;color:#3a2a00;border-color:#e0b400" onclick="closeReward()">닫기</button>`;
+  document.getElementById('modal-reward').classList.add('show');
+}
+function closeReward(){document.getElementById('modal-reward').classList.remove('show');}
 
 /* ===================== 시작 ===================== */
 async function init(){

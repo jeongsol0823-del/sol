@@ -127,8 +127,10 @@ table.simple th{text-align:left;color:var(--text2);font-weight:500;font-size:11p
 table.simple td{padding:9px 10px;border-bottom:1px solid var(--border)}
 table.simple tr:last-child td{border-bottom:none}
 
-.exq-row{display:grid;grid-template-columns:36px 92px 64px 1fr 1fr 60px;gap:6px;align-items:center;margin-bottom:6px}
+.exq-row{display:grid;grid-template-columns:36px 92px 190px 64px 1fr 1fr 60px;gap:6px;align-items:center;margin-bottom:6px}
 @media(max-width:700px){.exq-row{grid-template-columns:1fr 1fr;grid-auto-rows:auto}}
+.tag-bar{height:8px;border-radius:4px;background:var(--bg3);overflow:hidden;min-width:80px}
+.tag-bar>div{height:100%}
 .reply-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-top:8px;font-size:13px}
 
 /* ---- modal ---- */
@@ -375,7 +377,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
           <div class="form-group"><label>구분</label><select class="form-select" id="ex-category"><option value="school">내신</option><option value="regular">정규</option></select></div>
           <div class="form-group"><label>제한시간 (분, 비우면 제한 없음)</label><input class="form-input" id="ex-time" type="number" min="0" placeholder="예: 50"></div>
         </div>
-        <div style="margin:12px 0 4px;font-size:11px;color:var(--text2)">번호 / 유형 / 배점 / 정답 / 해설(선택)</div>
+        <div style="margin:12px 0 4px;font-size:11px;color:var(--text2)">번호 / 객관식·주관식 / 문제 유형 / 배점 / 정답 / 해설(선택)</div>
         <div id="ex-q-rows"></div>
         <button class="btn sm" onclick="addExamQRow()">+ 문항 추가</button>
         <div style="display:flex;gap:6px;margin-top:10px"><button class="btn blue" id="ex-save-btn" onclick="saveExam()">시험 저장</button><button class="btn" id="ex-cancel-btn" style="display:none" onclick="resetExamForm()">수정 취소</button></div>
@@ -384,6 +386,16 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div id="exam-list"></div>
       <div class="section-head" style="margin-top:24px"><h2>응시 결과</h2></div>
       <div id="exam-results"><div class="empty-hint">시험 목록에서 "결과 보기"를 눌러주세요.</div></div>
+
+      <div class="section-head" style="margin-top:28px"><h2>학생별 약점 유형</h2></div>
+      <div class="vhint" style="margin-top:0">문항에 유형을 달아 둔 시험만 계산돼요. 시험을 볼수록 쌓여서 더 정확해져요.</div>
+      <div id="tag-analysis"></div>
+
+      <details class="card" style="margin-top:20px"><summary style="cursor:pointer;font-weight:600">문제 유형 목록 관리</summary>
+        <div class="vhint">한 줄에 유형 하나씩 적어요. "영역 · 유형"처럼 쓰면 영역별로 보기 좋아요. 이미 달아 둔 유형 이름을 바꾸면 예전 시험은 예전 이름 그대로 남아요.</div>
+        <textarea class="form-input" id="ex-tag-text" rows="14" oninput="this.dataset.dirty='1'"></textarea>
+        <div style="display:flex;gap:6px;margin-top:8px"><button class="btn blue sm" onclick="saveExamTags()">유형 목록 저장</button><button class="btn sm" onclick="resetExamTags()">기본 목록으로 되돌리기</button></div>
+      </details>
     </div>
 
     <div class="section" id="t-vocab">
@@ -688,7 +700,7 @@ async function selectAll(table,orderCols=['id']){
 }
 async function loadAll(attempt=0){
   try{
-    const [u,v,p,va,ar,ex,er,cw,ci,att,an,arr,vs2,vw2,va2,rl,sc,ge]=await Promise.all([
+    const [u,v,p,va,ar,ex,er,cw,ci,att,an,arr,vs2,vw2,va2,rl,sc,ge,st]=await Promise.all([
       sb.from('users').select(USER_COLS), // 비밀번호 칸은 읽지 않아요 (서버에서도 막혀 있어요)
       sb.from('videos').select('*').order('created_at'),
       selectAll('progress',['student_id','video_id']),
@@ -706,7 +718,8 @@ async function loadAll(attempt=0){
       selectAll('vocab_attempts'),
       sb.from('report_links').select('*').order('created_at',{ascending:false}),
       sb.from('schools').select('*'),
-      sb.from('grammar_enroll').select('*')
+      sb.from('grammar_enroll').select('*'),
+      sb.from('app_settings').select('*')
     ]);
     if(u.error)throw new Error(u.error.message);
     if(v.error)throw new Error(v.error.message);
@@ -719,6 +732,7 @@ async function loadAll(attempt=0){
     db.vocabSets=(vs2.data)||[];db.vocabWords=(vw2.data)||[];db.vocabAttempts=(va2.data)||[];
     db.reportLinks=(rl&&rl.data)||[];db.schools=(sc&&sc.data)||[];
     db.grammarEnroll=(ge&&ge.data)||[];db.grammarMissing=!!(ge&&ge.error);
+    db.settings=Object.fromEntries(((st&&st.data)||[]).map(r=>[r.key,r.value]));
   }catch(e){
     if(attempt<3){
       document.querySelector('.loading-text').textContent=`재연결 중... (${attempt+1}/3)`;
@@ -1818,6 +1832,75 @@ function examScoreText(ex,r){
 function examCatLabel(c){return c==='school'?'내신':'정규';}
 function fmtLeft(sec){sec=Math.max(0,Math.floor(sec));return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;}
 
+/* ===================== 시험 — 문제 유형 ===================== */
+// 고1 국어 기본 유형 목록 (강사 화면 "문제 유형 목록 관리"에서 고칠 수 있어요 → app_settings.exam_types)
+const DEFAULT_EXAM_TAGS=[
+  '문학 · 화자·서술자의 태도','문학 · 표현상 특징','문학 · 시어·소재의 의미','문학 · 인물·갈등','문학 · 서술 방식·시점','문학 · 작품 비교','문학 · <보기> 바탕 감상',
+  '독서 · 세부 내용 일치','독서 · 중심 내용·주제','독서 · 글의 전개 방식','독서 · 추론','독서 · <보기> 사례 적용','독서 · 자료·그래프 해석',
+  '어휘 · 문맥적 의미·바꿔 쓰기',
+  '문법 · 음운과 음운 변동','문법 · 품사·형태소·단어 형성','문법 · 문장 성분·문장 구조','문법 · 높임·시제·피동·사동','문법 · 담화·국어사',
+  '화법과 작문 · 말하기 전략','화법과 작문 · 글쓰기 계획·고쳐쓰기',
+  '서술형 · 서술형·요약'
+];
+function examTags(){const v=db.settings&&db.settings.exam_types;return Array.isArray(v)&&v.length?v:DEFAULT_EXAM_TAGS;}
+function tagOptions(sel){
+  const list=examTags();
+  return '<option value="">유형 (선택)</option>'+list.map(x=>`<option value="${esc(x)}"${x===sel?' selected':''}>${esc(x)}</option>`).join('')
+    +(sel&&!list.includes(sel)?`<option value="${esc(sel)}" selected>${esc(sel)}</option>`:'');
+}
+function renderTagAdmin(){const el=document.getElementById('ex-tag-text');if(el&&!el.dataset.dirty)el.value=examTags().join('\n');}
+async function saveExamTags(){
+  const el=document.getElementById('ex-tag-text');
+  const v=[...new Set(el.value.split('\n').map(s=>s.trim()).filter(Boolean))];
+  if(!v.length){notify('유형을 한 개 이상 적어 주세요.','error');return;}
+  const fail=await teacherRpc('teacher_setting_set',{p_key:'exam_types',p_value:v});
+  if(fail){notify('저장 실패: '+fail,'error');return;}
+  db.settings=db.settings||{};db.settings.exam_types=v;delete el.dataset.dirty;renderTagAdmin();
+  notify(`유형 ${v.length}개를 저장했어요. 새로 추가하는 문항부터 고를 수 있어요.`,'success');
+}
+function resetExamTags(){const el=document.getElementById('ex-tag-text');el.value=DEFAULT_EXAM_TAGS.join('\n');el.dataset.dirty='1';notify('기본 목록을 불러왔어요. "유형 목록 저장"을 눌러야 적용돼요.','info');}
+// 학생 한 명의 유형별 정답률 (유형을 달아 둔 문항만, 제출한 시험 전체 누적)
+// 객관식은 맞으면 1, 주관식은 받은 점수/배점 (아직 채점 안 한 주관식은 빼요)
+function tagStats(name){
+  const by={};
+  db.examResponses.filter(r=>r.student_name===name&&isSubmitted(r)).forEach(r=>{
+    const ex=db.exams.find(x=>x.id===r.exam_id);if(!ex)return;
+    const ans=r.answers||{},dp=(r.thoughts&&r.thoughts.__descPoints)||null;
+    (ex.questions||[]).forEach(q=>{
+      if(!q.tag)return;
+      let got;
+      if(q.type==='obj')got=String(ans[q.num]||'').trim()!==''&&String(ans[q.num]).trim()===String(q.answer).trim()?1:0;
+      else{if(!dp||dp[q.num]==null)return;got=q.points?Math.min(dp[q.num],q.points)/q.points:0;}
+      const s=by[q.tag]||(by[q.tag]={tag:q.tag,n:0,got:0,wrong:[]});
+      s.n++;s.got+=got;if(got<1)s.wrong.push(`${ex.name} ${q.num}번`);
+    });
+  });
+  return Object.values(by).map(s=>Object.assign(s,{rate:Math.round(s.got/s.n*100)})).sort((a,b)=>a.rate-b.rate||b.n-a.n);
+}
+// 약한 유형: 정답률이 낮은 순 (다 맞힌 유형은 빼요)
+function weakTags(name,k=3){return tagStats(name).filter(s=>s.rate<100).slice(0,k);}
+function tagRateColor(r){return r>=80?'var(--green)':r>=50?'var(--amber)':'var(--red)';}
+function tagTableHtml(stats){
+  return `<table class="simple"><thead><tr><th>유형</th><th>문항</th><th style="min-width:120px">정답률</th><th>틀린 문항</th></tr></thead><tbody>${stats.map(s=>`<tr>
+    <td>${esc(s.tag)}</td><td>${s.n}</td>
+    <td><div style="display:flex;gap:6px;align-items:center"><div class="tag-bar" style="flex:1"><div style="width:${s.rate}%;background:${tagRateColor(s.rate)}"></div></div><b style="color:${tagRateColor(s.rate)}">${s.rate}%</b></div></td>
+    <td style="font-size:12px;color:var(--text2)">${s.wrong.slice(-3).map(esc).join(', ')||'-'}${s.wrong.length>3?` 외 ${s.wrong.length-3}`:''}</td></tr>`).join('')}</tbody></table>`;
+}
+let tagStudentSel='';
+function renderTagAnalysis(){
+  const el=document.getElementById('tag-analysis');if(!el)return;
+  const students=db.users.filter(u=>u.role==='student'&&u.status==='active');
+  const withData=students.map(u=>({u,weak:weakTags(u.name),all:tagStats(u.name)})).filter(x=>x.all.length);
+  if(!withData.length){el.innerHTML='<div class="empty-hint">아직 유형을 단 시험의 응시 기록이 없어요. 시험을 만들 때 문항마다 유형을 골라 주세요.</div>';return;}
+  if(!withData.some(x=>x.u.id===tagStudentSel))tagStudentSel=withData[0].u.id;
+  const cur=withData.find(x=>x.u.id===tagStudentSel);
+  el.innerHTML=`<div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple"><thead><tr><th>학생</th><th>약한 유형 TOP 3</th><th></th></tr></thead><tbody>${withData.map(x=>`<tr${x.u.id===tagStudentSel?' style="background:rgba(79,124,255,.08)"':''}>
+      <td style="white-space:nowrap">${esc(x.u.name)}<div style="font-size:11px;color:var(--text3)">${esc(x.u.school||'')}</div></td>
+      <td style="font-size:12px">${x.weak.length?x.weak.map(s=>`<span style="color:${tagRateColor(s.rate)}">${esc(s.tag)} ${s.rate}%</span>`).join(' · '):'<span style="color:var(--green)">약한 유형 없음</span>'}</td>
+      <td><button class="btn sm" onclick="tagStudentSel='${esc(x.u.id)}';renderTagAnalysis()">자세히</button></td></tr>`).join('')}</tbody></table></div>
+    <div class="card"><div style="font-weight:700;margin-bottom:8px">${esc(cur.u.name)} · 유형별 정답률 <span style="font-size:12px;color:var(--text2);font-weight:400">(낮은 순)</span></div>${tagTableHtml(cur.all)}</div>`;
+}
+
 /* ===================== 시험 — 강사 ===================== */
 function addExamQRow(q){
   examRowSeq++;
@@ -1828,6 +1911,7 @@ function addExamQRow(q){
   div.innerHTML=`
     <div style="text-align:center;color:var(--text2)">${wrap.children.length+1}</div>
     <select class="form-select exq-type"><option value="obj">객관식</option><option value="desc">주관식</option></select>
+    <select class="form-select exq-tag">${tagOptions(q&&q.tag)}</select>
     <input class="form-input exq-points" type="number" value="2">
     <input class="form-input exq-answer" placeholder="정답 (객관식은 숫자)">
     <input class="form-input exq-expl" placeholder="해설(선택)">
@@ -1872,7 +1956,8 @@ async function saveExam(){
     type:row.querySelector('.exq-type').value,
     points:parseInt(row.querySelector('.exq-points').value)||0,
     answer:row.querySelector('.exq-answer').value.trim(),
-    explanation:row.querySelector('.exq-expl').value.trim()
+    explanation:row.querySelector('.exq-expl').value.trim(),
+    tag:row.querySelector('.exq-tag').value||null
   }));
   const fields={name,total_q:questions.length,questions,category,time_limit:timeLimit};
   const tryWrite=async f=>editingExamId?await sb.from('exams').update(f).eq('id',editingExamId).select():await sb.from('exams').insert(Object.assign({teacher_id:session.id},f)).select();
@@ -1923,6 +2008,7 @@ async function deleteExam(id){
   renderExamAdmin();notify('시험을 삭제했습니다.','info');
 }
 function renderExamAdmin(){
+  renderTagAdmin();renderTagAnalysis();
   const el=document.getElementById('exam-list');
   if(!db.exams.length){el.innerHTML='<div class="empty-hint">만든 시험이 없습니다.</div>';return;}
   el.innerHTML=db.exams.map(ex=>{
@@ -2117,7 +2203,7 @@ function renderExamResultBox(ex,resp){
   // 정답·해설은 쏠T가 "정답 공개"를 눌러야 보여요
   const wrong=(ex.questions||[]).filter(q=>q.type==='obj'&&String(resp.answers[q.num]||'').trim()!==String(q.answer).trim());
   const detail=ex.answers_revealed
-    ?(wrong.length?wrong.map(q=>`<div class="card"><strong>${q.num}번</strong> 오답 · 내 답 ${esc(resp.answers[q.num]||'-')} · 정답 ${esc(q.answer)}${q.explanation?`<div style="color:var(--text2);margin-top:4px">${esc(q.explanation)}</div>`:''}</div>`).join(''):'<div class="empty-hint">객관식을 모두 맞혔어요!</div>')
+    ?(wrong.length?wrong.map(q=>`<div class="card"><strong>${q.num}번</strong>${q.tag?` <span class="pill blue">${esc(q.tag)}</span>`:''} 오답 · 내 답 ${esc(resp.answers[q.num]||'-')} · 정답 ${esc(q.answer)}${q.explanation?`<div style="color:var(--text2);margin-top:4px">${esc(q.explanation)}</div>`:''}</div>`).join(''):'<div class="empty-hint">객관식을 모두 맞혔어요!</div>')
     :'<div class="empty-hint">정답과 해설은 쏠T가 공개하면 볼 수 있어요.</div>';
   box.innerHTML=`<div class="card"><strong>채점 결과</strong> · ${examScoreText(ex,resp)}${resp.thoughts&&resp.thoughts.__autoSubmitted?' <span class="pill amber">시간 종료 자동 제출</span>':''}</div>${detail}`;
 }
@@ -2478,6 +2564,13 @@ function vocabReportHTML(v){
     </div>`;
   }).join('');
 }
+function weakTagCardHTML(name){
+  const all=tagStats(name);if(!all.length)return'';
+  const weak=all.filter(s=>s.rate<100).slice(0,3);
+  return `<div class="card"><div class="row-between"><strong>시험 유형 분석</strong><span style="font-size:12px;color:var(--text2)">유형 ${all.length}개 · 누적</span></div>
+    ${weak.length?`<div style="font-size:12px;color:var(--text2);margin:8px 0 4px">약한 유형</div>`+weak.map(s=>`<div class="row-between" style="gap:6px;padding:3px 0"><span>${esc(s.tag)}</span><b style="color:${tagRateColor(s.rate)}">${s.rate}% <span style="font-size:11px;color:var(--text2);font-weight:400">(${s.n}문항)</span></b></div>`).join(''):'<div style="margin-top:8px;color:var(--green);font-weight:600">유형을 단 문항을 모두 맞혔어요!</div>'}
+  </div>`;
+}
 function renderReportCardHTML(d){
   if(!d.student)return '<div class="empty-hint">학생 정보를 찾을 수 없습니다.</div>';
   const examRowsHtml=d.examRows.length?d.examRows.map(r=>{
@@ -2493,6 +2586,7 @@ function renderReportCardHTML(d){
     <div class="card row-between"><span>출석</span><span>출석 ${d.present} · 지각 ${d.late} · 결석 ${d.absent}</span></div>
     ${vocabReportHTML(d.vocab)}
     ${certReportHTML(d.cert)}
+    ${weakTagCardHTML(d.student.name)}
     ${d.grammar&&d.grammar.total?`<div class="card"><div class="row-between"><strong>문법 기초</strong><span>완강 <b>${d.grammar.done}</b>/${d.grammar.total}강 · 진도율 ${d.grammar.avg}%</span></div>
       <div class="progress-bar"><div class="progress-bar-fill" style="width:${d.grammar.avg}%;background:var(--green)"></div></div>
       <div style="font-size:12px;color:var(--text2);margin-top:8px">${d.grammar.next?`다음 강의: ${d.grammar.next.no}강 ${esc(d.grammar.next.v.title)}`:'모든 강의 완강'}</div></div>`:''}
@@ -2610,6 +2704,10 @@ function parentReportHTML(sid,note,start,end){
       <span>${esc(item.title)}<span style="display:block;font-size:12px;color:${C.sub}">${item.due_date?mdWd(item.due_date)+' 마감':'마감 없음'}${certLate(item,sub)?' · 늦게 제출':''}</span></span>
       <span style="color:${certColor[state]};font-weight:700;white-space:nowrap">${certText[state]}</span></div>`).join(''),
     `통과 <b style="color:${C.ink}">${d.certs.filter(x=>x.state==='approved').length}/${d.certs.length}</b>`):'';
+  // 시험 유형 분석 (누적, 유형을 단 문항이 있을 때만)
+  const tagAll=u?tagStats(u.name):[];const tagWeak=tagAll.filter(s=>s.rate<100).slice(0,3);
+  const tagBox=tagAll.length?box('시험 유형 분석',tagWeak.length?tagWeak.map(s=>`<div class="pb" style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid ${C.line};font-size:14px"><span>${esc(s.tag)}<span style="display:block;font-size:12px;color:${C.sub}">${s.n}문항 중 ${Math.round(s.got*10)/10}문항 정답</span></span><span style="color:${s.rate>=80?C.green:s.rate>=50?C.amber:C.red};font-weight:700">${s.rate}%</span></div>`).join('')
+      :empty('유형을 단 문항을 모두 맞혔어요.'),'약한 유형 · 누적'):'';
   // 시험
   const examBox=box('시험 성적',d.exams.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">${d.exams.map(({r,ex})=>{
       const score=ex&&descPending(ex,r)?`객관식 ${r.points_earned}/${examObjTotal(ex)}점 (주관식 채점 중)`:`${r.points_earned}/${r.points_total}점 (${r.score}%)`;
@@ -2620,7 +2718,7 @@ function parentReportHTML(sid,note,start,end){
       <div><div style="font-size:13px;color:${C.blue};font-weight:700;letter-spacing:1px">정말 쏠쏠한 국어</div><div style="font-size:26px;font-weight:800;margin-top:2px">주간 학습 리포트</div></div>
       <div style="text-align:right"><div style="font-size:20px;font-weight:700">${esc(u?u.name:'')} 학생</div><div style="font-size:13px;color:${C.sub}">${u&&u.school?esc(u.school)+' '+gradeName(gradeAt(u,end),end,u.school)+' · ':''}${mdWd(start)} ~ ${mdWd(end)}</div></div>
     </div>
-    ${noteBox}${attBox}${vocabBox}${certBox}${examBox}${gramBox}${vidBox}
+    ${noteBox}${attBox}${vocabBox}${certBox}${examBox}${tagBox}${gramBox}${vidBox}
     <div class="pb" style="font-size:11px;color:#9aa1b0;text-align:center;margin-top:18px">정말 쏠쏠한 국어 · 쏠T · ${koDate(start)} ~ ${koDate(end)} 기록</div>
   </div>`;
 }

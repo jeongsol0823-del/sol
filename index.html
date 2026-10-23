@@ -106,6 +106,8 @@ a.btn{text-decoration:none;display:inline-block}
 .pill.green{background:var(--green-bg);color:var(--green)}
 .pill.blue{background:rgba(79,124,255,.12);color:var(--accent)}
 .pill.red{background:var(--red-bg);color:var(--red)}
+.pill.gray{background:rgba(255,255,255,.06);color:var(--text2)}
+.cert-school{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-top:8px}
 
 .video-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
 .video-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color .15s}
@@ -444,12 +446,13 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
         <div class="admin-form">
           <div class="form-group"><label>주차</label><select class="form-select" id="ci-week"></select></div>
           <div class="form-group"><label>과제 제목</label><input class="form-input" id="ci-title" placeholder="예: 어휘 30개 암기 확인"></div>
-          <div class="form-group full"><label>제출 방식</label><select class="form-select" id="ci-type"><option value="check">체크형 (완료 확인만)</option><option value="photo">사진 인증 (Storage 버킷 필요)</option></select></div>
+          <div class="form-group"><label>제출 방식</label><select class="form-select" id="ci-type"><option value="check">체크형 (완료 확인만)</option><option value="photo">사진 인증</option></select></div>
+          <div class="form-group"><label>마감일 (비우면 마감 없음)</label><input class="form-input" type="date" id="ci-due"></div>
         </div>
         <button class="btn blue sm" style="margin-top:8px" onclick="addCertItem()">과제 등록 (전체 학생 대상)</button>
-        <div style="font-size:11px;color:var(--text2);margin-top:6px">※ 사진 인증은 Supabase Storage에 <code>cert-photos</code> 버킷(Public)을 먼저 만들어주셔야 동작해요.</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:6px">마감일이 지나면 학교별로 <b>미제출 학생</b>도 보여요.</div>
       </div>
-      <div class="section-head" style="margin-top:24px"><h2>제출 현황</h2></div>
+      <div class="section-head" style="margin-top:24px"><h2>과제 목록 · 제출 현황</h2></div>
       <div id="cert-submission-list"></div>
     </div>
 
@@ -586,7 +589,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     </div>
 
     <div class="section" id="s-cert">
-      <div class="section-head"><h2>내 인증 과제</h2></div>
+      <div class="section-head"><h2>내 인증 과제</h2><div id="cert-my-summary" style="font-size:13px;color:var(--text2)"></div></div>
       <div id="cert-my-items"></div>
     </div>
 
@@ -2190,6 +2193,33 @@ async function addCertWeek(){
   renderCertAdmin();
   notify('인증 주차가 추가되었습니다.','success');
 }
+/* --- 인증 공통 --- */
+// 과제 마감: 마감일 다음 날부터 '마감 지남'
+function certPastDue(item){return !!item.due_date&&todayStr()>item.due_date;}
+function certStudents(){return db.users.filter(u=>u.role==='student'&&u.status==='active');}
+// 학생의 가장 최근 제출 (재제출하면 예전 거절 기록은 지워져요)
+function certSubOf(itemId,sid){return db.certSubmissions.filter(s=>s.item_id===itemId&&s.student_id===sid).sort((a,b)=>new Date(b.submitted_at||0)-new Date(a.submitted_at||0))[0]||null;}
+function certLate(item,sub){return !!(item.due_date&&sub&&sub.submitted_at&&ymd(new Date(sub.submitted_at))>item.due_date);}
+// 상태: approved 통과 / pending 확인 대기 / rejected 미통과 / missing 미제출(마감 지남) / open 미제출(마감 전)
+function certState(item,sub){
+  if(sub)return sub.status==='approved'?'approved':sub.status==='rejected'?'rejected':'pending';
+  return certPastDue(item)?'missing':'open';
+}
+const CERT_LABEL={approved:['통과','green'],pending:['확인 대기중','amber'],rejected:['미통과 - 재제출 필요','red'],missing:['미제출','red'],open:['미제출','gray']};
+function certPill(state){const [t,c]=CERT_LABEL[state];return `<span class="pill ${c}">${t}</span>`;}
+function certDueText(item){
+  if(!item.due_date)return '마감 없음';
+  const d=daysUntil(item.due_date);
+  return `${mdWd(item.due_date)}까지 · ${d>0?'D-'+d:d===0?'오늘 마감':'마감 지남'}`;
+}
+function certSortItems(items){return items.slice().sort((a,b)=>(b.due_date||'9999').localeCompare(a.due_date||'9999')||String(b.created_at||'').localeCompare(String(a.created_at||'')));}
+async function removeCertPhoto(url){
+  if(!url)return;const i=url.indexOf('/cert-photos/');if(i<0)return;
+  try{await sb.storage.from('cert-photos').remove([decodeURIComponent(url.slice(i+'/cert-photos/'.length))]);}catch(e){}
+}
+
+/* --- 인증 — 강사 --- */
+let certEditId=null;
 function renderCertAdmin(){
   const listEl=document.getElementById('cert-week-list');
   listEl.innerHTML=db.certWeeks.length?db.certWeeks.map(w=>`<div class="card row-between"><span>${esc(w.name)}</span></div>`).join(''):'<div class="empty-hint">등록된 인증 주차가 없습니다.</div>';
@@ -2197,36 +2227,97 @@ function renderCertAdmin(){
   sel.innerHTML=db.certWeeks.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')||'<option value="">주차를 먼저 추가하세요</option>';
   const subEl=document.getElementById('cert-submission-list');
   if(!db.certItems.length){subEl.innerHTML='<div class="empty-hint">등록된 인증 과제가 없습니다.</div>';return;}
-  subEl.innerHTML=db.certItems.map(item=>{
-    const subs=db.certSubmissions.filter(s=>s.item_id===item.id);
-    const rows=subs.map(s=>`<div class="row-between" style="padding:6px 0;border-top:1px solid var(--border)">
-      <span>${esc(userName(s.student_id))}${s.photo_url?` · <a href="${esc(s.photo_url)}" target="_blank" rel="noopener" style="color:var(--accent)">사진 보기</a>`:''}</span>
-      ${s.status==='approved'?'<span class="pill green">승인됨</span>':s.status==='rejected'?'<span class="pill red">거절됨</span>':`<div style="display:flex;gap:6px"><button class="btn green sm" onclick="setCertStatus('${esc(s.id)}','approved')">승인</button><button class="btn red sm" onclick="setCertStatus('${esc(s.id)}','rejected')">거절</button></div>`}
-    </div>`).join('')||'<div style="color:var(--text2);font-size:12px;padding:6px 0">아직 제출한 학생이 없습니다.</div>';
-    return `<div class="card"><strong>${esc(item.title)}</strong> ${item.type==='photo'?'<span class="pill amber">사진</span>':'<span class="pill blue">체크</span>'}${rows}</div>`;
+  subEl.innerHTML=certSortItems(db.certItems).map(certItemAdminHtml).join('');
+}
+function certItemAdminHtml(item){
+  const w=db.certWeeks.find(x=>x.id===item.week_id);
+  if(certEditId===item.id){
+    return `<div class="card"><div class="admin-form">
+      <div class="form-group"><label>주차</label><select class="form-select" id="ce-week">${db.certWeeks.map(x=>`<option value="${esc(x.id)}"${x.id===item.week_id?' selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+      <div class="form-group"><label>과제 제목</label><input class="form-input" id="ce-title" value="${esc(item.title)}"></div>
+      <div class="form-group"><label>제출 방식</label><select class="form-select" id="ce-type"><option value="check"${item.type!=='photo'?' selected':''}>체크형</option><option value="photo"${item.type==='photo'?' selected':''}>사진 인증</option></select></div>
+      <div class="form-group"><label>마감일 (비우면 마감 없음)</label><input class="form-input" type="date" id="ce-due" value="${esc(item.due_date||'')}"></div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px"><button class="btn blue sm" onclick="saveCertItem('${esc(item.id)}')">저장</button><button class="btn sm" onclick="certEditId=null;renderCertAdmin()">취소</button></div></div>`;
+  }
+  const past=certPastDue(item);
+  const students=certStudents();
+  const rows=students.map(u=>{const sub=certSubOf(item.id,u.id);return{u,sub,state:certState(item,sub)};});
+  const cnt=k=>rows.filter(r=>r.state===k).length;
+  const submitted=rows.filter(r=>r.sub).length;
+  // 학교별로 묶기
+  const groups={};rows.forEach(r=>{const k=r.u.school||'학교 미지정';(groups[k]=groups[k]||[]).push(r);});
+  const schoolNames=Object.keys(groups).sort((a,b)=>(a==='학교 미지정')-(b==='학교 미지정')||a.localeCompare(b));
+  const subRow=r=>`<div class="row-between" style="padding:6px 0;border-top:1px solid var(--border);gap:8px">
+      <span>${esc(r.u.name)}${certLate(item,r.sub)?' <span class="pill amber">늦게 제출</span>':''}${r.sub.photo_url?` · <a href="${esc(r.sub.photo_url)}" target="_blank" rel="noopener" style="color:var(--accent)">사진 보기</a>`:''}</span>
+      ${r.state==='pending'?`<div style="display:flex;gap:6px"><button class="btn green sm" onclick="setCertStatus('${esc(r.sub.id)}','approved')">통과</button><button class="btn red sm" onclick="setCertStatus('${esc(r.sub.id)}','rejected')">미통과</button></div>`
+        :r.state==='approved'?`<span style="display:flex;gap:6px;align-items:center">${certPill('approved')}<button class="btn sm" onclick="setCertStatus('${esc(r.sub.id)}','rejected')">미통과로</button></span>`
+        :`<span style="display:flex;gap:6px;align-items:center"><span class="pill red">미통과 · 재제출 대기</span><button class="btn sm" onclick="setCertStatus('${esc(r.sub.id)}','approved')">통과로</button></span>`}
+    </div>`;
+  const schoolHtml=schoolNames.map(sc=>{
+    const g=groups[sc];const subs=g.filter(r=>r.sub);const miss=g.filter(r=>!r.sub);
+    return `<div class="cert-school"><div class="row-between"><strong style="font-size:13px">${esc(sc)}</strong><span style="font-size:12px;color:var(--text2)">제출 ${subs.length}/${g.length}</span></div>
+      ${subs.map(subRow).join('')||'<div style="color:var(--text2);font-size:12px;padding:4px 0">제출한 학생이 없어요.</div>'}
+      ${miss.length?(past?`<div style="padding:6px 0;border-top:1px solid var(--border);font-size:13px"><span class="pill red">미제출 ${miss.length}명</span> ${miss.map(r=>esc(r.u.name)).join(', ')}</div>`
+        :`<div style="padding:6px 0;border-top:1px solid var(--border);font-size:12px;color:var(--text3)">아직 안 낸 학생 ${miss.length}명 · ${item.due_date?'마감일이 지나면 이름이 보여요':'마감일을 정하면 마감 후 이름이 보여요'}</div>`):''}
+    </div>`;
   }).join('');
+  return `<div class="card">
+    <div class="row-between" style="gap:8px;align-items:flex-start">
+      <div><strong>${esc(item.title)}</strong> ${item.type==='photo'?'<span class="pill amber">사진</span>':'<span class="pill blue">체크</span>'}
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">${esc(w?w.name:'')} · <span style="color:${past?'var(--red)':'var(--text2)'}">${certDueText(item)}</span></div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">제출 ${submitted}/${students.length} · 통과 ${cnt('approved')} · 확인 대기 ${cnt('pending')} · 미통과 ${cnt('rejected')}${past?` · <b style="color:var(--red)">미제출 ${cnt('missing')}</b>`:''}</div></div>
+      <div style="display:flex;gap:6px;flex-shrink:0"><button class="btn sm" onclick="certEditId='${esc(item.id)}';renderCertAdmin()">수정</button><button class="btn red sm" onclick="deleteCertItem('${esc(item.id)}')">삭제</button></div>
+    </div>
+    <details${cnt('pending')||past?' open':''} style="margin-top:8px"><summary style="font-size:12px;color:var(--text2);cursor:pointer">학교별 제출 현황</summary>${schoolHtml||'<div class="empty-hint">학생이 없어요.</div>'}</details>
+  </div>`;
 }
 async function addCertItem(){
   const weekId=document.getElementById('ci-week').value;
   const title=document.getElementById('ci-title').value.trim();
   const type=document.getElementById('ci-type').value;
+  const due=document.getElementById('ci-due').value||null;
   if(!weekId){notify('주차를 먼저 추가하세요.','error');return;}
   if(!title){notify('과제 제목을 입력하세요.','error');return;}
-  const row={id:uid('ci_'),week_id:weekId,title,type,targets:null};
+  const row={id:uid('ci_'),week_id:weekId,title,type,targets:null,due_date:due};
   const{error}=await sb.from('cert_items').insert(row);
-  if(error){notify('등록 실패: '+error.message,'error');return;}
+  if(error){notify('등록 실패: '+error.message+(String(error.message).includes('due_date')?' (schema_add13.sql을 실행했는지 확인해주세요)':''),'error');return;}
+  row.created_at=new Date().toISOString();
   db.certItems.push(row);
-  document.getElementById('ci-title').value='';
+  document.getElementById('ci-title').value='';document.getElementById('ci-due').value='';
   renderCertAdmin();
   notify('인증 과제가 등록되었습니다.','success');
 }
+async function saveCertItem(itemId){
+  const item=db.certItems.find(x=>x.id===itemId);if(!item)return;
+  const upd={week_id:document.getElementById('ce-week').value,title:document.getElementById('ce-title').value.trim(),type:document.getElementById('ce-type').value,due_date:document.getElementById('ce-due').value||null};
+  if(!upd.title){notify('과제 제목을 입력하세요.','error');return;}
+  const{error}=await sb.from('cert_items').update(upd).eq('id',itemId);
+  if(error){notify('수정 실패: '+error.message,'error');return;}
+  Object.assign(item,upd);certEditId=null;renderCertAdmin();
+  notify('과제를 수정했습니다.','success');
+}
+async function deleteCertItem(itemId){
+  const item=db.certItems.find(x=>x.id===itemId);if(!item)return;
+  const subs=db.certSubmissions.filter(s=>s.item_id===itemId);
+  if(!confirm(`"${item.title}" 과제를 삭제할까요?${subs.length?`\n\n학생 제출 ${subs.length}건(사진 포함)도 함께 지워지고 되돌릴 수 없어요.`:''}`))return;
+  const r1=await sb.from('cert_submissions').delete().eq('item_id',itemId);
+  if(r1.error){notify('삭제 실패: '+r1.error.message,'error');return;}
+  const r2=await sb.from('cert_items').delete().eq('id',itemId);
+  if(r2.error){notify('삭제 실패: '+r2.error.message,'error');return;}
+  subs.forEach(s=>removeCertPhoto(s.photo_url));
+  db.certSubmissions=db.certSubmissions.filter(s=>s.item_id!==itemId);
+  db.certItems=db.certItems.filter(x=>x.id!==itemId);
+  renderCertAdmin();
+  notify('과제를 삭제했습니다.','info');
+}
 async function setCertStatus(subId,status){
-  await sb.from('cert_submissions').update({status}).eq('id',subId);
+  const{error}=await sb.from('cert_submissions').update({status}).eq('id',subId);
+  if(error){notify('저장 실패: '+error.message,'error');return;}
   const s=db.certSubmissions.find(x=>x.id===subId);if(s)s.status=status;
   renderCertAdmin();
-  notify(status==='approved'?'승인했습니다.':'거절했습니다.','info');
+  notify(status==='approved'?'통과로 처리했습니다.':'미통과로 처리했어요. 학생 화면에 "미통과 - 재제출 필요"로 보여요.','info');
 }
-
 /* ===================== 출석 — 강사 ===================== */
 function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function renderAttendanceForm(){
@@ -2354,7 +2445,25 @@ function buildReportData(studentId){
   const late=attRecs.filter(a=>a.status==='late').length;
   const absent=attRecs.filter(a=>a.status==='absent').length;
   const grammar=(grammarOk(studentId)||db.progress.some(p=>p.student_id===studentId&&isGrammar(db.videos.find(v=>v.id===p.video_id))))?grammarSummary(studentId):null;
-  return{student,examRows,watched,total:videoList.length,avgPct,present,late,absent,vocab:vocabReport(studentId),grammar};
+  return{student,examRows,watched,total:videoList.length,avgPct,present,late,absent,vocab:vocabReport(studentId),grammar,cert:certReport(studentId)};
+}
+// 성적표용 인증 과제 요약: 마감이 지났거나 이미 낸 과제 기준
+function certReport(sid){
+  if(!db.certItems.length)return null;
+  const list=certSortItems(db.certItems).map(item=>{const sub=certSubOf(item.id,sid);return{item,sub,state:certState(item,sub)};});
+  const counted=list.filter(x=>x.state!=='open');
+  return{list,counted:counted.length,passed:list.filter(x=>x.state==='approved').length,
+    todo:list.filter(x=>x.state==='missing'||x.state==='rejected'),open:list.filter(x=>x.state==='open').length};
+}
+function certReportHTML(c){
+  if(!c)return'';
+  const rate=c.counted?Math.round(c.passed/c.counted*100):0;
+  return `<div class="card">
+    <div class="row-between"><strong>인증 과제</strong><span>통과 <b>${c.passed}</b>/${c.counted}${c.counted?` <span style="color:var(--text2);font-size:12px">(${rate}%)</span>`:''}</span></div>
+    <div class="progress-bar"><div class="progress-bar-fill" style="width:${rate}%;background:var(--green)"></div></div>
+    ${c.todo.length?`<div style="font-size:12px;color:var(--text2);margin:10px 0 4px">해야 할 과제</div>`+c.todo.map(x=>`<div class="row-between" style="gap:6px;padding:3px 0"><span>${esc(x.item.title)} <span style="font-size:12px;color:var(--text2)">${x.item.due_date?mdWd(x.item.due_date)+' 마감':''}</span></span>${certPill(x.state)}</div>`).join(''):''}
+    ${c.open?`<div style="font-size:12px;color:var(--text2);margin-top:8px">마감 전 과제 ${c.open}개</div>`:''}
+  </div>`;
 }
 // 성적표용 어휘 미션 요약: 지금 도전 중인 미션, 수행률(전체 미션 중 클리어한 비율)
 function vocabReport(sid){
@@ -2400,6 +2509,7 @@ function renderReportCardHTML(d){
     </div>
     <div class="card row-between"><span>출석</span><span>출석 ${d.present} · 지각 ${d.late} · 결석 ${d.absent}</span></div>
     ${vocabReportHTML(d.vocab)}
+    ${certReportHTML(d.cert)}
     ${d.grammar&&d.grammar.total?`<div class="card"><div class="row-between"><strong>문법 기초</strong><span>완강 <b>${d.grammar.done}</b>/${d.grammar.total}강 · 진도율 ${d.grammar.avg}%</span></div>
       <div class="progress-bar"><div class="progress-bar-fill" style="width:${d.grammar.avg}%;background:var(--green)"></div></div>
       <div style="font-size:12px;color:var(--text2);margin-top:8px">${d.grammar.next?`다음 강의: ${d.grammar.next.no}강 ${esc(d.grammar.next.v.title)}`:'모든 강의 완강'}</div></div>`:''}
@@ -2466,7 +2576,10 @@ function weeklyReportData(sid,start,end){
   });
   // 시험: 기간 안에 제출한 시험
   const exams=db.examResponses.filter(r=>u&&r.student_name===u.name&&isSubmitted(r)&&inRange(r.submitted_at,start,end)).map(r=>({r,ex:db.exams.find(x=>x.id===r.exam_id)}));
-  return{u,att,vids,vocab,vocabStarted:!!myTrack,exams,grammar};
+  // 인증 과제: 마감일이 기간 안에 있거나, 기간 안에 제출한 과제
+  const certs=certSortItems(db.certItems).map(item=>{const sub=certSubOf(item.id,sid);return{item,sub,state:certState(item,sub)};})
+    .filter(x=>(x.item.due_date&&x.item.due_date>=start&&x.item.due_date<=end)||(x.sub&&inRange(x.sub.submitted_at,start,end))).reverse();
+  return{u,att,vids,vocab,vocabStarted:!!myTrack,exams,grammar,certs};
 }
 // 학부모용 A4 주간 성적표 (밝은 화면, 이 모양 그대로 PDF가 돼요)
 function parentReportHTML(sid,note,start,end){
@@ -2507,6 +2620,13 @@ function parentReportHTML(sid,note,start,end){
     return box('어휘 미션',rows+
       `<div style="font-size:12px;color:${C.sub};margin-top:8px">누적 ${t.clearedAll}/${t.total}개 완료${curTxt}</div>`,sub);
   }).join('');
+  // 인증 과제 (이 기간에 마감이거나 제출한 과제가 있을 때만)
+  const certColor={approved:C.green,pending:C.blue,rejected:C.red,missing:C.red,open:C.sub};
+  const certText={approved:'통과',pending:'확인 중',rejected:'미통과 · 재제출 필요',missing:'미제출',open:'마감 전'};
+  const certBox=d.certs.length?box('인증 과제',d.certs.map(({item,sub,state})=>`<div class="pb" style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid ${C.line};font-size:14px">
+      <span>${esc(item.title)}<span style="display:block;font-size:12px;color:${C.sub}">${item.due_date?mdWd(item.due_date)+' 마감':'마감 없음'}${certLate(item,sub)?' · 늦게 제출':''}</span></span>
+      <span style="color:${certColor[state]};font-weight:700;white-space:nowrap">${certText[state]}</span></div>`).join(''),
+    `통과 <b style="color:${C.ink}">${d.certs.filter(x=>x.state==='approved').length}/${d.certs.length}</b>`):'';
   // 시험
   const examBox=box('시험 성적',d.exams.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">${d.exams.map(({r,ex})=>{
       const score=ex&&descPending(ex,r)?`객관식 ${r.points_earned}/${examObjTotal(ex)}점 (주관식 채점 중)`:`${r.points_earned}/${r.points_total}점 (${r.score}%)`;
@@ -2517,7 +2637,7 @@ function parentReportHTML(sid,note,start,end){
       <div><div style="font-size:13px;color:${C.blue};font-weight:700;letter-spacing:1px">정말 쏠쏠한 국어</div><div style="font-size:26px;font-weight:800;margin-top:2px">주간 학습 리포트</div></div>
       <div style="text-align:right"><div style="font-size:20px;font-weight:700">${esc(u?u.name:'')} 학생</div><div style="font-size:13px;color:${C.sub}">${u&&u.school?esc(u.school)+' '+gradeName(gradeAt(u,end),end,u.school)+' · ':''}${mdWd(start)} ~ ${mdWd(end)}</div></div>
     </div>
-    ${noteBox}${attBox}${vocabBox}${examBox}${gramBox}${vidBox}
+    ${noteBox}${attBox}${vocabBox}${certBox}${examBox}${gramBox}${vidBox}
     <div class="pb" style="font-size:11px;color:#9aa1b0;text-align:center;margin-top:18px">정말 쏠쏠한 국어 · 쏠T · ${koDate(start)} ~ ${koDate(end)} 기록</div>
   </div>`;
 }
@@ -2639,45 +2759,60 @@ async function deleteParentReport(id){
 
 /* ===================== 인증 — 학생 ===================== */
 function renderCertMy(){
-  const el=document.getElementById('cert-my-items');
-  if(!db.certItems.length){el.innerHTML='<div class="empty-hint">등록된 인증 과제가 없습니다.</div>';return;}
-  el.innerHTML=db.certItems.map(item=>{
+  const el=document.getElementById('cert-my-items');const sumEl=document.getElementById('cert-my-summary');
+  if(!db.certItems.length){el.innerHTML='<div class="empty-hint">등록된 인증 과제가 없습니다.</div>';if(sumEl)sumEl.innerHTML='';return;}
+  const list=db.certItems.map(item=>{const sub=certSubOf(item.id,session.id);return{item,sub,state:certState(item,sub)};});
+  const done=list.filter(x=>x.sub).length;
+  if(sumEl)sumEl.innerHTML=`제출 <b style="color:var(--text)">${done}</b>/${list.length} · 미제출 <b style="color:${list.some(x=>x.state==='missing')?'var(--red)':'var(--text)'}">${list.length-done}</b>`;
+  // 할 일 먼저: 미통과 → 마감 지난 미제출 → 마감 전 미제출(마감 가까운 순) → 확인 대기 → 통과
+  const order={rejected:0,missing:1,open:2,pending:3,approved:4};
+  list.sort((a,b)=>(order[a.state]-order[b.state])||(a.item.due_date||'9999').localeCompare(b.item.due_date||'9999'));
+  el.innerHTML=list.map(({item,sub,state})=>{
     const w=db.certWeeks.find(x=>x.id===item.week_id);
-    const mySub=db.certSubmissions.find(s=>s.item_id===item.id&&s.student_id===session.id);
-    let statusHtml=item.type==='photo'
-      ?`<div style="display:flex;gap:6px;align-items:center"><input type="file" accept="image/*" id="cert-file-${esc(item.id)}" style="max-width:150px;font-size:11px"><button class="btn blue sm" onclick="submitCertItem('${esc(item.id)}')">제출</button></div>`
-      :`<button class="btn blue sm" onclick="submitCertItem('${esc(item.id)}')">완료 체크</button>`;
-    if(mySub){
-      if(mySub.status==='approved')statusHtml='<span class="pill green">승인됨</span>';
-      else if(mySub.status==='rejected')statusHtml=(item.type==='photo'?`<div style="display:flex;gap:6px;align-items:center"><input type="file" accept="image/*" id="cert-file-${esc(item.id)}" style="max-width:150px;font-size:11px"><button class="btn blue sm" onclick="submitCertItem('${esc(item.id)}')">재제출</button></div>`:`<button class="btn blue sm" onclick="submitCertItem('${esc(item.id)}')">재제출</button>`);
-      else statusHtml='<span class="pill amber">확인 대기중</span>';
-    }
-    return `<div class="card row-between"><div><strong>${esc(item.title)}</strong><div style="font-size:12px;color:var(--text2)">${esc(w?w.name:'')}</div></div>${statusHtml}</div>`;
+    const canSubmit=state==='open'||state==='missing'||state==='rejected';
+    const btnTxt=state==='rejected'?'재제출':item.type==='photo'?'제출':'완료 체크';
+    const form=!canSubmit?'':item.type==='photo'
+      ?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px"><input type="file" accept="image/*" id="cert-file-${esc(item.id)}" style="max-width:190px;font-size:11px"><button class="btn blue sm" onclick="submitCertItem('${esc(item.id)}')">${btnTxt}</button></div>`
+      :`<div style="margin-top:8px"><button class="btn blue sm" onclick="submitCertItem('${esc(item.id)}')">${btnTxt}</button></div>`;
+    const note=state==='missing'?'<div style="font-size:12px;color:var(--red);margin-top:6px">마감이 지났어요. 지금 내도 \'늦게 제출\'로 표시돼요.</div>'
+      :state==='rejected'?'<div style="font-size:12px;color:var(--red);margin-top:6px">쏠T가 확인했는데 통과하지 못했어요. 다시 해서 제출해 주세요.</div>':'';
+    return `<div class="card">
+      <div class="row-between" style="gap:8px;align-items:flex-start">
+        <div><strong>${esc(item.title)}</strong> ${item.type==='photo'?'<span class="pill amber">사진</span>':''}
+          <div style="font-size:12px;color:var(--text2);margin-top:2px">${esc(w?w.name:'')} · <span style="color:${state==='missing'?'var(--red)':'var(--text2)'}">${certDueText(item)}</span>${certLate(item,sub)?' · 늦게 제출':''}</div></div>
+        ${certPill(state)}
+      </div>${note}${form}</div>`;
   }).join('');
 }
 async function submitCertItem(itemId){
-  const item=db.certItems.find(x=>x.id===itemId);
-  const existing=db.certSubmissions.find(s=>s.item_id===itemId&&s.student_id===session.id);
+  const item=db.certItems.find(x=>x.id===itemId);if(!item)return;
+  const existing=certSubOf(itemId,session.id);
   if(existing&&existing.status!=='rejected'){notify('이미 제출했어요.','info');return;}
   let photoUrl=null;
-  if(item&&item.type==='photo'){
+  if(item.type==='photo'){
     const fileEl=document.getElementById('cert-file-'+itemId);
     const file=fileEl&&fileEl.files&&fileEl.files[0];
     if(!file){notify('사진을 선택해주세요.','error');return;}
-    const path=session.id+'/'+Date.now()+'_'+file.name;
+    const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').slice(0,5)||'jpg';
+    const path=session.id+'/'+itemId+'_'+Date.now()+'.'+ext;
     const{error:upErr}=await sb.storage.from('cert-photos').upload(path,file,{upsert:true});
-    if(upErr){notify('사진 업로드 실패: '+upErr.message+' (cert-photos 버킷이 만들어져 있는지 확인해주세요)','error');return;}
+    if(upErr){notify('사진 업로드 실패: '+upErr.message,'error');return;}
     photoUrl=sb.storage.from('cert-photos').getPublicUrl(path).data.publicUrl;
   }
   const row={id:uid('cs_'),item_id:itemId,student_id:session.id,status:'pending',photo_url:photoUrl,submitted_at:new Date().toISOString()};
   const{error}=await sb.from('cert_submissions').insert(row);
   if(error){notify('제출 실패: '+error.message,'error');return;}
-  const exist=db.certSubmissions.find(s=>s.item_id===itemId&&s.student_id===session.id);
-  if(exist)Object.assign(exist,row);else db.certSubmissions.push(row);
-  renderCertMy();
+  // 재제출이면 예전 미통과 기록(과 사진)은 지워요
+  const old=db.certSubmissions.filter(s=>s.item_id===itemId&&s.student_id===session.id&&s.status==='rejected');
+  if(old.length){
+    await sb.from('cert_submissions').delete().in('id',old.map(s=>s.id));
+    old.forEach(s=>removeCertPhoto(s.photo_url));
+    db.certSubmissions=db.certSubmissions.filter(s=>!old.includes(s));
+  }
+  db.certSubmissions.push(row);
+  renderCertMy();try{renderMyReportCard();}catch(e){}
   notify('제출했습니다. 쏠T의 확인을 기다려주세요.','success');
 }
-
 /* ===================== 어휘 미션 — 공통 ===================== */
 const VOCAB_PASS=1;              // 다 맞혀야 미션 클리어 (다음 미션이 열려요)
 const TRACK_ORDER=['중학','수능']; // 교재 구분 없이 한 줄로 이어 붙이는 순서

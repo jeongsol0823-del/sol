@@ -180,7 +180,6 @@ table.simple tr:last-child td{border-bottom:none}
 .m-tile.locked{opacity:.42;cursor:not-allowed}
 .hall-card{background:linear-gradient(135deg,rgba(245,158,11,.18),rgba(79,124,255,.08));border:1px solid rgba(245,158,11,.45);border-radius:var(--radius);padding:16px 18px;margin:4px 0 16px}
 .hall-title{font-weight:700;font-size:16px;margin-bottom:12px;text-align:center}
-.hall-medal{font-size:20px;white-space:nowrap}
 .podium{display:flex;align-items:flex-end;justify-content:center;gap:8px;max-width:420px;margin:0 auto}
 .podium-spot{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center}
 .podium-who{text-align:center;padding:0 2px 8px;min-width:0;width:100%}
@@ -194,8 +193,6 @@ table.simple tr:last-child td{border-bottom:none}
 .p1 .podium-block{height:96px;background:linear-gradient(180deg,#f5c542,#d49b12)}
 .p2 .podium-block{height:70px;background:linear-gradient(180deg,#c9d1dc,#8e99a8)}
 .p3 .podium-block{height:52px;background:linear-gradient(180deg,#e0a26b,#b06b33)}
-.hall-edit{display:grid;grid-template-columns:70px 1fr 1fr;gap:8px;align-items:center;margin-top:8px}
-.hall-edit .hall-medal{font-size:14px}
 .stars{color:var(--amber);letter-spacing:1px}
 .stars .off{color:var(--text3)}
 .q-wrap{max-width:580px;margin:0 auto}
@@ -649,7 +646,7 @@ const emptyDb=()=>({
   exams:[],examResponses:[],
   certWeeks:[],certItems:[],certSubmissions:[],
   attendance:[],announcements:[],announcementReads:[],
-  vocabSets:[],vocabWords:[],vocabAttempts:[],reportLinks:[],schools:[],vocabHall:[]
+  vocabSets:[],vocabWords:[],vocabAttempts:[],reportLinks:[],schools:[]
 });
 let db=emptyDb();
 
@@ -699,7 +696,7 @@ async function selectAll(table,orderCols=['id']){
 }
 async function loadAll(attempt=0){
   try{
-    const [u,v,p,va,ar,qs,qw,qq,ex,er,cw,ci,csu,att,an,arr,vs2,vw2,va2,rl,sc,ge,vh]=await Promise.all([
+    const [u,v,p,va,ar,qs,qw,qq,ex,er,cw,ci,csu,att,an,arr,vs2,vw2,va2,rl,sc,ge]=await Promise.all([
       sb.from('users').select('*'),
       sb.from('videos').select('*').order('created_at'),
       selectAll('progress',['student_id','video_id']),
@@ -721,8 +718,7 @@ async function loadAll(attempt=0){
       selectAll('vocab_attempts'),
       sb.from('report_links').select('*').order('created_at',{ascending:false}),
       sb.from('schools').select('*'),
-      sb.from('grammar_enroll').select('*'),
-      sb.from('vocab_hall').select('*')
+      sb.from('grammar_enroll').select('*')
     ]);
     if(u.error)throw new Error(u.error.message);
     if(v.error)throw new Error(v.error.message);
@@ -736,7 +732,6 @@ async function loadAll(attempt=0){
     db.vocabSets=(vs2.data)||[];db.vocabWords=(vw2.data)||[];db.vocabAttempts=(va2.data)||[];
     db.reportLinks=(rl&&rl.data)||[];db.schools=(sc&&sc.data)||[];
     db.grammarEnroll=(ge&&ge.data)||[];db.grammarMissing=!!(ge&&ge.error);
-    db.vocabHall=(vh&&vh.data)||[];db.vocabHallMissing=!!(vh&&vh.error);
   }catch(e){
     if(attempt<3){
       document.querySelector('.loading-text').textContent=`재연결 중... (${attempt+1}/3)`;
@@ -2754,14 +2749,28 @@ function maskName(name){
   if(c.length===2)return c[0]+'*';
   return c[0]+'*'.repeat(c.length-2)+c[c.length-1];
 }
-function hallEntry(rank){return db.vocabHall.find(h=>h.rank===rank)||{rank,school:'',name:''};}
+// 학생 기록으로 자동 순위: 클리어한 미션이 많은 순, 같으면 그 개수를 먼저 달성한 순 (1개 이상 클리어한 학생만)
+function hallRanking(){
+  const missionIds=new Set(missionsOf().map(s=>s.id));
+  const firstClear={}; // 'sid|setId' → 처음 다 맞힌 시각
+  db.vocabAttempts.forEach(a=>{
+    if(!missionIds.has(a.set_id)||!isCleared(a))return;
+    const k=a.student_id+'|'+a.set_id;const t=new Date(a.submitted_at).getTime();
+    if(!(k in firstClear)||t<firstClear[k])firstClear[k]=t;
+  });
+  const per={};
+  Object.keys(firstClear).forEach(k=>{const sid=k.split('|')[0];const p=per[sid]||(per[sid]={n:0,at:0});p.n++;p.at=Math.max(p.at,firstClear[k]);});
+  return db.users.filter(u=>u.role==='student'&&u.status==='active'&&per[u.id])
+    .map(u=>({u,name:u.name,school:u.school||'',n:per[u.id].n,at:per[u.id].at}))
+    .sort((a,b)=>(b.n-a.n)||(a.at-b.at));
+}
 function hallViewHtml(){
-  const list=[1,2,3].map(hallEntry).filter(h=>(h.name||'').trim()||(h.school||'').trim());
-  if(!list.length)return'';
+  const top=hallRanking().slice(0,3);
+  if(!top.length)return'';
   // 시상대: 왼쪽 2등 · 가운데 1등(가장 높음) · 오른쪽 3등
-  const spot=r=>{const h=hallEntry(r);const has=(h.name||'').trim()||(h.school||'').trim();
+  const spot=r=>{const h=top[r-1];
     return `<div class="podium-spot p${r}">
-      <div class="podium-who">${has?`<div class="podium-medal">${HALL_MEDALS[r-1]}</div><div class="podium-name">${esc(maskName(h.name))}</div><div class="podium-school">${esc(h.school||'')}</div>`:'<div class="podium-empty">-</div>'}</div>
+      <div class="podium-who">${h?`<div class="podium-medal">${HALL_MEDALS[r-1]}</div><div class="podium-name">${esc(maskName(h.name))}</div><div class="podium-school">${esc(h.school)}</div><div class="podium-school">미션 ${h.n}개</div>`:'<div class="podium-empty">-</div>'}</div>
       <div class="podium-block">${r}</div></div>`;};
   return `<div class="hall-card"><div class="hall-title">🏆 명예의 전당</div>
     <div class="podium">${spot(2)}${spot(1)}${spot(3)}</div>
@@ -2770,36 +2779,16 @@ function hallViewHtml(){
 function renderHallStudent(){const el=document.getElementById('vs-hall');if(el)el.innerHTML=hallViewHtml();}
 function renderHallAdmin(){
   const el=document.getElementById('vt-hall');if(!el)return;
-  if(db.vocabHallMissing){el.innerHTML=`<div class="card alert-card">명예의 전당을 쓰려면 Supabase에서 <b>schema_add12.sql</b>을 실행해야 해요.</div>`;return;}
-  const schools=[...new Set(db.schools.map(s=>s.name).concat(db.users.map(u=>u.school)).filter(Boolean))];
-  const students=db.users.filter(u=>u.role==='student');
+  const rank=hallRanking().slice(0,10);
   el.innerHTML=`<div class="card">
-    <div class="vhint" style="margin-top:0">학생 화면 어휘 탭 맨 위에 보여요. 이름은 가운데 글자가 <b>*</b>로 가려져요 (예: 김민준 → ${esc(maskName('김민준'))}).</div>
-    <datalist id="hall-schools">${schools.map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
-    <datalist id="hall-students">${students.map(u=>`<option value="${esc(u.name)}">`).join('')}</datalist>
-    ${[1,2,3].map(r=>{const h=hallEntry(r);return `<div class="hall-edit">
-      <span class="hall-medal">${HALL_MEDALS[r-1]} ${r}등</span>
-      <input class="form-input" id="hall-school-${r}" list="hall-schools" placeholder="학교" value="${esc(h.school||'')}">
-      <input class="form-input" id="hall-name-${r}" list="hall-students" placeholder="학생 이름" value="${esc(h.name||'')}" onchange="hallFillSchool(${r})">
-    </div>`;}).join('')}
-    <div style="display:flex;gap:6px;margin-top:10px"><button class="btn blue sm" onclick="saveHall()">저장</button><button class="btn sm" onclick="clearHall()">모두 비우기</button></div>
-    <div style="margin-top:12px">${hallViewHtml()||'<div class="empty-hint">아직 비어 있어요. 학생 화면에는 아무것도 안 보여요.</div>'}</div>
+    <div class="vhint" style="margin-top:0">학생 기록으로 <b>자동</b>으로 정해져요. <b>클리어한 미션이 많은 순</b>, 같으면 <b>먼저 달성한 순</b>이에요. 학생 화면 어휘 탭 맨 위에 1~3등이 보이고, 이름은 가운데가 <b>*</b>로 가려져요. 아직 아무도 클리어하지 않았으면 학생 화면에 안 보여요.</div>
+    ${hallViewHtml()||'<div class="empty-hint">아직 미션을 클리어한 학생이 없어요.</div>'}
+    ${rank.length?`<details style="margin-top:8px"><summary style="font-size:12px;color:var(--text2);cursor:pointer">순위 10등까지 보기 (강사만 보여요)</summary>
+      <table class="simple" style="margin-top:6px"><thead><tr><th>#</th><th>학생</th><th>학교</th><th>미션</th><th>달성</th></tr></thead><tbody>
+      ${rank.map((h,i)=>`<tr><td>${i+1}</td><td>${esc(h.name)}</td><td>${esc(h.school)}</td><td>${h.n}개</td><td style="font-size:12px;color:var(--text2)">${fmtMD(ymd(new Date(h.at)))}</td></tr>`).join('')}
+      </tbody></table></details>`:''}
   </div>`;
 }
-// 학생 이름을 고르면 학교 칸이 비어 있을 때 그 학생의 학교를 채워 줘요
-function hallFillSchool(r){
-  const name=document.getElementById('hall-name-'+r).value.trim();const sc=document.getElementById('hall-school-'+r);
-  const u=db.users.find(x=>x.role==='student'&&x.name===name);
-  if(u&&u.school&&!sc.value.trim())sc.value=u.school;
-}
-async function saveHall(){
-  const rows=[1,2,3].map(r=>({id:'rank'+r,rank:r,school:document.getElementById('hall-school-'+r).value.trim(),name:document.getElementById('hall-name-'+r).value.trim(),updated_at:new Date().toISOString()}));
-  const{error}=await sb.from('vocab_hall').upsert(rows);
-  if(error){notify('저장 실패: '+error.message,'error');return;}
-  db.vocabHall=rows;renderHallAdmin();notify('명예의 전당을 저장했어요.','success');
-}
-function clearHall(){[1,2,3].forEach(r=>{document.getElementById('hall-school-'+r).value='';document.getElementById('hall-name-'+r).value='';});saveHall();}
-
 /* ===================== 어휘 미션 — 강사 ===================== */
 // 어휘 미션을 한 번이라도 풀었으면 '어휘', 아직 안 했으면 null
 function studentVocabTrack(sid){

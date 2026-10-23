@@ -97,3 +97,7 @@ end $$;
 
 grant execute on function student_qa_list(text), student_qa_submit(text, jsonb), teacher_qa_list(text),
   teacher_qa_answer(text, text, text), teacher_qa_delete(text, text) to anon, authenticated;
+
+-- 질문 사진: 목록 보기(누구나 전체 파일 목록을 불러오기)를 막아요.
+-- 사진 주소를 아는 사람(질문한 학생 본인과 쏠T 화면)만 볼 수 있어요. 공개 저장소라 주소로 보기는 그대로 돼요.
+drop policy if exists "qa-photos read" on storage.objects;

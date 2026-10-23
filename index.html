@@ -263,7 +263,6 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     <button data-t="t-qa" onclick="switchTab('teacher','t-qa')">질문답변</button>
     <button data-t="t-exams" onclick="switchTab('teacher','t-exams')">시험</button>
     <button data-t="t-vocab" onclick="switchTab('teacher','t-vocab')">어휘<span id="vocab-tab-badge"></span></button>
-    <button data-t="t-clinic" onclick="switchTab('teacher','t-clinic')">클리닉</button>
     <button data-t="t-cert" onclick="switchTab('teacher','t-cert')">인증</button>
     <button data-t="t-attendance" onclick="switchTab('teacher','t-attendance')">출석</button>
     <button data-t="t-announce" onclick="switchTab('teacher','t-announce')">공지사항</button>
@@ -411,21 +410,6 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div id="vocab-set-list"></div>
     </div>
 
-    <div class="section" id="t-clinic">
-      <div class="section-head"><h2>클리닉 슬롯 등록</h2></div>
-      <div class="card">
-        <div class="admin-form">
-          <div class="form-group"><label>이름</label><input class="form-input" id="cl-label" placeholder="예: 화요일 저녁반"></div>
-          <div class="form-group"><label>요일/날짜</label><input class="form-input" id="cl-date" placeholder="예: 매주 화 또는 2026-09-01"></div>
-          <div class="form-group"><label>시간</label><input class="form-input" id="cl-time" placeholder="예: 19:00"></div>
-          <div class="form-group"><label>정원</label><input class="form-input" id="cl-capacity" type="number" value="5"></div>
-        </div>
-        <button class="btn blue sm" style="margin-top:8px" onclick="addClinicSlot()">슬롯 추가</button>
-      </div>
-      <div class="section-head" style="margin-top:24px"><h2>슬롯 &amp; 예약 현황</h2></div>
-      <div id="clinic-slot-list"></div>
-    </div>
-
     <div class="section" id="t-cert">
       <div class="section-head"><h2>인증 주차 관리</h2></div>
       <div class="card"><div style="display:flex;gap:8px"><input class="form-input" id="cw-name" placeholder="예: 8월 4주차" style="flex:1"><button class="btn blue sm" onclick="addCertWeek()">추가</button></div></div>
@@ -505,7 +489,6 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     <button data-t="s-qa" onclick="switchTab('student','s-qa')">질문답변</button>
     <button data-t="s-exams" onclick="switchTab('student','s-exams')">시험</button>
     <button data-t="s-vocab" onclick="switchTab('student','s-vocab')">어휘</button>
-    <button data-t="s-clinic" onclick="switchTab('student','s-clinic')">클리닉</button>
     <button data-t="s-cert" onclick="switchTab('student','s-cert')">인증</button>
     <button data-t="s-attendance" onclick="switchTab('student','s-attendance')">출석</button>
     <button data-t="s-announce" onclick="switchTab('student','s-announce')">공지사항<span id="ann-tab-badge"></span></button>
@@ -577,13 +560,6 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div id="vocab-take-area"></div>
     </div>
 
-    <div class="section" id="s-clinic">
-      <div class="section-head"><h2>클리닉 예약</h2></div>
-      <div id="clinic-book-list"></div>
-      <div class="section-head" style="margin-top:24px"><h2>내 예약</h2></div>
-      <div id="my-clinic-list"></div>
-    </div>
-
     <div class="section" id="s-cert">
       <div class="section-head"><h2>내 인증 과제</h2></div>
       <div id="cert-my-items"></div>
@@ -638,7 +614,6 @@ const emptyDb=()=>({
   videoAccess:[],accessRequests:[],grammarEnroll:[],
   qaSchools:[],qaWeeks:[],qaQuestions:[],
   exams:[],examResponses:[],
-  clinicSlots:[],clinicRequests:[],
   certWeeks:[],certItems:[],certSubmissions:[],
   attendance:[],announcements:[],announcementReads:[],
   vocabSets:[],vocabWords:[],vocabAttempts:[],reportLinks:[],schools:[]
@@ -691,7 +666,7 @@ async function selectAll(table,orderCols=['id']){
 }
 async function loadAll(attempt=0){
   try{
-    const [u,v,p,va,ar,qs,qw,qq,ex,er,cs,cr,cw,ci,csu,att,an,arr,vs2,vw2,va2,rl,sc,ge]=await Promise.all([
+    const [u,v,p,va,ar,qs,qw,qq,ex,er,cw,ci,csu,att,an,arr,vs2,vw2,va2,rl,sc,ge]=await Promise.all([
       sb.from('users').select('*'),
       sb.from('videos').select('*').order('created_at'),
       selectAll('progress',['student_id','video_id']),
@@ -702,8 +677,6 @@ async function loadAll(attempt=0){
       sb.from('qa_questions').select('*').order('created_at',{ascending:false}),
       sb.from('exams').select('*').order('created_at',{ascending:false}),
       selectAll('exam_responses'),
-      sb.from('clinic_slots').select('*'),
-      sb.from('clinic_requests').select('*'),
       sb.from('cert_weeks').select('*'),
       sb.from('cert_items').select('*'),
       sb.from('cert_submissions').select('*'),
@@ -724,7 +697,6 @@ async function loadAll(attempt=0){
     db.videoAccess=(va.data)||[];db.accessRequests=(ar.data)||[];
     db.qaSchools=(qs.data)||[];db.qaWeeks=(qw.data)||[];db.qaQuestions=(qq.data)||[];
     db.exams=(ex.data)||[];db.examResponses=(er.data)||[];
-    db.clinicSlots=(cs.data)||[];db.clinicRequests=(cr.data)||[];
     db.certWeeks=(cw.data)||[];db.certItems=(ci.data)||[];db.certSubmissions=(csu.data)||[];
     db.attendance=(att.data)||[];db.announcements=(an.data)||[];db.announcementReads=(arr.data)||[];
     db.vocabSets=(vs2.data)||[];db.vocabWords=(vw2.data)||[];db.vocabAttempts=(va2.data)||[];
@@ -971,7 +943,6 @@ function launchTeacher(){
   renderAccessAdmin();onVideoKindChange();
   renderQaSchools();renderQaWeeks();renderQaQuestions();renderQaFreeAdmin();
   renderExamAdmin();
-  renderClinicAdmin();
   renderCertAdmin();
   renderAttendanceForm();
   renderAnnounceAdmin();
@@ -1053,7 +1024,7 @@ async function rejectStudent(id){
 }
 async function removeStudent(id){
   const u=db.users.find(x=>x.id===id);if(!u)return;
-  if(!confirm(`${u.name} 학생을 삭제할까요?\n\n영상 진도, 복습 신청, 문법 기초 수강, 질문과 사진, 시험, 어휘 미션, 클리닉 예약, 인증 제출과 사진, 출석, 공지 확인 기록까지 모두 지워지고 되돌릴 수 없어요.`))return;
+  if(!confirm(`${u.name} 학생을 삭제할까요?\n\n영상 진도, 복습 신청, 문법 기초 수강, 질문과 사진, 시험, 어휘 미션, 인증 제출과 사진, 출석, 공지 확인 기록까지 모두 지워지고 되돌릴 수 없어요.`))return;
   const sameName=db.users.some(x=>x.id!==id&&x.name===u.name);
   const jobs=[['progress','student_id',id],['video_access','student_id',id],['access_requests','student_id',id],['qa_questions','student_id',id],['clinic_requests','student_id',id],['cert_submissions','student_id',id],['attendance','student_id',id],['announcement_reads','student_id',id],['vocab_attempts','student_id',id],['grammar_enroll','student_id',id]];
   if(!sameName)jobs.push(['exam_responses','student_name',u.name]); // 동명이인이 있으면 시험 기록은 구분할 수 없어 남김
@@ -1068,11 +1039,11 @@ async function removeStudent(id){
   if(error){notify('학생 삭제 실패: '+error.message,'error');return;}
   const keep=r=>r.student_id!==id;
   db.progress=db.progress.filter(keep);db.videoAccess=db.videoAccess.filter(keep);db.accessRequests=db.accessRequests.filter(keep);
-  db.qaQuestions=db.qaQuestions.filter(keep);db.clinicRequests=db.clinicRequests.filter(keep);db.certSubmissions=db.certSubmissions.filter(keep);
+  db.qaQuestions=db.qaQuestions.filter(keep);db.certSubmissions=db.certSubmissions.filter(keep);
   db.attendance=db.attendance.filter(keep);db.announcementReads=db.announcementReads.filter(keep);db.vocabAttempts=db.vocabAttempts.filter(keep);db.grammarEnroll=db.grammarEnroll.filter(keep);
   if(!sameName)db.examResponses=db.examResponses.filter(r=>r.student_name!==u.name);
   db.users=db.users.filter(x=>x.id!==id);
-  renderActive();renderAccessAdmin();renderQaQuestions();renderQaFreeAdmin();renderExamAdmin();renderClinicAdmin();renderCertAdmin();
+  renderActive();renderAccessAdmin();renderQaQuestions();renderQaFreeAdmin();renderExamAdmin();renderCertAdmin();
   renderAttendanceForm();renderAnnounceAdmin();renderReportSelect();renderVocabAdmin();renderVideoAlerts();
   notify(fails.length?`삭제했지만 일부 기록은 지우지 못했어요: ${fails.join(', ')}`:`${u.name} 학생과 모든 기록을 삭제했습니다.`,fails.length?'error':'info');
 }
@@ -1425,7 +1396,6 @@ function launchStudent(){
   renderLectures();renderReviewGrid();renderGrammarGrid();
   populateSqSelects();renderMyQa();renderMyQaFree();
   renderMyExamResults();
-  renderClinicBook();renderMyClinic();
   renderCertMy();
   renderMyAttendance();
   renderMyAnnounce();
@@ -2176,84 +2146,6 @@ function renderMyExamResults(){
     const ex=db.exams.find(x=>x.id===r.exam_id);
     return `<div class="card row-between"><span>${esc(ex?ex.name:'(삭제된 시험)')}</span><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">${ex?examScoreText(ex,r):r.score+'%'}${ex&&ex.answers_revealed?` <button class="btn sm" onclick="viewMyExam('${esc(ex.id)}')">정답 보기</button>`:''}</span></div>`;
   }).join('');
-}
-
-/* ===================== 클리닉 — 강사 ===================== */
-async function addClinicSlot(){
-  const label=document.getElementById('cl-label').value.trim();
-  const date=document.getElementById('cl-date').value.trim();
-  const time=document.getElementById('cl-time').value.trim();
-  const capacity=parseInt(document.getElementById('cl-capacity').value)||5;
-  if(!label){notify('슬롯 이름을 입력하세요.','error');return;}
-  const row={id:uid('slot_'),label,slot_date:date,start_time:time,capacity};
-  const{error}=await sb.from('clinic_slots').insert(row);
-  if(error){notify('등록 실패: '+error.message,'error');return;}
-  db.clinicSlots.push(row);
-  ['cl-label','cl-date','cl-time'].forEach(i=>document.getElementById(i).value='');
-  renderClinicAdmin();
-  notify('슬롯이 등록되었습니다.','success');
-}
-function renderClinicAdmin(){
-  const el=document.getElementById('clinic-slot-list');
-  if(!db.clinicSlots.length){el.innerHTML='<div class="empty-hint">등록된 슬롯이 없습니다.</div>';return;}
-  el.innerHTML=db.clinicSlots.map(s=>{
-    const booked=db.clinicRequests.filter(r=>r.slot_id===s.id&&r.status==='confirmed');
-    const names=booked.map(r=>esc(userName(r.student_id))).join(', ')||'-';
-    return `<div class="card row-between">
-      <div><strong>${esc(s.label)}</strong> <span style="color:var(--text2)">${esc(s.slot_date||'')} ${esc(s.start_time||'')}</span><div style="font-size:12px;color:var(--text2);margin-top:4px">예약: ${booked.length}/${s.capacity}명 (${names})</div></div>
-      <button class="btn red sm" onclick="deleteClinicSlot('${esc(s.id)}')">삭제</button>
-    </div>`;
-  }).join('');
-}
-async function deleteClinicSlot(id){
-  if(!confirm('슬롯을 삭제하시겠습니까? 관련 예약도 함께 삭제됩니다.'))return;
-  await sb.from('clinic_requests').delete().eq('slot_id',id);
-  await sb.from('clinic_slots').delete().eq('id',id);
-  db.clinicRequests=db.clinicRequests.filter(r=>r.slot_id!==id);
-  db.clinicSlots=db.clinicSlots.filter(s=>s.id!==id);
-  renderClinicAdmin();
-  notify('슬롯을 삭제했습니다.','info');
-}
-
-/* ===================== 클리닉 — 학생 ===================== */
-function renderClinicBook(){
-  const el=document.getElementById('clinic-book-list');
-  if(!db.clinicSlots.length){el.innerHTML='<div class="empty-hint">예약 가능한 슬롯이 없습니다.</div>';return;}
-  el.innerHTML=db.clinicSlots.map(s=>{
-    const booked=db.clinicRequests.filter(r=>r.slot_id===s.id&&r.status==='confirmed');
-    const mine=booked.some(r=>r.student_id===session.id);
-    const full=booked.length>=s.capacity;
-    return `<div class="card row-between">
-      <div><strong>${esc(s.label)}</strong> <span style="color:var(--text2)">${esc(s.slot_date||'')} ${esc(s.start_time||'')}</span><div style="font-size:12px;color:var(--text2);margin-top:4px">${booked.length}/${s.capacity}명</div></div>
-      ${mine?'<span class="pill green">예약됨</span>':full?'<span class="pill red">마감</span>':`<button class="btn blue sm" onclick="bookClinicSlot('${esc(s.id)}')">예약</button>`}
-    </div>`;
-  }).join('');
-}
-async function bookClinicSlot(slotId){
-  const s=db.clinicSlots.find(x=>x.id===slotId);if(!s)return;
-  const booked=db.clinicRequests.filter(r=>r.slot_id===slotId&&r.status==='confirmed');
-  if(booked.length>=s.capacity){notify('정원이 마감되었습니다.','error');return;}
-  const row={id:uid('cr_'),slot_id:slotId,student_id:session.id,status:'confirmed'};
-  const{error}=await sb.from('clinic_requests').insert(row);
-  if(error){notify('예약 실패: '+error.message,'error');return;}
-  db.clinicRequests.push(row);
-  renderClinicBook();renderMyClinic();
-  notify('예약되었습니다.','success');
-}
-function renderMyClinic(){
-  const el=document.getElementById('my-clinic-list');
-  const mine=db.clinicRequests.filter(r=>r.student_id===session.id&&r.status==='confirmed');
-  if(!mine.length){el.innerHTML='<div class="empty-hint">예약한 클리닉이 없습니다.</div>';return;}
-  el.innerHTML=mine.map(r=>{
-    const s=db.clinicSlots.find(x=>x.id===r.slot_id);
-    return `<div class="card row-between"><span>${esc(s?s.label:'(삭제된 슬롯)')}</span><button class="btn red sm" onclick="cancelClinicReq('${esc(r.id)}')">예약 취소</button></div>`;
-  }).join('');
-}
-async function cancelClinicReq(reqId){
-  await sb.from('clinic_requests').update({status:'cancelled'}).eq('id',reqId);
-  const r=db.clinicRequests.find(x=>x.id===reqId);if(r)r.status='cancelled';
-  renderClinicBook();renderMyClinic();
-  notify('예약을 취소했습니다.','info');
 }
 
 /* ===================== 인증 — 강사 ===================== */

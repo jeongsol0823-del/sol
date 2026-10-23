@@ -127,7 +127,7 @@ table.simple th{text-align:left;color:var(--text2);font-weight:500;font-size:11p
 table.simple td{padding:9px 10px;border-bottom:1px solid var(--border)}
 table.simple tr:last-child td{border-bottom:none}
 
-.exq-row{display:grid;grid-template-columns:36px 92px 190px 64px 1fr 1fr 60px;gap:6px;align-items:center;margin-bottom:6px}
+.exq-row{display:grid;grid-template-columns:36px 92px 170px 170px 64px 1fr 1fr 60px;gap:6px;align-items:center;margin-bottom:6px}
 @media(max-width:700px){.exq-row{grid-template-columns:1fr 1fr;grid-auto-rows:auto}}
 .tag-bar{height:8px;border-radius:4px;background:var(--bg3);overflow:hidden;min-width:80px}
 .tag-bar>div{height:100%}
@@ -377,7 +377,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
           <div class="form-group"><label>구분</label><select class="form-select" id="ex-category"><option value="school">내신</option><option value="regular">정규</option></select></div>
           <div class="form-group"><label>제한시간 (분, 비우면 제한 없음)</label><input class="form-input" id="ex-time" type="number" min="0" placeholder="예: 50"></div>
         </div>
-        <div style="margin:12px 0 4px;font-size:11px;color:var(--text2)">번호 / 객관식·주관식 / 문제 유형 / 배점 / 정답 / 해설(선택)</div>
+        <div style="margin:12px 0 4px;font-size:11px;color:var(--text2)">번호 / 객관식·주관식 / 갈래 / 세부유형 / 배점 / 정답 / 해설(선택)</div>
         <div id="ex-q-rows"></div>
         <button class="btn sm" onclick="addExamQRow()">+ 문항 추가</button>
         <div style="display:flex;gap:6px;margin-top:10px"><button class="btn blue" id="ex-save-btn" onclick="saveExam()">시험 저장</button><button class="btn" id="ex-cancel-btn" style="display:none" onclick="resetExamForm()">수정 취소</button></div>
@@ -388,13 +388,17 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div id="exam-results"><div class="empty-hint">시험 목록에서 "결과 보기"를 눌러주세요.</div></div>
 
       <div class="section-head" style="margin-top:28px"><h2>학생별 약점 유형</h2></div>
-      <div class="vhint" style="margin-top:0">문항에 유형을 달아 둔 시험만 계산돼요. 시험을 볼수록 쌓여서 더 정확해져요.</div>
+      <div class="vhint" style="margin-top:0">문항에 갈래·세부유형을 달아 둔 시험만 계산돼요. 시험을 볼수록 쌓여서 더 정확해져요.</div>
       <div id="tag-analysis"></div>
 
-      <details class="card" style="margin-top:20px"><summary style="cursor:pointer;font-weight:600">문제 유형 목록 관리</summary>
-        <div class="vhint">한 줄에 유형 하나씩 적어요. "영역 · 유형"처럼 쓰면 영역별로 보기 좋아요. 이미 달아 둔 유형 이름을 바꾸면 예전 시험은 예전 이름 그대로 남아요.</div>
-        <textarea class="form-input" id="ex-tag-text" rows="14" oninput="this.dataset.dirty='1'"></textarea>
-        <div style="display:flex;gap:6px;margin-top:8px"><button class="btn blue sm" onclick="saveExamTags()">유형 목록 저장</button><button class="btn sm" onclick="resetExamTags()">기본 목록으로 되돌리기</button></div>
+      <details class="card" style="margin-top:20px"><summary style="cursor:pointer;font-weight:600">갈래 · 세부유형 목록 관리</summary>
+        <div class="vhint">한 줄에 하나씩 적어요. 이미 달아 둔 이름을 바꾸면 예전 시험은 예전 이름 그대로 남아요.</div>
+        <div class="admin-form">
+          <div class="form-group"><label>갈래 (예: 문학 · 표현상 특징)</label><textarea class="form-input" id="ex-tag-text" rows="14" oninput="this.dataset.dirty='1'"></textarea>
+            <div style="display:flex;gap:6px;margin-top:8px"><button class="btn blue sm" onclick="saveExamTags('tag')">갈래 목록 저장</button><button class="btn sm" onclick="resetExamTags('tag')">기본 목록으로</button></div></div>
+          <div class="form-group"><label>세부유형 (예: 함정 · 주어 바꾸기)</label><textarea class="form-input" id="ex-sub-text" rows="14" oninput="this.dataset.dirty='1'"></textarea>
+            <div style="display:flex;gap:6px;margin-top:8px"><button class="btn blue sm" onclick="saveExamTags('sub')">세부유형 목록 저장</button><button class="btn sm" onclick="resetExamTags('sub')">기본 목록으로</button></div></div>
+        </div>
       </details>
     </div>
 
@@ -1842,46 +1846,53 @@ const DEFAULT_EXAM_TAGS=[
   '화법과 작문 · 말하기 전략','화법과 작문 · 글쓰기 계획·고쳐쓰기',
   '서술형 · 서술형·요약'
 ];
-function examTags(){const v=db.settings&&db.settings.exam_types;return Array.isArray(v)&&v.length?v:DEFAULT_EXAM_TAGS;}
-function tagOptions(sel){
-  const list=examTags();
-  return '<option value="">유형 (선택)</option>'+list.map(x=>`<option value="${esc(x)}"${x===sel?' selected':''}>${esc(x)}</option>`).join('')
+// 문제 자체의 세부유형 (함정 종류 등) → app_settings.exam_subtypes
+const DEFAULT_EXAM_SUBTAGS=[
+  '개념 확인','함정 · 주어 바꾸기','함정 · 목적어 바꾸기','함정 · 수식어 바꾸기','함정 · 인과 관계 뒤집기','함정 · 범위 바꾸기 (모두/일부)',
+  '모두 고르시오','적절하지 않은 것 고르기','<보기> ㄱ~ㄹ 고르기','짝짓기·연결하기'
+];
+const TAG_KIND={tag:{key:'exam_types',def:()=>DEFAULT_EXAM_TAGS,box:'ex-tag-text',label:'갈래'},sub:{key:'exam_subtypes',def:()=>DEFAULT_EXAM_SUBTAGS,box:'ex-sub-text',label:'세부유형'}};
+function examTags(kind='tag'){const k=TAG_KIND[kind];const v=db.settings&&db.settings[k.key];return Array.isArray(v)&&v.length?v:k.def();}
+function tagOptions(sel,kind='tag'){
+  const list=examTags(kind);
+  return `<option value="">${TAG_KIND[kind].label} (선택)</option>`+list.map(x=>`<option value="${esc(x)}"${x===sel?' selected':''}>${esc(x)}</option>`).join('')
     +(sel&&!list.includes(sel)?`<option value="${esc(sel)}" selected>${esc(sel)}</option>`:'');
 }
-function renderTagAdmin(){const el=document.getElementById('ex-tag-text');if(el&&!el.dataset.dirty)el.value=examTags().join('\n');}
-async function saveExamTags(){
-  const el=document.getElementById('ex-tag-text');
+function renderTagAdmin(){['tag','sub'].forEach(kind=>{const el=document.getElementById(TAG_KIND[kind].box);if(el&&!el.dataset.dirty)el.value=examTags(kind).join('\n');});}
+async function saveExamTags(kind='tag'){
+  const k=TAG_KIND[kind];const el=document.getElementById(k.box);
   const v=[...new Set(el.value.split('\n').map(s=>s.trim()).filter(Boolean))];
-  if(!v.length){notify('유형을 한 개 이상 적어 주세요.','error');return;}
-  const fail=await teacherRpc('teacher_setting_set',{p_key:'exam_types',p_value:v});
+  if(!v.length){notify(k.label+'을(를) 한 개 이상 적어 주세요.','error');return;}
+  const fail=await teacherRpc('teacher_setting_set',{p_key:k.key,p_value:v});
   if(fail){notify('저장 실패: '+fail,'error');return;}
-  db.settings=db.settings||{};db.settings.exam_types=v;delete el.dataset.dirty;renderTagAdmin();
-  notify(`유형 ${v.length}개를 저장했어요. 새로 추가하는 문항부터 고를 수 있어요.`,'success');
+  db.settings=db.settings||{};db.settings[k.key]=v;delete el.dataset.dirty;renderTagAdmin();
+  notify(`${k.label} ${v.length}개를 저장했어요. 새로 추가하는 문항부터 고를 수 있어요.`,'success');
 }
-function resetExamTags(){const el=document.getElementById('ex-tag-text');el.value=DEFAULT_EXAM_TAGS.join('\n');el.dataset.dirty='1';notify('기본 목록을 불러왔어요. "유형 목록 저장"을 눌러야 적용돼요.','info');}
+function resetExamTags(kind='tag'){const k=TAG_KIND[kind];const el=document.getElementById(k.box);el.value=k.def().join('\n');el.dataset.dirty='1';notify(`기본 ${k.label} 목록을 불러왔어요. "${k.label} 목록 저장"을 눌러야 적용돼요.`,'info');}
 // 학생 한 명의 유형별 정답률 (유형을 달아 둔 문항만, 제출한 시험 전체 누적)
 // 객관식은 맞으면 1, 주관식은 받은 점수/배점 (아직 채점 안 한 주관식은 빼요)
-function tagStats(name){
+function tagStats(name,field='tag'){
   const by={};
   db.examResponses.filter(r=>r.student_name===name&&isSubmitted(r)).forEach(r=>{
     const ex=db.exams.find(x=>x.id===r.exam_id);if(!ex)return;
     const ans=r.answers||{},dp=(r.thoughts&&r.thoughts.__descPoints)||null;
     (ex.questions||[]).forEach(q=>{
-      if(!q.tag)return;
+      const key=q[field];if(!key)return;
       let got;
       if(q.type==='obj')got=String(ans[q.num]||'').trim()!==''&&String(ans[q.num]).trim()===String(q.answer).trim()?1:0;
       else{if(!dp||dp[q.num]==null)return;got=q.points?Math.min(dp[q.num],q.points)/q.points:0;}
-      const s=by[q.tag]||(by[q.tag]={tag:q.tag,n:0,got:0,wrong:[]});
+      const s=by[key]||(by[key]={tag:key,n:0,got:0,wrong:[]});
       s.n++;s.got+=got;if(got<1)s.wrong.push(`${ex.name} ${q.num}번`);
     });
   });
   return Object.values(by).map(s=>Object.assign(s,{rate:Math.round(s.got/s.n*100)})).sort((a,b)=>a.rate-b.rate||b.n-a.n);
 }
 // 약한 유형: 정답률이 낮은 순 (다 맞힌 유형은 빼요)
-function weakTags(name,k=3){return tagStats(name).filter(s=>s.rate<100).slice(0,k);}
+function weakTags(name,k=3,field='tag'){return tagStats(name,field).filter(s=>s.rate<100).slice(0,k);}
 function tagRateColor(r){return r>=80?'var(--green)':r>=50?'var(--amber)':'var(--red)';}
-function tagTableHtml(stats){
-  return `<table class="simple"><thead><tr><th>유형</th><th>문항</th><th style="min-width:120px">정답률</th><th>틀린 문항</th></tr></thead><tbody>${stats.map(s=>`<tr>
+function tagTableHtml(stats,label='갈래'){
+  if(!stats.length)return '<div class="empty-hint">아직 기록이 없어요.</div>';
+  return `<table class="simple"><thead><tr><th>${label}</th><th>문항</th><th style="min-width:120px">정답률</th><th>틀린 문항</th></tr></thead><tbody>${stats.map(s=>`<tr>
     <td>${esc(s.tag)}</td><td>${s.n}</td>
     <td><div style="display:flex;gap:6px;align-items:center"><div class="tag-bar" style="flex:1"><div style="width:${s.rate}%;background:${tagRateColor(s.rate)}"></div></div><b style="color:${tagRateColor(s.rate)}">${s.rate}%</b></div></td>
     <td style="font-size:12px;color:var(--text2)">${s.wrong.slice(-3).map(esc).join(', ')||'-'}${s.wrong.length>3?` 외 ${s.wrong.length-3}`:''}</td></tr>`).join('')}</tbody></table>`;
@@ -1890,15 +1901,21 @@ let tagStudentSel='';
 function renderTagAnalysis(){
   const el=document.getElementById('tag-analysis');if(!el)return;
   const students=db.users.filter(u=>u.role==='student'&&u.status==='active');
-  const withData=students.map(u=>({u,weak:weakTags(u.name),all:tagStats(u.name)})).filter(x=>x.all.length);
-  if(!withData.length){el.innerHTML='<div class="empty-hint">아직 유형을 단 시험의 응시 기록이 없어요. 시험을 만들 때 문항마다 유형을 골라 주세요.</div>';return;}
+  const withData=students.map(u=>({u,weak:weakTags(u.name),weakSub:weakTags(u.name,3,'subtag'),all:tagStats(u.name),allSub:tagStats(u.name,'subtag')})).filter(x=>x.all.length||x.allSub.length);
+  if(!withData.length){el.innerHTML='<div class="empty-hint">아직 유형을 단 시험의 응시 기록이 없어요. 시험을 만들 때 문항마다 갈래와 세부유형을 골라 주세요.</div>';return;}
   if(!withData.some(x=>x.u.id===tagStudentSel))tagStudentSel=withData[0].u.id;
   const cur=withData.find(x=>x.u.id===tagStudentSel);
-  el.innerHTML=`<div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple"><thead><tr><th>학생</th><th>약한 유형 TOP 3</th><th></th></tr></thead><tbody>${withData.map(x=>`<tr${x.u.id===tagStudentSel?' style="background:rgba(79,124,255,.08)"':''}>
+  el.innerHTML=`<div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple"><thead><tr><th>학생</th><th>약한 갈래 TOP 3</th><th>약한 세부유형 TOP 3</th><th></th></tr></thead><tbody>${withData.map(x=>`<tr${x.u.id===tagStudentSel?' style="background:rgba(79,124,255,.08)"':''}>
       <td style="white-space:nowrap">${esc(x.u.name)}<div style="font-size:11px;color:var(--text3)">${esc(x.u.school||'')}</div></td>
-      <td style="font-size:12px">${x.weak.length?x.weak.map(s=>`<span style="color:${tagRateColor(s.rate)}">${esc(s.tag)} ${s.rate}%</span>`).join(' · '):'<span style="color:var(--green)">약한 유형 없음</span>'}</td>
+      <td style="font-size:12px">${weakListHtml(x.weak,x.all)}</td>
+      <td style="font-size:12px">${weakListHtml(x.weakSub,x.allSub)}</td>
       <td><button class="btn sm" onclick="tagStudentSel='${esc(x.u.id)}';renderTagAnalysis()">자세히</button></td></tr>`).join('')}</tbody></table></div>
-    <div class="card"><div style="font-weight:700;margin-bottom:8px">${esc(cur.u.name)} · 유형별 정답률 <span style="font-size:12px;color:var(--text2);font-weight:400">(낮은 순)</span></div>${tagTableHtml(cur.all)}</div>`;
+    <div class="card"><div style="font-weight:700;margin-bottom:8px">${esc(cur.u.name)} · 갈래별 정답률 <span style="font-size:12px;color:var(--text2);font-weight:400">(낮은 순)</span></div>${tagTableHtml(cur.all,'갈래')}</div>
+    <div class="card"><div style="font-weight:700;margin-bottom:8px">${esc(cur.u.name)} · 세부유형별 정답률 <span style="font-size:12px;color:var(--text2);font-weight:400">(낮은 순)</span></div>${tagTableHtml(cur.allSub,'세부유형')}</div>`;
+}
+function weakListHtml(weak,all){
+  if(!all.length)return '<span style="color:var(--text3)">기록 없음</span>';
+  return weak.length?weak.map(s=>`<span style="color:${tagRateColor(s.rate)}">${esc(s.tag)} ${s.rate}%</span>`).join(' · '):'<span style="color:var(--green)">약한 것 없음</span>';
 }
 
 /* ===================== 시험 — 강사 ===================== */
@@ -1912,6 +1929,7 @@ function addExamQRow(q){
     <div style="text-align:center;color:var(--text2)">${wrap.children.length+1}</div>
     <select class="form-select exq-type"><option value="obj">객관식</option><option value="desc">주관식</option></select>
     <select class="form-select exq-tag">${tagOptions(q&&q.tag)}</select>
+    <select class="form-select exq-sub">${tagOptions(q&&q.subtag,'sub')}</select>
     <input class="form-input exq-points" type="number" value="2">
     <input class="form-input exq-answer" placeholder="정답 (객관식은 숫자)">
     <input class="form-input exq-expl" placeholder="해설(선택)">
@@ -1957,7 +1975,8 @@ async function saveExam(){
     points:parseInt(row.querySelector('.exq-points').value)||0,
     answer:row.querySelector('.exq-answer').value.trim(),
     explanation:row.querySelector('.exq-expl').value.trim(),
-    tag:row.querySelector('.exq-tag').value||null
+    tag:row.querySelector('.exq-tag').value||null,
+    subtag:row.querySelector('.exq-sub').value||null
   }));
   const fields={name,total_q:questions.length,questions,category,time_limit:timeLimit};
   const tryWrite=async f=>editingExamId?await sb.from('exams').update(f).eq('id',editingExamId).select():await sb.from('exams').insert(Object.assign({teacher_id:session.id},f)).select();
@@ -2203,7 +2222,7 @@ function renderExamResultBox(ex,resp){
   // 정답·해설은 쏠T가 "정답 공개"를 눌러야 보여요
   const wrong=(ex.questions||[]).filter(q=>q.type==='obj'&&String(resp.answers[q.num]||'').trim()!==String(q.answer).trim());
   const detail=ex.answers_revealed
-    ?(wrong.length?wrong.map(q=>`<div class="card"><strong>${q.num}번</strong>${q.tag?` <span class="pill blue">${esc(q.tag)}</span>`:''} 오답 · 내 답 ${esc(resp.answers[q.num]||'-')} · 정답 ${esc(q.answer)}${q.explanation?`<div style="color:var(--text2);margin-top:4px">${esc(q.explanation)}</div>`:''}</div>`).join(''):'<div class="empty-hint">객관식을 모두 맞혔어요!</div>')
+    ?(wrong.length?wrong.map(q=>`<div class="card"><strong>${q.num}번</strong>${q.tag?` <span class="pill blue">${esc(q.tag)}</span>`:''}${q.subtag?` <span class="pill amber">${esc(q.subtag)}</span>`:''} 오답 · 내 답 ${esc(resp.answers[q.num]||'-')} · 정답 ${esc(q.answer)}${q.explanation?`<div style="color:var(--text2);margin-top:4px">${esc(q.explanation)}</div>`:''}</div>`).join(''):'<div class="empty-hint">객관식을 모두 맞혔어요!</div>')
     :'<div class="empty-hint">정답과 해설은 쏠T가 공개하면 볼 수 있어요.</div>';
   box.innerHTML=`<div class="card"><strong>채점 결과</strong> · ${examScoreText(ex,resp)}${resp.thoughts&&resp.thoughts.__autoSubmitted?' <span class="pill amber">시간 종료 자동 제출</span>':''}</div>${detail}`;
 }
@@ -2565,11 +2584,10 @@ function vocabReportHTML(v){
   }).join('');
 }
 function weakTagCardHTML(name){
-  const all=tagStats(name);if(!all.length)return'';
-  const weak=all.filter(s=>s.rate<100).slice(0,3);
-  return `<div class="card"><div class="row-between"><strong>시험 유형 분석</strong><span style="font-size:12px;color:var(--text2)">유형 ${all.length}개 · 누적</span></div>
-    ${weak.length?`<div style="font-size:12px;color:var(--text2);margin:8px 0 4px">약한 유형</div>`+weak.map(s=>`<div class="row-between" style="gap:6px;padding:3px 0"><span>${esc(s.tag)}</span><b style="color:${tagRateColor(s.rate)}">${s.rate}% <span style="font-size:11px;color:var(--text2);font-weight:400">(${s.n}문항)</span></b></div>`).join(''):'<div style="margin-top:8px;color:var(--green);font-weight:600">유형을 단 문항을 모두 맞혔어요!</div>'}
-  </div>`;
+  const all=tagStats(name),allSub=tagStats(name,'subtag');if(!all.length&&!allSub.length)return'';
+  const part=(label,list)=>{if(!list.length)return'';const weak=list.filter(s=>s.rate<100).slice(0,3);
+    return `<div style="font-size:12px;color:var(--text2);margin:10px 0 4px">약한 ${label}</div>`+(weak.length?weak.map(s=>`<div class="row-between" style="gap:6px;padding:3px 0"><span>${esc(s.tag)}</span><b style="color:${tagRateColor(s.rate)}">${s.rate}% <span style="font-size:11px;color:var(--text2);font-weight:400">(${s.n}문항)</span></b></div>`).join(''):`<div style="color:var(--green);font-weight:600">모두 맞혔어요!</div>`);};
+  return `<div class="card"><div class="row-between"><strong>시험 유형 분석</strong><span style="font-size:12px;color:var(--text2)">누적</span></div>${part('갈래',all)}${part('세부유형',allSub)}</div>`;
 }
 function renderReportCardHTML(d){
   if(!d.student)return '<div class="empty-hint">학생 정보를 찾을 수 없습니다.</div>';
@@ -2705,9 +2723,10 @@ function parentReportHTML(sid,note,start,end){
       <span style="color:${certColor[state]};font-weight:700;white-space:nowrap">${certText[state]}</span></div>`).join(''),
     `통과 <b style="color:${C.ink}">${d.certs.filter(x=>x.state==='approved').length}/${d.certs.length}</b>`):'';
   // 시험 유형 분석 (누적, 유형을 단 문항이 있을 때만)
-  const tagAll=u?tagStats(u.name):[];const tagWeak=tagAll.filter(s=>s.rate<100).slice(0,3);
-  const tagBox=tagAll.length?box('시험 유형 분석',tagWeak.length?tagWeak.map(s=>`<div class="pb" style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid ${C.line};font-size:14px"><span>${esc(s.tag)}<span style="display:block;font-size:12px;color:${C.sub}">${s.n}문항 중 ${Math.round(s.got*10)/10}문항 정답</span></span><span style="color:${s.rate>=80?C.green:s.rate>=50?C.amber:C.red};font-weight:700">${s.rate}%</span></div>`).join('')
-      :empty('유형을 단 문항을 모두 맞혔어요.'),'약한 유형 · 누적'):'';
+  const tagAll=u?tagStats(u.name):[],subAll=u?tagStats(u.name,'subtag'):[];
+  const tagRows=(label,list)=>{const w=list.filter(s=>s.rate<100).slice(0,3);if(!list.length)return'';
+    return `<div style="font-size:13px;font-weight:700;color:${C.sub};margin:6px 0 2px">약한 ${label}</div>`+(w.length?w.map(s=>`<div class="pb" style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid ${C.line};font-size:14px"><span>${esc(s.tag)}<span style="display:block;font-size:12px;color:${C.sub}">${s.n}문항 중 ${Math.round(s.got*10)/10}문항 정답</span></span><span style="color:${s.rate>=80?C.green:s.rate>=50?C.amber:C.red};font-weight:700">${s.rate}%</span></div>`).join(''):empty('모두 맞혔어요.'));};
+  const tagBox=(tagAll.length||subAll.length)?box('시험 유형 분석',tagRows('갈래',tagAll)+tagRows('세부유형',subAll),'누적'):'';
   // 시험
   const examBox=box('시험 성적',d.exams.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">${d.exams.map(({r,ex})=>{
       const score=ex&&descPending(ex,r)?`객관식 ${r.points_earned}/${examObjTotal(ex)}점 (주관식 채점 중)`:`${r.points_earned}/${r.points_total}점 (${r.score}%)`;

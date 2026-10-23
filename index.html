@@ -171,6 +171,16 @@ table.simple tr:last-child td{border-bottom:none}
 .m-tile.open .m-no{color:var(--accent)}
 .m-tile.tried{border-color:rgba(245,158,11,.5)}
 .m-tile.locked{opacity:.42;cursor:not-allowed}
+.hall-card{background:linear-gradient(135deg,rgba(245,158,11,.18),rgba(79,124,255,.08));border:1px solid rgba(245,158,11,.45);border-radius:var(--radius);padding:16px 18px;margin:4px 0 16px}
+.hall-title{font-weight:700;font-size:16px;margin-bottom:8px}
+.hall-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border);font-size:14px}
+.hall-title+.hall-row{border-top:none}
+.hall-medal{font-size:20px;white-space:nowrap}
+.hall-rank{font-family:var(--mono);font-size:12px;color:var(--text2);min-width:28px}
+.hall-school{color:var(--text2);flex:1;min-width:0}
+.hall-name{font-weight:700;font-size:15px;letter-spacing:1px}
+.hall-edit{display:grid;grid-template-columns:70px 1fr 1fr;gap:8px;align-items:center;margin-top:8px}
+.hall-edit .hall-medal{font-size:14px}
 .stars{color:var(--amber);letter-spacing:1px}
 .stars .off{color:var(--text3)}
 .q-wrap{max-width:580px;margin:0 auto}
@@ -375,6 +385,8 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     </div>
 
     <div class="section" id="t-vocab">
+      <div class="section-head"><h2>🏆 명예의 전당</h2></div>
+      <div id="vt-hall" style="margin-bottom:18px"></div>
       <div id="vocab-alerts"></div>
       <div class="section-head"><h2>어휘 미션</h2><div id="vt-track-chips" class="chips"></div></div>
       <div id="vocab-mission-admin"></div>
@@ -553,6 +565,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 
     <div class="section" id="s-vocab">
       <div id="vocab-home">
+        <div id="vs-hall"></div>
         <div class="section-head"><h2>어휘 미션</h2><div id="vs-track-chips" class="chips"></div></div>
         <div id="vocab-set-pick"></div>
         <div id="my-vocab-results"></div>
@@ -616,7 +629,7 @@ const emptyDb=()=>({
   exams:[],examResponses:[],
   certWeeks:[],certItems:[],certSubmissions:[],
   attendance:[],announcements:[],announcementReads:[],
-  vocabSets:[],vocabWords:[],vocabAttempts:[],reportLinks:[],schools:[]
+  vocabSets:[],vocabWords:[],vocabAttempts:[],reportLinks:[],schools:[],vocabHall:[]
 });
 let db=emptyDb();
 
@@ -666,7 +679,7 @@ async function selectAll(table,orderCols=['id']){
 }
 async function loadAll(attempt=0){
   try{
-    const [u,v,p,va,ar,qs,qw,qq,ex,er,cw,ci,csu,att,an,arr,vs2,vw2,va2,rl,sc,ge]=await Promise.all([
+    const [u,v,p,va,ar,qs,qw,qq,ex,er,cw,ci,csu,att,an,arr,vs2,vw2,va2,rl,sc,ge,vh]=await Promise.all([
       sb.from('users').select('*'),
       sb.from('videos').select('*').order('created_at'),
       selectAll('progress',['student_id','video_id']),
@@ -688,7 +701,8 @@ async function loadAll(attempt=0){
       selectAll('vocab_attempts'),
       sb.from('report_links').select('*').order('created_at',{ascending:false}),
       sb.from('schools').select('*'),
-      sb.from('grammar_enroll').select('*')
+      sb.from('grammar_enroll').select('*'),
+      sb.from('vocab_hall').select('*')
     ]);
     if(u.error)throw new Error(u.error.message);
     if(v.error)throw new Error(v.error.message);
@@ -702,6 +716,7 @@ async function loadAll(attempt=0){
     db.vocabSets=(vs2.data)||[];db.vocabWords=(vw2.data)||[];db.vocabAttempts=(va2.data)||[];
     db.reportLinks=(rl&&rl.data)||[];db.schools=(sc&&sc.data)||[];
     db.grammarEnroll=(ge&&ge.data)||[];db.grammarMissing=!!(ge&&ge.error);
+    db.vocabHall=(vh&&vh.data)||[];db.vocabHallMissing=!!(vh&&vh.error);
   }catch(e){
     if(attempt<3){
       document.querySelector('.loading-text').textContent=`재연결 중... (${attempt+1}/3)`;
@@ -949,7 +964,7 @@ function launchTeacher(){
   renderReportSelect();
   renderVocabAdmin();renderVideoAlerts();
   const n=vocabAlerts().filter(a=>a.urgent).length,nv=videoAlerts().length;
-  const msg=[n?`어휘 미션이 밀린 학생 ${n}명`:'',nv?`영상 배속·건너뛰기 확인 ${nv}건`:''].filter(Boolean).join(', ');
+  const msg=[n?`어휘를 7일 넘게 안 한 학생 ${n}명`:'',nv?`영상 배속·건너뛰기 확인 ${nv}건`:''].filter(Boolean).join(', ');
   if(msg)setTimeout(()=>notify(msg+'이 있어요.','error'),600);
 }
 function renderPending(){
@@ -2326,21 +2341,13 @@ function buildReportData(studentId){
   const grammar=(grammarOk(studentId)||db.progress.some(p=>p.student_id===studentId&&isGrammar(db.videos.find(v=>v.id===p.video_id))))?grammarSummary(studentId):null;
   return{student,examRows,watched,total:videoList.length,avgPct,present,late,absent,vocab:vocabReport(studentId),grammar};
 }
-// 성적표용 어휘 미션 요약: 이번 주 미션, 수행 여부, 수행률(열린 미션 중 클리어한 비율)
+// 성적표용 어휘 미션 요약: 지금 도전 중인 미션, 수행률(전체 미션 중 클리어한 비율)
 function vocabReport(sid){
   const tracks=vocabTracks();if(!tracks.length)return null;
-  const today=todayStr();const t=studentVocabTrack(sid);
-  const mk=track=>{
-    const st=missionStates(track,sid);
-    const opened=st.filter(m=>m.set.open_date&&m.set.open_date<=today);
-    const cleared=opened.filter(m=>m.cleared).length;
-    return{track,cur:opened[opened.length-1]||null,openedN:opened.length,cleared,
-      rate:opened.length?Math.round(cleared/opened.length*100):0,
-      overdue:opened.filter(m=>addDays(m.set.open_date,7)<=today&&!m.cleared).length,
-      total:st.length,allCleared:st.filter(m=>m.cleared).length,stars:st.reduce((n,m)=>n+m.stars,0),
-      next:st.find(m=>m.set.open_date&&m.set.open_date>today)||null};
-  };
-  return{started:!!t,list:(t?[t]:tracks).map(mk)};
+  const st=missionStates(VOCAB_ALL,sid);
+  const cleared=st.filter(m=>m.cleared).length;
+  return{started:!!studentVocabTrack(sid),list:[{cur:st.find(m=>m.state==='open')||null,cleared,total:st.length,
+    rate:st.length?Math.round(cleared/st.length*100):0,stars:st.reduce((n,m)=>n+m.stars,0)}]};
 }
 function mdWd(d){const [y,m,dd]=d.split('-').map(Number);return `${m}/${dd}(${'일월화수목금토'[new Date(y,m-1,dd).getDay()]})`;}
 function vocabReportHTML(v){
@@ -2348,22 +2355,19 @@ function vocabReportHTML(v){
   if(!v.started)return `<div class="card row-between"><strong>어휘 미션</strong><span class="pill red">아직 시작 안 함</span></div>`;
   return v.list.map(r=>{
     let curLine;
-    if(!r.cur){curLine=r.next?`<span style="color:var(--text2)">첫 미션은 ${mdWd(r.next.set.open_date)}에 열려요</span>`:'<span style="color:var(--text2)">열린 미션이 없어요</span>';}
+    if(!r.cur){curLine=r.total?'<span style="color:var(--green);font-weight:600">🏆 모든 미션 클리어</span>':'<span style="color:var(--text2)">미션이 없어요</span>';}
     else{
       const c=r.cur;const{title}=splitTitle(c.set.lesson_title||c.set.name);
-      const st=c.cleared?`<span class="pill green">완료 ${starsHtml(c.stars)} ${c.best.score}/${c.best.total}</span>`
-        :c.tries?`<span class="pill amber">미완료 · 최고 ${c.best?c.best.score+'/'+c.best.total:'-'}</span>`
-        :`<span class="pill red">미응시</span>`;
-      curLine=`<div class="row-between" style="gap:6px"><span><b>MISSION ${pad2(c.no)}</b> · ${esc(title)}</span>${st}</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:2px">기간 ${mdWd(c.set.open_date)} ~ ${mdWd(addDays(c.set.open_date,6))}</div>`;
+      const st=c.tries?`<span class="pill amber">도전 중 · 최고 ${c.best?c.best.score+'/'+c.best.total:'-'}</span>`:`<span class="pill red">미응시</span>`;
+      curLine=`<div class="row-between" style="gap:6px"><span><b>MISSION ${pad2(c.no)}</b> · ${esc(title)}</span>${st}</div>`;
     }
     return `<div class="card">
       <div class="row-between"><strong>어휘 미션</strong>
-        <span>수행률 <b>${r.openedN?r.rate+'%':'-'}</b> <span style="color:var(--text2);font-size:12px">(${r.cleared}/${r.openedN})</span></span></div>
+        <span>수행률 <b>${r.total?r.rate+'%':'-'}</b> <span style="color:var(--text2);font-size:12px">(${r.cleared}/${r.total})</span></span></div>
       <div class="progress-bar"><div class="progress-bar-fill" style="width:${r.rate}%;background:var(--green)"></div></div>
-      <div style="font-size:12px;color:var(--text2);margin:10px 0 4px">이번 주 미션</div>
+      <div style="font-size:12px;color:var(--text2);margin:10px 0 4px">지금 도전 중인 미션</div>
       ${curLine}
-      <div style="font-size:12px;color:var(--text2);margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">전체 ${r.allCleared}/${r.total} 클리어 · ★ ${r.stars}${r.overdue?` · <span style="color:var(--red)">밀린 미션 ${r.overdue}개</span>`:''}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">전체 ${r.cleared}/${r.total} 클리어 · ★ ${r.stars}</div>
     </div>`;
   }).join('');
 }
@@ -2432,21 +2436,18 @@ function weeklyReportData(sid,start,end){
   // 문법 기초: 수강생이거나 그 기간에 본 기록이 있으면
   const gWeek=db.progress.filter(p=>p.student_id===sid&&inRange(p.updated_at,start,end)).map(p=>({p,v:db.videos.find(x=>x.id===p.video_id),f:watchInfo(p)})).filter(x=>isGrammar(x.v)).map(x=>Object.assign(x,{no:grammarNo(x.v)})).sort((a,b)=>a.no-b.no);
   const grammar=(grammarOk(sid)||gWeek.length)&&grammarVideos().length?Object.assign(grammarSummary(sid),{week:gWeek}):null;
-  // 어휘: 기간 안에 열린 미션 (없으면 기간 끝 기준 진행 중이던 미션)
+  // 어휘: 기간 안에 푼 미션 + 기간 끝 기준 누적 클리어와 도전 중이던 미션
   const endTs=new Date(end+'T23:59:59').getTime();
   const bestBy=(setId)=>{let b=null;db.vocabAttempts.forEach(a=>{if(a.set_id===setId&&a.student_id===sid&&a.total>0&&new Date(a.submitted_at).getTime()<=endTs&&(!b||ratio(a)>ratio(b)))b=a;});return b;};
-  const triesBy=setId=>db.vocabAttempts.filter(a=>a.set_id===setId&&a.student_id===sid&&new Date(a.submitted_at).getTime()<=endTs).length;
+  const triesIn=setId=>db.vocabAttempts.filter(a=>a.set_id===setId&&a.student_id===sid&&inRange(a.submitted_at,start,end)).length;
   const myTrack=studentVocabTrack(sid);
-  const vocab=(myTrack?[myTrack]:vocabTracks()).map(track=>{
-    const ms=missionsOf(track);
-    let picked=ms.map((s,i)=>({s,no:i+1})).filter(x=>x.s.open_date&&x.s.open_date>=start&&x.s.open_date<=end);
-    if(!picked.length){const cur=ms.map((s,i)=>({s,no:i+1})).filter(x=>x.s.open_date&&x.s.open_date<=end).pop();if(cur)picked=[cur];}
-    const items=picked.map(x=>{const b=bestBy(x.s.id);return{...x,best:b,cleared:isCleared(b),tries:triesBy(x.s.id),stars:starsOf(b)};});
-    const opened=ms.filter(s=>s.open_date&&s.open_date<=end);
-    const clearedAll=opened.filter(s=>isCleared(bestBy(s.id))).length;
-    const overdue=opened.filter(s=>addDays(s.open_date,7)<=end&&!isCleared(bestBy(s.id))).length;
-    const next=ms.find(s=>s.open_date&&s.open_date>end);
-    return{track,items,clearedAll,openedN:opened.length,total:ms.length,overdue,next};
+  const vocab=vocabTracks().map(()=>{
+    const ms=missionsOf();
+    const all=ms.map((s,i)=>{const b=bestBy(s.id);return{s,no:i+1,best:b,cleared:isCleared(b),tries:triesIn(s.id),stars:starsOf(b)};});
+    const items=all.filter(x=>x.tries>0);
+    const clearedAll=all.filter(x=>x.cleared).length;
+    let prev=true;const cur=all.find(x=>{const open=prev&&!x.cleared;prev=x.cleared;return open;})||null;
+    return{items,clearedAll,total:ms.length,cur};
   });
   // 시험: 기간 안에 제출한 시험
   const exams=db.examResponses.filter(r=>u&&r.student_name===u.name&&isSubmitted(r)&&inRange(r.submitted_at,start,end)).map(r=>({r,ex:db.exams.find(x=>x.id===r.exam_id)}));
@@ -2482,15 +2483,14 @@ function parentReportHTML(sid,note,start,end){
   const vocabBox=!d.vocabStarted?box('어휘 미션',empty('아직 어휘 미션을 시작하지 않았어요.')):d.vocab.map(t=>{
     const done=t.items.filter(x=>x.cleared).length;
     const rows=t.items.length?t.items.map(x=>{const{title}=splitTitle(x.s.lesson_title||x.s.name);
-      const ongoing=!x.cleared&&addDays(x.s.open_date,6)>end; // 마감 전이면 아직 진행 중
       const st=x.cleared?`<span style="color:${C.green};font-weight:700">완료 · ${x.best.score}/${x.best.total}</span>`
-        :ongoing?`<span style="color:${C.blue};font-weight:700">진행 중${x.tries?` · 최고 ${x.best?x.best.score+'/'+x.best.total:'-'}`:''}</span>`
-        :x.tries?`<span style="color:${C.amber};font-weight:700">미완료 · 최고 ${x.best?x.best.score+'/'+x.best.total:'-'}</span>`:`<span style="color:${C.red};font-weight:700">미응시</span>`;
-      return `<div class="pb" style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid ${C.line};font-size:14px"><span><b>MISSION ${pad2(x.no)}</b> · ${esc(title)}<span style="display:block;font-size:12px;color:${C.sub}">${mdWd(x.s.open_date)} ~ ${mdWd(addDays(x.s.open_date,6))}${x.tries?` · ${x.tries}회 응시`:''}</span></span>${st}</div>`;}).join('')
-      :empty(t.next?`첫 미션은 ${mdWd(t.next.open_date)}에 열려요.`:'이 기간에 열린 미션이 없어요.');
-    const sub=t.items.length?`이번 주 수행 <b style="color:${C.ink}">${done}/${t.items.length}</b>`:'';
+        :`<span style="color:${C.amber};font-weight:700">도전 중 · 최고 ${x.best?x.best.score+'/'+x.best.total:'-'}</span>`;
+      return `<div class="pb" style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid ${C.line};font-size:14px"><span><b>MISSION ${pad2(x.no)}</b> · ${esc(title)}<span style="display:block;font-size:12px;color:${C.sub}">이 기간 ${x.tries}회 응시</span></span>${st}</div>`;}).join('')
+      :`<div style="color:${C.red};font-size:14px;font-weight:600">이 기간에 푼 어휘 미션이 없어요.</div>`;
+    const sub=t.items.length?`이 기간 완료 <b style="color:${C.ink}">${done}/${t.items.length}</b>`:'';
+    const curTxt=t.cur?` · 다음 도전 <b style="color:${C.ink}">MISSION ${pad2(t.cur.no)}</b>`:` · <b style="color:${C.green}">모든 미션 완료</b>`;
     return box('어휘 미션',rows+
-      `<div style="font-size:12px;color:${C.sub};margin-top:8px">누적 ${t.clearedAll}/${t.openedN}개 완료${t.overdue?` · <span style="color:${C.red};font-weight:600">밀린 미션 ${t.overdue}개</span>`:''}</div>`,sub);
+      `<div style="font-size:12px;color:${C.sub};margin-top:8px">누적 ${t.clearedAll}/${t.total}개 완료${curTxt}</div>`,sub);
   }).join('');
   // 시험
   const examBox=box('시험 성적',d.exams.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">${d.exams.map(({r,ex})=>{
@@ -2664,8 +2664,9 @@ async function submitCertItem(itemId){
 }
 
 /* ===================== 어휘 미션 — 공통 ===================== */
-const VOCAB_PASS=0.8;            // 80% 이상 맞히면 미션 클리어
-const TRACK_ORDER=['중학','수능'];
+const VOCAB_PASS=1;              // 다 맞혀야 미션 클리어 (다음 미션이 열려요)
+const TRACK_ORDER=['중학','수능']; // 교재 구분 없이 한 줄로 이어 붙이는 순서
+const VOCAB_ALL='어휘';           // 모든 교재를 합친 하나의 미션 목록
 let vocabTrackSel=null;          // 화면에서 고른 교재(트랙)
 let currentVocabQuiz=null;
 
@@ -2679,28 +2680,30 @@ function fmtMD(dateStr){if(!dateStr)return'';const [,m,d]=dateStr.split('-').map
 function pad2(n){return String(n).padStart(2,'0');}
 function splitTitle(t){t=t||'';const i=t.indexOf('|');return i>=0?{cat:t.slice(0,i).trim(),title:t.slice(i+1).trim()}:{cat:'',title:t.trim()};}
 
-function vocabTracks(){
-  const ts=[...new Set(db.vocabSets.filter(s=>s.track).map(s=>s.track))];
-  return ts.sort((a,b)=>{const ia=TRACK_ORDER.indexOf(a),ib=TRACK_ORDER.indexOf(b);return((ia<0?99:ia)-(ib<0?99:ib))||a.localeCompare(b);});
-}
-function missionsOf(track){return db.vocabSets.filter(s=>s.track===track).sort((a,b)=>(a.lesson_no||0)-(b.lesson_no||0));}
+function trackRank(t){const i=TRACK_ORDER.indexOf(t);return i<0?99:i;}
+// 교재 구분 없이 미션 목록은 하나뿐 (미션이 있으면 ['어휘'])
+function vocabTracks(){return db.vocabSets.some(s=>s.track)?[VOCAB_ALL]:[];}
+// 전체 미션: 중학 → 수능(→ 그 밖의 교재) 순서, 교재 안에서는 강 번호 순
+function missionsOf(){return db.vocabSets.filter(s=>s.track).sort((a,b)=>(trackRank(a.track)-trackRank(b.track))||String(a.track).localeCompare(String(b.track))||(a.lesson_no||0)-(b.lesson_no||0));}
+// 엑셀로 올릴 때 강 번호를 매기는 용도: 실제 교재 하나의 미션만
+function setsOfTrack(track){return db.vocabSets.filter(s=>s.track===track);}
 function wordsOf(setId){return db.vocabWords.filter(w=>w.set_id===setId).sort((a,b)=>(a.sort_no||0)-(b.sort_no||0));}
 function ratio(a){return a&&a.total>0?a.score/a.total:0;}
 function bestAttempt(setId,sid){let best=null;db.vocabAttempts.forEach(a=>{if(a.set_id===setId&&a.student_id===sid&&a.total>0&&(!best||ratio(a)>ratio(best)))best=a;});return best;}
 function isCleared(a){return !!a&&ratio(a)>=VOCAB_PASS;}
-function starsOf(a){const r=ratio(a);return r>=1?3:r>=0.9?2:r>=VOCAB_PASS?1:0;}
+function starsOf(a){const r=ratio(a);return r>=1?3:r>=0.9?2:r>=0.8?1:0;}
 function starsHtml(n){return `<span class="stars">${'★'.repeat(n)}<span class="off">${'★'.repeat(3-n)}</span></span>`;}
 function missionLabel(set){
   const ms=set.track?missionsOf(set.track):[];const i=ms.findIndex(s=>s.id===set.id);
   return i>=0?`MISSION ${pad2(i+1)}`:'자유 세트';
 }
-// 학생 한 명 기준 미션 상태: cleared(클리어) / open(도전 가능) / date(오픈 전) / prev(이전 미션 먼저)
+// 학생 한 명 기준 미션 상태: cleared(클리어) / open(도전 가능) / prev(이전 미션 먼저)
+// 미션은 처음부터 모두 열려 있고, 앞 미션을 다 맞혀야 다음 미션을 풀 수 있어요
 function missionStates(track,sid){
-  const today=todayStr();let prevCleared=true;
+  let prevCleared=true;
   return missionsOf(track).map((s,i)=>{
     const best=bestAttempt(s.id,sid);const cleared=isCleared(best);
-    const dateOpen=!s.open_date||s.open_date<=today;
-    const state=cleared?'cleared':!dateOpen?'date':!prevCleared?'prev':'open';
+    const state=cleared?'cleared':!prevCleared?'prev':'open';
     prevCleared=cleared;
     return{set:s,no:i+1,best,cleared,state,stars:starsOf(best),tries:db.vocabAttempts.filter(a=>a.set_id===s.id&&a.student_id===sid).length};
   });
@@ -2723,38 +2726,77 @@ function trackChipsHtml(sel){
   return ts.map(t=>`<button class="chip${t===sel?' active':''}" onclick="selectVocabTrack('${esc(t)}')">${esc(t)}</button>`).join('');
 }
 
+/* --- 명예의 전당 (1~3등 학교·이름, 이름은 가운데를 *로 가려서 보여줌) --- */
+const HALL_MEDALS=['🥇','🥈','🥉'];
+function maskName(name){
+  const c=Array.from((name||'').trim());
+  if(c.length<=1)return c.join('');
+  if(c.length===2)return c[0]+'*';
+  return c[0]+'*'.repeat(c.length-2)+c[c.length-1];
+}
+function hallEntry(rank){return db.vocabHall.find(h=>h.rank===rank)||{rank,school:'',name:''};}
+function hallViewHtml(){
+  const list=[1,2,3].map(hallEntry).filter(h=>(h.name||'').trim()||(h.school||'').trim());
+  if(!list.length)return'';
+  return `<div class="hall-card"><div class="hall-title">🏆 명예의 전당</div>
+    ${list.map(h=>`<div class="hall-row"><span class="hall-medal">${HALL_MEDALS[h.rank-1]}</span><span class="hall-rank">${h.rank}등</span>
+      <span class="hall-school">${esc(h.school||'')}</span><span class="hall-name">${esc(maskName(h.name))}</span></div>`).join('')}
+  </div>`;
+}
+function renderHallStudent(){const el=document.getElementById('vs-hall');if(el)el.innerHTML=hallViewHtml();}
+function renderHallAdmin(){
+  const el=document.getElementById('vt-hall');if(!el)return;
+  if(db.vocabHallMissing){el.innerHTML=`<div class="card alert-card">명예의 전당을 쓰려면 Supabase에서 <b>schema_add12.sql</b>을 실행해야 해요.</div>`;return;}
+  const schools=[...new Set(db.schools.map(s=>s.name).concat(db.users.map(u=>u.school)).filter(Boolean))];
+  const students=db.users.filter(u=>u.role==='student');
+  el.innerHTML=`<div class="card">
+    <div class="vhint" style="margin-top:0">학생 화면 어휘 탭 맨 위에 보여요. 이름은 가운데 글자가 <b>*</b>로 가려져요 (예: 김민준 → ${esc(maskName('김민준'))}).</div>
+    <datalist id="hall-schools">${schools.map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
+    <datalist id="hall-students">${students.map(u=>`<option value="${esc(u.name)}">`).join('')}</datalist>
+    ${[1,2,3].map(r=>{const h=hallEntry(r);return `<div class="hall-edit">
+      <span class="hall-medal">${HALL_MEDALS[r-1]} ${r}등</span>
+      <input class="form-input" id="hall-school-${r}" list="hall-schools" placeholder="학교" value="${esc(h.school||'')}">
+      <input class="form-input" id="hall-name-${r}" list="hall-students" placeholder="학생 이름" value="${esc(h.name||'')}" onchange="hallFillSchool(${r})">
+    </div>`;}).join('')}
+    <div style="display:flex;gap:6px;margin-top:10px"><button class="btn blue sm" onclick="saveHall()">저장</button><button class="btn sm" onclick="clearHall()">모두 비우기</button></div>
+    <div style="margin-top:12px">${hallViewHtml()||'<div class="empty-hint">아직 비어 있어요. 학생 화면에는 아무것도 안 보여요.</div>'}</div>
+  </div>`;
+}
+// 학생 이름을 고르면 학교 칸이 비어 있을 때 그 학생의 학교를 채워 줘요
+function hallFillSchool(r){
+  const name=document.getElementById('hall-name-'+r).value.trim();const sc=document.getElementById('hall-school-'+r);
+  const u=db.users.find(x=>x.role==='student'&&x.name===name);
+  if(u&&u.school&&!sc.value.trim())sc.value=u.school;
+}
+async function saveHall(){
+  const rows=[1,2,3].map(r=>({id:'rank'+r,rank:r,school:document.getElementById('hall-school-'+r).value.trim(),name:document.getElementById('hall-name-'+r).value.trim(),updated_at:new Date().toISOString()}));
+  const{error}=await sb.from('vocab_hall').upsert(rows);
+  if(error){notify('저장 실패: '+error.message,'error');return;}
+  db.vocabHall=rows;renderHallAdmin();notify('명예의 전당을 저장했어요.','success');
+}
+function clearHall(){[1,2,3].forEach(r=>{document.getElementById('hall-school-'+r).value='';document.getElementById('hall-name-'+r).value='';});saveHall();}
+
 /* ===================== 어휘 미션 — 강사 ===================== */
-// 학생이 주로 푸는 교재 = 가장 많이 응시한 교재 (아직 안 했으면 null)
+// 어휘 미션을 한 번이라도 풀었으면 '어휘', 아직 안 했으면 null
 function studentVocabTrack(sid){
-  const cnt={};
-  db.vocabAttempts.forEach(a=>{if(a.student_id!==sid)return;const s=db.vocabSets.find(x=>x.id===a.set_id);if(s&&s.track)cnt[s.track]=(cnt[s.track]||0)+1;});
-  const ts=Object.keys(cnt);return ts.length?ts.sort((a,b)=>cnt[b]-cnt[a])[0]:null;
+  return db.vocabAttempts.some(a=>{if(a.student_id!==sid)return false;const s=db.vocabSets.find(x=>x.id===a.set_id);return !!(s&&s.track);})?VOCAB_ALL:null;
 }
 function lastVocabDate(sid){
   const a=db.vocabAttempts.filter(x=>x.student_id===sid).sort((x,y)=>new Date(y.submitted_at)-new Date(x.submitted_at))[0];
   return a?ymd(new Date(a.submitted_at)):null;
 }
-// 미션을 안 한 학생 목록. urgent=true → 일주일이 지났는데 클리어 못 한 미션이 있거나, 첫 미션 열린 지 일주일이 넘도록 한 번도 안 함
+// 일주일(7일) 넘게 어휘 미션을 한 번도 안 푼 학생 목록 (전부 클리어한 학생은 빼요)
 function vocabAlerts(){
-  const today=todayStr();
-  const opens=db.vocabSets.filter(s=>s.track&&s.open_date&&s.open_date<=today).map(s=>s.open_date).sort();
-  if(!opens.length)return[];
-  const firstOpen=opens[0];
+  const ms=missionsOf();if(!ms.length)return[];
   const out=[];
   db.users.filter(u=>u.role==='student'&&u.status==='active').forEach(u=>{
-    const t=studentVocabTrack(u.id);const last=lastVocabDate(u.id);
-    if(!t){
-      const weeks=Math.floor(-daysUntil(firstOpen)/7);
-      out.push({u,track:null,kind:'never',weeks,urgent:weeks>=1,last});return;
-    }
-    const st=missionStates(t,u.id);
-    const overdue=st.filter(m=>m.set.open_date&&addDays(m.set.open_date,7)<=today&&!m.cleared);
-    const cur=[...st].reverse().find(m=>m.set.open_date&&m.set.open_date<=today);
-    if(overdue.length)out.push({u,track:t,kind:'behind',weeks:overdue.length,from:overdue[0],urgent:true,last});
-    else if(cur&&!cur.cleared)out.push({u,track:t,kind:'thisweek',cur,daysLeft:daysUntil(addDays(cur.set.open_date,7)),urgent:false,last});
+    const st=missionStates(VOCAB_ALL,u.id);
+    if(st.every(m=>m.cleared))return;
+    const last=lastVocabDate(u.id);const days=last?-daysUntil(last):null;
+    if(last&&days<7)return;
+    out.push({u,kind:last?'idle':'never',days,cur:st.find(m=>m.state==='open'),urgent:true,last});
   });
-  const rank={behind:0,never:1,thisweek:2};
-  return out.sort((a,b)=>(rank[a.kind]-rank[b.kind])||(b.weeks||0)-(a.weeks||0));
+  return out.sort((a,b)=>(a.kind==='never'?-1:0)-(b.kind==='never'?-1:0)||(b.days||0)-(a.days||0));
 }
 function renderVocabAlerts(){
   const el=document.getElementById('vocab-alerts');const badge=document.getElementById('vocab-tab-badge');
@@ -2763,24 +2805,21 @@ function renderVocabAlerts(){
   if(badge)badge.innerHTML=urgent.length?`<span class="tab-badge">${urgent.length}</span>`:'';
   if(!list.length){el.innerHTML='';return;}
   const row=a=>{
-    let tag;
-    if(a.kind==='behind')tag=`<span class="pill red">${a.weeks}주 밀림</span> <span style="font-size:12px;color:var(--text2)">MISSION ${pad2(a.from.no)}부터 미클리어</span>`;
-    else if(a.kind==='never')tag=a.weeks>=1?`<span class="pill red">한 번도 안 함</span> <span style="font-size:12px;color:var(--text2)">${a.weeks}주째</span>`:`<span class="pill amber">아직 시작 안 함</span>`;
-    else tag=`<span class="pill amber">이번 주 미완료</span> <span style="font-size:12px;color:var(--text2)">MISSION ${pad2(a.cur.no)} · ${a.daysLeft<=0?'오늘 마감':'D-'+a.daysLeft}</span>`;
-    return `<div class="alert-row"><div><strong>${esc(a.u.name)}</strong>${a.track?` <span style="font-size:12px;color:var(--text3)">${esc(a.track)}</span>`:''}<div style="margin-top:2px">${tag}</div></div>
+    const tag=a.kind==='never'?`<span class="pill red">한 번도 안 함</span>`:`<span class="pill red">${a.days}일째 안 함</span>`;
+    const cur=a.cur?` <span style="font-size:12px;color:var(--text2)">MISSION ${pad2(a.cur.no)} 차례</span>`:'';
+    return `<div class="alert-row"><div><strong>${esc(a.u.name)}</strong><div style="margin-top:2px">${tag}${cur}</div></div>
       <div style="font-size:12px;color:var(--text2);white-space:nowrap">최근 응시 ${a.last?fmtMD(a.last):'없음'}</div></div>`;
   };
-  const soft=list.filter(a=>!a.urgent);
-  el.innerHTML=`<div class="card ${urgent.length?'alert-card':''}" style="margin-bottom:18px">
-    <div class="row-between" style="margin-bottom:4px"><strong>${urgent.length?`🔔 미션이 밀린 학생 ${urgent.length}명`:'🔔 이번 주 미션 현황'}</strong>
-      <span style="font-size:11px;color:var(--text3)">미션은 열린 날부터 일주일 안에 클리어해야 해요</span></div>
+  el.innerHTML=`<div class="card alert-card" style="margin-bottom:18px">
+    <div class="row-between" style="margin-bottom:4px"><strong>🔔 어휘를 안 한 학생 ${urgent.length}명</strong>
+      <span style="font-size:11px;color:var(--text3)">최근 7일 동안 한 번도 안 푼 학생이에요</span></div>
     ${urgent.map(row).join('')}
-    ${soft.length?(urgent.length?`<details style="margin-top:6px"><summary style="font-size:12px;color:var(--text2);cursor:pointer">이번 주 아직 안 한 학생 ${soft.length}명 보기</summary>${soft.map(row).join('')}</details>`:soft.map(row).join('')):''}
   </div>`;
 }
 function renderVocabAdmin(){
   const adminEl=document.getElementById('vocab-mission-admin');
   if(!adminEl)return;
+  renderHallAdmin();
   renderVocabAlerts();
   const track=pickDefaultTrack(null);vocabTrackSel=track;
   document.getElementById('vt-track-chips').innerHTML=trackChipsHtml(track);
@@ -2804,36 +2843,25 @@ function renderVocabAdmin(){
     document.getElementById('vocab-student-board').innerHTML='';
     return;
   }
-  const ms=missionsOf(track);
+  const ms=missionsOf();
   const students=db.users.filter(u=>u.role==='student'&&u.status==='active');
-  const start=ms[0]&&ms[0].open_date?ms[0].open_date:mondayOf(todayStr());
-  const today=todayStr();
   const rows=ms.map((s,i)=>{
     const{cat,title}=splitTitle(s.lesson_title||s.name);
     const wc=db.vocabWords.filter(w=>w.set_id===s.id).length;
     const clearCnt=students.filter(u=>isCleared(bestAttempt(s.id,u.id))).length;
-    const isNow=s.open_date&&s.open_date<=today&&(!ms[i+1]||!ms[i+1].open_date||ms[i+1].open_date>today);
-    return `<tr${isNow?' style="background:rgba(79,124,255,.08)"':''}>
-      <td style="font-family:var(--mono);font-size:12px;white-space:nowrap">${pad2(i+1)}${isNow?' <span class="pill blue">이번 주</span>':''}</td>
-      <td><div style="font-weight:600">${s.lesson_no?esc(s.lesson_no)+'강 · ':''}${esc(title)}</div><div style="font-size:11px;color:var(--text3)">${esc(cat)} · 단어 ${wc}개</div></td>
-      <td><input type="date" class="date-in" value="${esc(s.open_date||'')}" onchange="setMissionDate('${esc(s.id)}',this.value)"></td>
+    return `<tr>
+      <td style="font-family:var(--mono);font-size:12px;white-space:nowrap">${pad2(i+1)}</td>
+      <td><div style="font-weight:600">${s.lesson_no?esc(s.lesson_no)+'강 · ':''}${esc(title)}</div><div style="font-size:11px;color:var(--text3)">${esc(s.track)}${cat?' · '+esc(cat):''} · 단어 ${wc}개</div></td>
       <td style="white-space:nowrap">${clearCnt}/${students.length}명</td>
       <td style="white-space:nowrap"><button class="btn sm" onclick="renderVocabResults('${esc(s.id)}')">결과</button> <button class="btn red sm" onclick="deleteVocabSet('${esc(s.id)}')">삭제</button></td>
     </tr>`;
   }).join('');
   adminEl.innerHTML=`
     <div class="card">
-      <div class="row-between">
-        <div><strong>${esc(track)}</strong> <span style="color:var(--text2)">· 미션 ${ms.length}개 · 단어 ${ms.reduce((n,s)=>n+db.vocabWords.filter(w=>w.set_id===s.id).length,0)}개</span></div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <span style="font-size:12px;color:var(--text2)">첫 미션 오픈일</span>
-          <input type="date" class="date-in" id="vt-start" value="${esc(start)}">
-          <button class="btn sm blue" onclick="rescheduleTrack()">일주일에 하나씩 일정 짜기</button>
-        </div>
-      </div>
-      <div class="vhint" style="margin:8px 0 0">학생은 오픈일이 지난 미션을 <b>순서대로</b> 풀 수 있고, ${Math.round(VOCAB_PASS*100)}% 이상 맞히면 클리어돼 다음 미션이 열려요. 오픈일은 표에서 하나씩 바꿀 수도 있어요.</div>
+      <div><strong>전체 미션</strong> <span style="color:var(--text2)">· 미션 ${ms.length}개 · 단어 ${ms.reduce((n,s)=>n+db.vocabWords.filter(w=>w.set_id===s.id).length,0)}개</span></div>
+      <div class="vhint" style="margin:8px 0 0">미션은 <b>처음부터 모두 열려</b> 있어요. 중학 미션 다음에 수능 미션이 이어지고, 학생은 <b>앞 미션을 다 맞혀야</b> 다음 미션을 풀 수 있어요.</div>
     </div>
-    <div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple mtable"><thead><tr><th>#</th><th>미션</th><th>오픈일</th><th>클리어</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    <div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple mtable"><thead><tr><th>#</th><th>미션</th><th>클리어</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 
   // 학생별 진행
   const boardEl=document.getElementById('vocab-student-board');
@@ -2845,31 +2873,13 @@ function renderVocabAdmin(){
     const cur=st.find(m=>!m.cleared);
     const last=db.vocabAttempts.filter(a=>a.student_id===u.id&&ms.some(s=>s.id===a.set_id)).sort((a,b)=>new Date(b.submitted_at)-new Date(a.submitted_at))[0];
     const pct=ms.length?Math.round(cleared/ms.length*100):0;
-    const curTxt=!cur?'<span class="pill green">전부 클리어</span>':cur.state==='date'?`${pad2(cur.no)} 오픈 대기`:cur.state==='prev'?`${pad2(cur.no-1)} 미클리어`:`${pad2(cur.no)} 도전 중`;
+    const curTxt=!cur?'<span class="pill green">전부 클리어</span>':`${pad2(cur.no)} 도전 중`;
     return `<tr><td>${esc(u.name)}</td>
       <td style="min-width:120px"><div style="font-size:12px">${cleared}/${ms.length} · ★${stars}</div><div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%"></div></div></td>
       <td style="font-size:12px;white-space:nowrap">${curTxt}</td>
       <td style="font-size:12px;color:var(--text2);white-space:nowrap">${last?fmtMD(ymd(new Date(last.submitted_at))):'-'}</td></tr>`;
   }).join('');
   boardEl.innerHTML=`<div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple"><thead><tr><th>학생</th><th>진행</th><th>현재</th><th>최근</th></tr></thead><tbody>${brows}</tbody></table></div>`;
-}
-async function setMissionDate(setId,val){
-  const s=db.vocabSets.find(x=>x.id===setId);if(!s)return;
-  const{error}=await sb.from('vocab_sets').update({open_date:val||null}).eq('id',setId);
-  if(error){notify('저장 실패: '+error.message,'error');return;}
-  s.open_date=val||null;renderVocabAdmin();notify('오픈일을 바꿨습니다.','success');
-}
-async function rescheduleTrack(){
-  const track=vocabTrackSel;const start=document.getElementById('vt-start').value;
-  if(!track||!start){notify('첫 미션 오픈일을 골라주세요.','error');return;}
-  const ms=missionsOf(track);
-  if(!confirm(`${track} 미션 ${ms.length}개를 ${fmtMD(start)}부터 일주일에 하나씩 열리도록 바꿀까요?`))return;
-  const results=await Promise.all(ms.map((s,i)=>sb.from('vocab_sets').update({open_date:addDays(start,7*i)}).eq('id',s.id)));
-  const err=results.find(r=>r.error);
-  if(err){notify('일부 저장 실패: '+err.error.message,'error');}
-  ms.forEach((s,i)=>{if(!results[i].error)s.open_date=addDays(start,7*i);});
-  renderVocabAdmin();
-  if(!err)notify(`일정을 짰어요. 마지막 미션은 ${fmtMD(addDays(start,7*(ms.length-1)))}에 열려요.`,'success');
 }
 function renderVocabResults(setId){
   const el=document.getElementById('vocab-results');
@@ -3004,30 +3014,22 @@ async function importVocabRows(rows){
   const plan=planVocabImport(rows).filter(p=>p.fresh.length);
   if(!plan.length)return{sets:0,words:0};
   {
-    const newSets=[],newWords=[];const touchedTracks=new Set();
+    const newSets=[],newWords=[];
     plan.forEach(p=>{
       let setId;
       if(p.existing){setId=p.existing.id;}
       else{
         let lesson=p.lesson;
-        if(lesson==null){const ms=missionsOf(p.track).concat(newSets.filter(s=>s.track===p.track));lesson=ms.reduce((m,s)=>Math.max(m,s.lesson_no||0),0)+1;}
+        if(lesson==null){const ms=setsOfTrack(p.track).concat(newSets.filter(s=>s.track===p.track));lesson=ms.reduce((m,s)=>Math.max(m,s.lesson_no||0),0)+1;}
         const{title}=splitTitle(p.title);
         const s={id:uid('vs_'),name:`${p.track} ${lesson}강${title?' · '+title:''}`,track:p.track,lesson_no:lesson,lesson_title:p.title||null,open_date:null};
-        newSets.push(s);setId=s.id;touchedTracks.add(p.track);
+        newSets.push(s);setId=s.id;
       }
       const base=db.vocabWords.filter(w=>w.set_id===setId).reduce((m,w)=>Math.max(m,w.sort_no||0),0);
       p.fresh.forEach((r,i)=>newWords.push({id:uid('vw_')+'_'+newWords.length,set_id:setId,word:r.word,hanja:r.hanja,meaning:r.meaning,example:r.example,sort_no:base+i+1}));
     });
-    // 새 미션 오픈일: 그 교재의 기존 일정을 이어서, 없으면 이번 주 월요일부터 일주일 간격
-    touchedTracks.forEach(t=>{
-      const all=missionsOf(t).concat(newSets.filter(s=>s.track===t)).sort((a,b)=>a.lesson_no-b.lesson_no);
-      const first=all.find(s=>s.open_date);const firstIdx=first?all.indexOf(first):0;
-      const start=first?addDays(first.open_date,-7*firstIdx):mondayOf(todayStr());
-      all.forEach((s,i)=>{if(!s.open_date&&newSets.includes(s))s.open_date=addDays(start,7*i);});
-    });
     if(newSets.length){const{error}=await sb.from('vocab_sets').insert(newSets);if(error)throw new Error(error.message+' (schema_add4.sql을 실행했는지 확인해주세요)');db.vocabSets.push(...newSets);}
     for(let i=0;i<newWords.length;i+=200){const chunk=newWords.slice(i,i+200);const{error}=await sb.from('vocab_words').insert(chunk);if(error)throw new Error('단어 저장 실패: '+error.message+' — 다시 올리면 빠진 단어만 이어서 저장돼요.');db.vocabWords.push(...chunk);}
-    if(newSets.length)vocabTrackSel=newSets[0].track;
     return{sets:newSets.length,words:newWords.length};
   }
 }
@@ -3037,7 +3039,7 @@ function renderVocabTargetOptions(){
   const sel=document.getElementById('vs-target');if(!sel)return;
   const cur=sel.value;
   let html='<option value="">새 자유 세트 만들기</option>';
-  vocabTracks().forEach(t=>{html+=`<optgroup label="${esc(t)}">`+missionsOf(t).map((s,i)=>`<option value="${esc(s.id)}">${pad2(i+1)} · ${esc(s.name)}</option>`).join('')+'</optgroup>';});
+  vocabTracks().forEach(()=>{html+=`<optgroup label="어휘 미션">`+missionsOf().map((s,i)=>`<option value="${esc(s.id)}">${pad2(i+1)} · ${esc(s.name)}</option>`).join('')+'</optgroup>';});
   const free=db.vocabSets.filter(s=>!s.track);
   if(free.length)html+='<optgroup label="자유 세트">'+free.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')+'</optgroup>';
   sel.innerHTML=html;
@@ -3093,6 +3095,7 @@ async function saveVocabSet(){
 function renderVocabPick(){
   const el=document.getElementById('vocab-set-pick');
   if(!el||!session)return;
+  renderHallStudent();
   const track=pickDefaultTrack(session.id);vocabTrackSel=track;
   document.getElementById('vs-track-chips').innerHTML=trackChipsHtml(track);
   let html='';
@@ -3101,15 +3104,13 @@ function renderVocabPick(){
     const cleared=st.filter(m=>m.cleared).length,stars=st.reduce((n,m)=>n+m.stars,0);
     const pct=st.length?Math.round(cleared/st.length*100):0;
     const cur=st.find(m=>m.state==='open');
-    const nextLocked=st.find(m=>m.state==='date');
     let nextHtml;
     if(cur){const{title}=splitTitle(cur.set.lesson_title||cur.set.name);
-      nextHtml=`<div><div style="font-size:12px;color:var(--text2)">지금 도전할 미션</div><div style="font-weight:700">MISSION ${pad2(cur.no)} · ${esc(title)}</div></div><button class="btn blue" onclick="openVocabStudy('${esc(cur.set.id)}')">${cur.tries?'재도전':'도전하기'} ▶</button>`;}
+      nextHtml=`<div><div style="font-size:12px;color:var(--text2)">지금 도전할 미션 · 다 맞혀야 다음 미션이 열려요</div><div style="font-weight:700">MISSION ${pad2(cur.no)} · ${esc(title)}</div></div><button class="btn blue" onclick="openVocabStudy('${esc(cur.set.id)}')">${cur.tries?'재도전':'도전하기'} ▶</button>`;}
     else if(cleared===st.length&&st.length){nextHtml=`<div style="font-weight:700">🏆 모든 미션을 클리어했어요!</div>`;}
-    else if(nextLocked){const d=daysUntil(nextLocked.set.open_date);nextHtml=`<div><div style="font-size:12px;color:var(--text2)">다음 미션</div><div style="font-weight:700">MISSION ${pad2(nextLocked.no)} · ${fmtMD(nextLocked.set.open_date)} 오픈 (D-${d})</div></div><span class="pill green">이번 주 미션 완료</span>`;}
     else nextHtml='';
     html+=`<div class="m-hero">
-      <div class="eyebrow">${esc(track)} 어휘 미션</div>
+      <div class="eyebrow">어휘 미션</div>
       <div class="big">${cleared} / ${st.length} 클리어 <span class="stars" style="font-size:16px;margin-left:6px">★ ${stars}</span></div>
       <div class="progress-bar" style="height:7px;margin-top:8px"><div class="progress-bar-fill" style="width:${pct}%;background:var(--green)"></div></div>
       ${nextHtml?`<div class="next">${nextHtml}</div>`:''}
@@ -3130,8 +3131,7 @@ function missionTileHtml(m){
   let cls='m-tile',foot,click=`onclick="openVocabStudy('${esc(m.set.id)}')"`;
   if(m.state==='cleared'){cls+=' cleared';foot=`${starsHtml(m.stars)} <span style="margin-left:4px">${m.best.score}/${m.best.total}</span>`;}
   else if(m.state==='open'){cls+=m.tries?' open tried':' open';foot=m.tries?`<span style="color:var(--amber)">최고 ${m.best?m.best.score+'/'+m.best.total:'-'} · 재도전!</span>`:'<span style="color:var(--accent);font-weight:600">도전하기 ▶</span>';}
-  else if(m.state==='date'){cls+=' locked';click=`onclick="notify('${fmtMD(m.set.open_date)}에 열려요.','info')"`;foot=`🔒 ${fmtMD(m.set.open_date)} 오픈`;}
-  else{cls+=' locked';click=`onclick="notify('앞 미션을 먼저 클리어해야 열려요.','info')"`;foot='🔒 앞 미션 클리어 필요';}
+  else{cls+=' locked';click=`onclick="notify('앞 미션을 다 맞혀야 열려요.','info')"`;foot='🔒 앞 미션 다 맞히기';}
   return `<button type="button" class="${cls}" ${click}>
     <div class="m-no">${m.state==='cleared'?'✓ ':''}MISSION ${pad2(m.no)}</div>
     ${cat?`<div class="m-cat">${esc(cat)}</div>`:''}
@@ -3145,7 +3145,7 @@ function renderMyVocabResults(){
   if(!mine.length){el.innerHTML='';return;}
   el.innerHTML='<div class="section-head" style="margin-top:24px"><h2>최근 기록</h2></div>'+mine.map(a=>{
     const set=db.vocabSets.find(s=>s.id===a.set_id);
-    return `<div class="card row-between"><span>${set?(set.track?esc(set.track)+' '+missionLabel(set)+' · ':'')+esc(splitTitle(set.lesson_title||set.name).title):'(삭제된 세트)'}</span><span>${a.score}/${a.total} ${isCleared(a)?'<span class="pill green">클리어</span>':''}</span></div>`;
+    return `<div class="card row-between"><span>${set?(set.track?missionLabel(set)+' · ':'')+esc(splitTitle(set.lesson_title||set.name).title):'(삭제된 세트)'}</span><span>${a.score}/${a.total} ${isCleared(a)?'<span class="pill green">클리어</span>':''}</span></div>`;
   }).join('');
 }
 
@@ -3167,7 +3167,7 @@ function buildVocabQuestions(set){
 }
 function startVocabTest(setId){
   const set=db.vocabSets.find(s=>s.id===setId);if(!set)return;
-  if(set.track){const m=missionStates(set.track,session.id).find(x=>x.set.id===setId);if(m&&(m.state==='date'||m.state==='prev')){notify('아직 열리지 않은 미션이에요.','info');return;}}
+  if(set.track){const m=missionStates(set.track,session.id).find(x=>x.set.id===setId);if(m&&m.state==='prev'){notify('앞 미션을 다 맞혀야 열려요.','info');return;}}
   const words=wordsOf(setId);
   if(words.length<2){notify('단어가 부족합니다.','error');return;}
   currentVocabQuiz={setId,set,questions:buildVocabQuestions(set),idx:0,picks:[],done:false};
@@ -3183,7 +3183,7 @@ function highlightExample(ex,word){
 let currentVocabStudy=null;
 function openVocabStudy(setId){
   const set=db.vocabSets.find(s=>s.id===setId);if(!set)return;
-  if(set.track){const m=missionStates(set.track,session.id).find(x=>x.set.id===setId);if(m&&(m.state==='date'||m.state==='prev')){notify('아직 열리지 않은 미션이에요.','info');return;}}
+  if(set.track){const m=missionStates(set.track,session.id).find(x=>x.set.id===setId);if(m&&m.state==='prev'){notify('앞 미션을 다 맞혀야 열려요.','info');return;}}
   currentVocabQuiz=null;
   currentVocabStudy={setId,set,hide:false,shown:new Set(),order:wordsOf(setId).map(w=>w.id)};
   renderVocabTake();window.scrollTo({top:0,behavior:'smooth'});
@@ -3199,12 +3199,11 @@ function renderVocabStudy(el){
   const words=st.order.map(id=>byId[id]).filter(Boolean);
   const best=bestAttempt(set.id,session.id);
   const{cat,title}=splitTitle(set.lesson_title||set.name);
-  const need=Math.ceil(words.length*VOCAB_PASS);
   el.innerHTML=`<div class="q-wrap">
     <div class="q-top"><div><span style="font-family:var(--mono);font-size:12px;color:var(--text2)">${esc(set.track?missionLabel(set):'자유 테스트')}</span> <strong style="margin-left:4px">${esc(title)}</strong></div>
       <button class="btn sm" onclick="studyBack()">미션 맵으로</button></div>
     <div class="card"><div style="font-weight:700">📖 테스트 전에 단어를 먼저 공부하세요</div>
-      <div style="font-size:13px;color:var(--text2);margin-top:4px">${cat?esc(cat)+' · ':''}단어 ${words.length}개 · ${need}개 이상 맞히면 클리어${best?` · 내 최고 ${best.score}/${best.total}`:''}</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:4px">${cat?esc(cat)+' · ':''}단어 ${words.length}개 · 다 맞혀야 클리어${best?` · 내 최고 ${best.score}/${best.total}`:''}</div>
       <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
         <button class="btn sm ${st.hide?'blue':''}" onclick="studyToggleHide()">${st.hide?'뜻 모두 보기':'뜻 가리고 외우기'}</button>
         <button class="btn sm" onclick="studyShuffle()">순서 섞기</button></div>
@@ -3287,7 +3286,6 @@ async function submitVocabTest(){
   if(pass&&q.set.track){
     const nxt=missionStates(q.set.track,session.id).find(m=>m.state==='open');
     if(nxt&&nxt.set.id!==q.setId)nextBtn=`<button class="btn blue" onclick="openVocabStudy('${esc(nxt.set.id)}')">다음 미션 ▶</button>`;
-    else{const lk=missionStates(q.set.track,session.id).find(m=>m.state==='date');if(lk)nextBtn=`<span class="pill blue" style="align-self:center">다음 미션은 ${fmtMD(lk.set.open_date)}에 열려요</span>`;}
   }
   const wrongHtml=wrongWords.length?`<div class="section-head" style="margin-top:18px"><h2>틀린 단어 다시 보기</h2></div>`+wrongWords.map(w=>`<div class="card"><strong>${esc(w.word)}</strong> — ${esc(w.meaning)}${w.example?`<div style="color:var(--text2);margin-top:4px;font-size:13px">예) ${highlightExample(w.example,w.word)}</div>`:''}</div>`).join(''):'';
   q.done=true;
@@ -3296,7 +3294,7 @@ async function submitVocabTest(){
       <div class="t" style="color:${pass?'var(--green)':'var(--text)'}">${pass?(firstClear?'MISSION CLEAR!':'CLEAR!'):'조금만 더!'}</div>
       ${q.set.track||pass?`<div class="stars">${'★'.repeat(stars)}<span class="off">${'★'.repeat(3-stars)}</span></div>`:''}
       <div style="font-size:15px">${total}문제 중 <b>${score}</b>개 정답 (${Math.round(r*100)}%)</div>
-      ${pass?'':`<div style="font-size:12px;color:var(--text2);margin-top:4px">${Math.ceil(total*VOCAB_PASS)}개 이상 맞히면 클리어예요</div>`}
+      ${pass?'':`<div style="font-size:12px;color:var(--text2);margin-top:4px">${q.set.track?'다 맞혀야 다음 미션이 열려요':'다 맞히면 클리어예요'}</div>`}
       <div style="display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap">
         <button class="btn" onclick="openVocabStudy('${esc(q.setId)}')">단어 다시 보기</button>
         <button class="btn" onclick="startVocabTest('${esc(q.setId)}')">${pass?(stars===3?'다시 풀기':'★ 더 받기 재도전'):'다시 도전'}</button>

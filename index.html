@@ -2910,7 +2910,7 @@ async function submitCertItem(itemId){
 }
 /* ===================== 어휘 미션 — 공통 ===================== */
 const VOCAB_PASS=1;              // 다 맞혀야 미션 클리어 (다음 미션이 열려요)
-const TRACK_ORDER=['중학','수능']; // 교재 구분 없이 한 줄로 이어 붙이는 순서
+const TRACK_ORDER=['중학','수능','1등급 어휘력']; // 교재 구분 없이 한 줄로 이어 붙이는 순서
 const VOCAB_ALL='어휘';           // 모든 교재를 합친 하나의 미션 목록
 let vocabTrackSel=null;          // 화면에서 고른 교재(트랙)
 let currentVocabQuiz=null;
@@ -3406,14 +3406,27 @@ function buildVocabQuestions(set){
     const sameTrack=new Set(set.track?missionsOf(set.track).map(s=>s.id):[]);
     pool=words.concat(db.vocabWords.filter(w=>w.set_id!==set.id&&sameTrack.has(w.set_id)));
   }
+  const plain=pool.filter(o=>!o.kind),spells=pool.filter(o=>o.kind==='spell'),rel=pool.filter(o=>o.kind==='syn'||o.kind==='ant');
+  const pick3=(cands,own)=>{const seen=new Set(own),ds=[];for(const t of shuffle(cands)){if(!t||seen.has(t))continue;seen.add(t);ds.push(t);if(ds.length>=3)break;}return ds;};
+  const mk=(type,w,right,wrongs)=>({type,w,choices:shuffle([{text:right,correct:true},...wrongs.map(t=>({text:t,correct:false}))])});
   return shuffle(words).map((w,i)=>{
+    if(w.kind==='spell'&&w.alt){ // 바른 표기 고르기 / 표기가 틀린 것 고르기 번갈아 (다른 단어의 틀린·바른 표기를 오답 보기로)
+      if(i%2===0)return mk('spell_right',w,w.word,[w.alt].concat(pick3(spells.filter(o=>o.id!==w.id).map(o=>o.alt),[w.word,w.alt])).slice(0,3));
+      return mk('spell_wrong',w,w.alt,pick3(spells.filter(o=>o.id!==w.id).map(o=>o.word),[w.word,w.alt]));
+    }
+    if((w.kind==='syn'||w.kind==='ant')&&altList(w).length){ // 뜻이 통하는 말(유의어) / 반의어 고르기: 다른 표제어의 유의어·반의어를 오답 보기로
+      const mine=altList(w);const right=shuffle(mine)[0];
+      return mk(w.kind,w,right,pick3(rel.filter(o=>o.id!==w.id).flatMap(altList),mine.concat(w.word)));
+    }
     const type=i%2===0?'meaning':'word'; // 뜻 고르기 / 단어 고르기 번갈아
     const key=type==='meaning'?'meaning':'word';
-    const seen=new Set([w[key]]),ds=[];
-    for(const o of shuffle(pool)){if(o.id===w.id||seen.has(o[key]))continue;seen.add(o[key]);ds.push(o[key]);if(ds.length>=3)break;}
-    return{type,w,choices:shuffle([{text:w[key],correct:true},...ds.map(t=>({text:t,correct:false}))])};
+    return mk(type,w,w[key],pick3((plain.length>=4?plain:pool).filter(o=>o.id!==w.id).map(o=>o[key]),[w[key]]));
   });
 }
+function altList(w){return String(w.alt||'').split(/\s*,\s*/).filter(Boolean);}
+// 문제 종류별 질문 문구와 문제 칸에 보여 줄 말
+const VQ_TYPE={meaning:'알맞은 뜻을 고르세요',word:'이 뜻에 맞는 단어를 고르세요',spell_right:'바른 표현을 고르세요',spell_wrong:'바르지 않은 표현을 고르세요',syn:'뜻이 통하는 말을 고르세요',ant:'반대되는 뜻의 말을 고르세요'};
+function vocabHeadText(w){return w.kind==='spell'?`${w.alt}(×) → ${w.word}`:w.word;}
 function startVocabTest(setId){
   const set=db.vocabSets.find(s=>s.id===setId);if(!set)return;
   if(set.track){const m=missionStates(set.track,session.id).find(x=>x.set.id===setId);if(m&&m.state==='prev'){notify('앞 미션을 다 맞혀야 열려요.','info');return;}}
@@ -3459,8 +3472,8 @@ function renderVocabStudy(el){
       ${st.hide?'<div style="font-size:12px;color:var(--text2);margin-top:8px">뜻을 떠올려 본 다음 카드를 눌러 확인해 보세요.</div>':''}</div>
     ${words.map((w,i)=>{const open=!st.hide||st.shown.has(w.id);
       return `<div class="card"${open?'':` style="cursor:pointer" onclick="studyReveal('${esc(w.id)}')"`}>
-        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${i+1}</span><span style="font-size:18px;font-weight:700">${esc(w.word)}</span>${w.hanja?`<span style="color:var(--text2);font-size:13px">${esc(w.hanja)}</span>`:''}</div>
-        ${open?`<div style="margin-top:6px;line-height:1.6">${esc(w.meaning)}</div>${w.example?`<div style="margin-top:6px;font-size:13px;color:var(--text2);line-height:1.6">예) ${highlightExample(w.example,w.word)}</div>`:''}`
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${i+1}</span><span style="font-size:18px;font-weight:700">${esc(vocabHeadText(w))}</span>${w.hanja?`<span style="color:var(--text2);font-size:13px">${esc(w.hanja)}</span>`:''}</div>
+        ${open?`<div style="margin-top:6px;line-height:1.6">${esc(w.meaning)}</div>${(w.kind==='syn'||w.kind==='ant')&&w.alt?`<div style="margin-top:4px;font-size:13px"><b>${w.kind==='syn'?'뜻이 통하는 말':'반의어'}</b> ${esc(w.alt)}</div>`:''}${w.example?`<div style="margin-top:6px;font-size:13px;color:var(--text2);line-height:1.6">예) ${highlightExample(w.example,w.word)}</div>`:''}`
           :`<div style="margin-top:6px;font-size:13px;color:var(--accent)">눌러서 뜻 보기 ▾</div>`}
       </div>`;}).join('')}
     <div style="position:sticky;bottom:12px;margin-top:8px"><button class="btn blue" style="width:100%;padding:12px;font-size:15px;box-shadow:0 6px 18px rgba(0,0,0,.35)" onclick="studyStart()">다 외웠어요 · 테스트 시작 ▶</button></div>
@@ -3491,8 +3504,11 @@ function renderVocabTake(){
   if(q.done){el.innerHTML=q.resultHtml;return;}
   const item=q.questions[q.idx];const picked=q.picks[q.idx];const answered=picked!=null;
   const total=q.questions.length;const w=item.w;
-  const prompt=item.type==='meaning'
+  const blankEx=w.example?esc(w.example.split(/\s*\/\s*/)[0]).split(esc(w.word)).join('<span style="color:var(--accent)">☐☐</span>'):'';
+  const prompt=item.type==='meaning'||item.type==='syn'||item.type==='ant'
     ?`<div class="q-prompt">${esc(w.word)}${w.hanja?`<span class="q-hanja">${esc(w.hanja)}</span>`:''}</div>`
+    :item.type==='spell_right'?(blankEx?`<div class="q-prompt long" style="font-size:15px">${blankEx}</div>`:'')
+    :item.type==='spell_wrong'?''
     :`<div class="q-prompt long">${esc(w.meaning)}</div>`;
   const choices=item.choices.map((c,ci)=>{
     let cls='q-choice';if(answered){if(c.correct)cls+=' correct';else if(ci===picked)cls+=' wrong';}
@@ -3501,7 +3517,8 @@ function renderVocabTake(){
   const ok=answered&&picked>=0&&item.choices[picked].correct;
   const feedback=answered?`<div class="q-feedback">
       <div style="font-weight:700;color:${ok?'var(--green)':'var(--red)'}">${ok?'정답!':picked<0?'⏱ 시간 초과!':'아쉬워요'}</div>
-      <div style="margin-top:4px"><b>${esc(w.word)}</b>${w.hanja?` (${esc(w.hanja)})`:''} — ${esc(w.meaning)}</div>
+      <div style="margin-top:4px"><b>${esc(vocabHeadText(w))}</b>${w.hanja?` (${esc(w.hanja)})`:''} — ${esc(w.meaning)}</div>
+      ${(w.kind==='syn'||w.kind==='ant')&&w.alt?`<div style="margin-top:4px;font-size:13px">${w.kind==='syn'?'뜻이 통하는 말':'반의어'}: ${esc(w.alt)}</div>`:''}
       ${w.example?`<div style="color:var(--text2);margin-top:4px">예) ${highlightExample(w.example,w.word)}</div>`:''}
     </div>
     <button class="btn blue" style="margin-top:12px;width:100%" onclick="nextVocabQ()">${q.idx+1<total?'다음 문제 ▶':'결과 보기'}</button>`:'';
@@ -3515,7 +3532,7 @@ function renderVocabTake(){
     <div class="progress-bar" style="height:6px;margin:4px 0 14px"><div class="progress-bar-fill" style="width:${Math.round((q.idx+(answered?1:0))/total*100)}%"></div></div>
     ${timerHtml}
     <div class="card">
-      <div class="q-type">${item.type==='meaning'?'알맞은 뜻을 고르세요':'이 뜻에 맞는 단어를 고르세요'}</div>
+      <div class="q-type">${VQ_TYPE[item.type]||''}</div>
       ${prompt}
       ${choices}
       ${feedback}
@@ -3540,7 +3557,7 @@ async function submitVocabTest(){
   let score=0;const wrongWords=[];
   q.questions.forEach((item,i)=>{
     const p=q.picks[i];const c=p!=null&&p>=0&&item.choices[p].correct;
-    if(c)score++;else wrongWords.push({word:item.w.word,meaning:item.w.meaning,example:item.w.example,type:item.type,picked:p!=null&&p>=0?item.choices[p].text:(p<0?'시간 초과':null)});
+    if(c)score++;else wrongWords.push({word:vocabHeadText(item.w),meaning:item.w.meaning,example:item.w.example,type:item.type,picked:p!=null&&p>=0?item.choices[p].text:(p<0?'시간 초과':null)});
   });
   const total=q.questions.length;
   const before=q.set.track?missionStates(q.set.track,session.id).find(m=>m.set.id===q.setId):null;

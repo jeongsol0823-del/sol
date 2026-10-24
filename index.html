@@ -3406,10 +3406,13 @@ function buildVocabQuestions(set){
     const sameTrack=new Set(set.track?missionsOf(set.track).map(s=>s.id):[]);
     pool=words.concat(db.vocabWords.filter(w=>w.set_id!==set.id&&sameTrack.has(w.set_id)));
   }
-  const plain=pool.filter(o=>!o.kind),spells=pool.filter(o=>o.kind==='spell'),rel=pool.filter(o=>o.kind==='syn'||o.kind==='ant');
+  const plain=pool.filter(o=>!o.kind),spells=pool.filter(o=>o.kind==='spell'&&o.alt&&o.alt.length<=12),sentences=pool.filter(o=>o.kind==='spell'&&o.alt&&o.alt.length>12),rel=pool.filter(o=>o.kind==='syn'||o.kind==='ant');
   const pick3=(cands,own)=>{const seen=new Set(own),ds=[];for(const t of shuffle(cands)){if(!t||seen.has(t))continue;seen.add(t);ds.push(t);if(ds.length>=3)break;}return ds;};
   const mk=(type,w,right,wrongs)=>({type,w,choices:shuffle([{text:right,correct:true},...wrongs.map(t=>({text:t,correct:false}))])});
   return shuffle(words).map((w,i)=>{
+    if(w.kind==='spell'&&w.alt&&w.alt.length>12){ // 문장 다듬기: 어색한 문장을 보여 주고, 바르게 고친 표현을 고르기
+      return mk('fix',w,w.word,pick3(sentences.filter(o=>o.id!==w.id).map(o=>o.word),[w.word]));
+    }
     if(w.kind==='spell'&&w.alt){ // 바른 표기 고르기 / 표기가 틀린 것 고르기 번갈아 (다른 단어의 틀린·바른 표기를 오답 보기로)
       if(i%2===0)return mk('spell_right',w,w.word,[w.alt].concat(pick3(spells.filter(o=>o.id!==w.id).map(o=>o.alt),[w.word,w.alt])).slice(0,3));
       return mk('spell_wrong',w,w.alt,pick3(spells.filter(o=>o.id!==w.id).map(o=>o.word),[w.word,w.alt]));
@@ -3418,14 +3421,18 @@ function buildVocabQuestions(set){
       const mine=altList(w);const right=shuffle(mine)[0];
       return mk(w.kind,w,right,pick3(rel.filter(o=>o.id!==w.id).flatMap(altList),mine.concat(w.word)));
     }
-    const type=i%2===0?'meaning':'word'; // 뜻 고르기 / 단어 고르기 번갈아
+    // 뜻 고르기 / 단어 고르기 번갈아. 뜻풀이에 단어가 그대로 들어 있으면(예: 사과 — 사과나무의 열매) 뜻 고르기로만
+    const stem=w.word.replace(/[¹²³⁴⁵⁶⁷⁸⁹]/g,'').replace(/(하다|되다|이다|스럽다|롭다|다)$/,'');
+    const type=i%2===0||(stem.length>=2&&w.meaning.includes(stem))?'meaning':'word';
     const key=type==='meaning'?'meaning':'word';
-    return mk(type,w,w[key],pick3((plain.length>=4?plain:pool).filter(o=>o.id!==w.id).map(o=>o[key]),[w[key]]));
+    // 뜻이 똑같은 단어(예: 서거·별세)나 같은 단어는 오답 보기로 쓰지 않아요 → 정답이 하나만 되게
+    const others=(plain.length>=4?plain:pool).filter(o=>o.id!==w.id&&o.meaning!==w.meaning&&o.word!==w.word);
+    return mk(type,w,w[key],pick3(others.map(o=>o[key]),[w[key]]));
   });
 }
 function altList(w){return String(w.alt||'').split(/\s*,\s*/).filter(Boolean);}
 // 문제 종류별 질문 문구와 문제 칸에 보여 줄 말
-const VQ_TYPE={meaning:'알맞은 뜻을 고르세요',word:'이 뜻에 맞는 단어를 고르세요',spell_right:'바른 표현을 고르세요',spell_wrong:'바르지 않은 표현을 고르세요',syn:'뜻이 통하는 말을 고르세요',ant:'반대되는 뜻의 말을 고르세요'};
+const VQ_TYPE={meaning:'알맞은 뜻을 고르세요',word:'이 뜻에 맞는 단어를 고르세요',spell_right:'바른 표현을 고르세요',spell_wrong:'바르지 않은 표현을 고르세요',fix:'어색한 문장을 바르게 고친 것을 고르세요',syn:'뜻이 통하는 말을 고르세요',ant:'반대되는 뜻의 말을 고르세요'};
 function vocabHeadText(w){return w.kind==='spell'?`${w.alt}(×) → ${w.word}`:w.word;}
 function startVocabTest(setId){
   const set=db.vocabSets.find(s=>s.id===setId);if(!set)return;
@@ -3509,6 +3516,7 @@ function renderVocabTake(){
     ?`<div class="q-prompt">${esc(w.word)}${w.hanja?`<span class="q-hanja">${esc(w.hanja)}</span>`:''}</div>`
     :item.type==='spell_right'?(blankEx?`<div class="q-prompt long" style="font-size:15px">${blankEx}</div>`:'')
     :item.type==='spell_wrong'?''
+    :item.type==='fix'?`<div class="q-prompt long" style="font-size:15px">${esc(w.alt)}</div>`
     :`<div class="q-prompt long">${esc(w.meaning)}</div>`;
   const choices=item.choices.map((c,ci)=>{
     let cls='q-choice';if(answered){if(c.correct)cls+=' correct';else if(ci===picked)cls+=' wrong';}

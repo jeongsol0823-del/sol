@@ -664,6 +664,7 @@ let ytPlayer=null,currentVid=null,currentStartPos=0;
 let watchedSet=new Set(),lastPos=-1,totalDur=0,maxRateSeen=1;
 let trackTimer=null,saveTimer=null;
 let rateSec={},baseRateSec={}; // 배속별 시청 초 (이번 재생분 / 저장돼 있던 값)
+let awayCount=0,awaySec=0,baseAwayCount=0,baseAwaySec=0,awayStart=0,lastPlayingAt=0; // 재생 중 다른 화면으로 나간 횟수·시간 (이번 재생분 / 저장돼 있던 값)
 let currentExamTaking=null; // exam object being taken by a student
 let examRowSeq=0;
 
@@ -753,7 +754,7 @@ async function upsertProgress(sid,vid,pct,watchSec,lastPosition,maxRate,extra){
   let{error}=await sb.from('progress').upsert(payload,{onConflict:'student_id,video_id'});
   if(error&&extra&&/watched_ranges|rate_seconds|duration|column/i.test(error.message)){
     progressExtrasOff=true;
-    ['watched_ranges','duration','rate_seconds'].forEach(k=>delete payload[k]);
+    ['watched_ranges','duration','rate_seconds','away_count','away_seconds'].forEach(k=>delete payload[k]);
     ({error}=await sb.from('progress').upsert(payload,{onConflict:'student_id,video_id'}));
   }
   if(error){console.error('저장 실패:',error.message);return;}
@@ -1034,14 +1035,14 @@ function renderActive(){
     const watched=myProg.length;
     const avg=watched?Math.round(myProg.reduce((a,p)=>a+(p.percent||0),0)/watched):0;
     const flags=videoFlagsFor(u.id);
-    const fast=flags.filter(f=>f.fast).length,skip=flags.filter(f=>f.skip).length;
+    const fast=flags.filter(f=>f.fast).length,skip=flags.filter(f=>f.skip).length,away=flags.filter(f=>f.away).length;
     return `<tr>
       <td>${esc(u.name)}${nameTaken(u.name,u.id)?' <span class="pill red">동명이인</span>':''}<div style="font-size:11px;color:var(--text3)">${esc(u.id)}</div></td>
       <td style="white-space:nowrap"><select class="date-in" id="st-school-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}','school')"><option value="">학교 미입력</option>${[...new Set(schoolNames().concat(u.school?[u.school]:[]))].map(n=>`<option value="${esc(n)}"${u.school===n?' selected':''}>${esc(n)}</option>`).join('')}</select>
         <select class="date-in" id="st-grade-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}')">${gradeOptionsHtml(todayStr(),gradeAt(u),'학년')}</select></td>
       <td>${watched} / ${db.videos.filter(v=>hasAccess(u.id,v.id)).length}개 시청${grammarOk(u.id)?' <span class="pill blue">문법</span>':''}</td>
       <td>${avg}%</td>
-      <td>${fast?`<span class="pill amber">배속 ${fast}</span> `:''}${skip?`<span class="pill red">건너뜀 ${skip}</span>`:''}${!fast&&!skip?'<span style="color:var(--text3)">-</span>':''}</td>
+      <td>${fast?`<span class="pill amber">배속 ${fast}</span> `:''}${skip?`<span class="pill red">건너뜀 ${skip}</span> `:''}${away?`<span class="pill red">이탈 ${away}</span>`:''}${!fast&&!skip&&!away?'<span style="color:var(--text3)">-</span>':''}</td>
       <td style="white-space:nowrap"><button class="btn sm" onclick="showStudentPw('${esc(u.id)}')">비번 보기</button> <button class="btn sm" onclick="resetStudentPw('${esc(u.id)}')">새 비번</button> <button class="btn sm" onclick="renameStudent('${esc(u.id)}')">이름 수정</button> <button class="btn red sm" onclick="removeStudent('${esc(u.id)}')">삭제</button><div id="pw-${esc(u.id)}" style="font-size:12px;margin-top:4px"></div></td>
     </tr>`;
   }).join('');
@@ -1207,6 +1208,7 @@ function renderVideoAdmin(){
 const FAST_RATE=1.5;      // 정상 속도는 1.5배까지 허용, 그보다 빠르게 본 시간을 확인
 const FAST_ALERT_SEC=10;  // 1.5배 이상으로 10초 넘게 보면 알림
 const SKIP_ALERT_SEC=30;  // 건너뛴 구간이 합쳐서 30초 넘으면 알림
+const AWAY_ALERT_N=3;     // 재생 중 다른 화면으로 3번 이상 나가면 알림
 function fmtClock(sec){sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s2=sec%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s2).padStart(2,'0');}
 function watchInfo(p){
   if(!p)return null;
@@ -1223,22 +1225,24 @@ function watchInfo(p){
     const far=R[R.length-1][1];info.remaining=p.duration?Math.max(0,p.duration-far-1):0;
   }
   info.fast=fastSec>=FAST_ALERT_SEC;info.skip=info.skipTotal>=SKIP_ALERT_SEC;
+  info.awayCount=p.away_count||0;info.awaySec=p.away_seconds||0;info.away=info.awayCount>=AWAY_ALERT_N;
   return info;
 }
 function videoFlagsFor(sid){
-  return db.progress.filter(p=>p.student_id===sid).map(p=>Object.assign({p},watchInfo(p))).filter(f=>f.fast||f.skip);
+  return db.progress.filter(p=>p.student_id===sid).map(p=>Object.assign({p},watchInfo(p))).filter(f=>f.fast||f.skip||f.away);
 }
 function ratesText(rates){
   const e=Object.entries(rates||{}).filter(([,v])=>v>0).sort((a,b)=>parseFloat(a[0])-parseFloat(b[0]));
   return e.length?e.map(([k,v])=>`${k}배 ${fmtTime(v)}`).join(' · '):'-';
 }
-function videoAckKey(f){return [f.p.student_id,f.p.video_id,f.maxRate,Math.floor(f.fastSec/10),f.skipTotal].join('|');}
+function videoAckKey(f){return [f.p.student_id,f.p.video_id,f.maxRate,Math.floor(f.fastSec/10),f.skipTotal].join('|')+(f.awayCount?'|a'+f.awayCount:'');}
+function awayPill(f){return f&&f.away?`<span class="pill red">이탈 ${f.awayCount}회 · ${fmtTime(f.awaySec)}</span>`:'';}
 function getVideoAcks(){try{return JSON.parse(localStorage.getItem('sk_video_ack')||'[]');}catch(e){return[];}}
 function ackVideoAlert(key){try{const a=getVideoAcks();a.push(key);localStorage.setItem('sk_video_ack',JSON.stringify(a.slice(-500)));}catch(e){}renderVideoAlerts();}
 function videoAlerts(){
   const acks=new Set(getVideoAcks());
   const active=new Set(db.users.filter(u=>u.role==='student').map(u=>u.id));
-  return db.progress.filter(p=>active.has(p.student_id)).map(p=>Object.assign({p},watchInfo(p))).filter(f=>(f.fast||f.skip)&&!acks.has(videoAckKey(f)))
+  return db.progress.filter(p=>active.has(p.student_id)).map(p=>Object.assign({p},watchInfo(p))).filter(f=>(f.fast||f.skip||f.away)&&!acks.has(videoAckKey(f)))
     .sort((a,b)=>new Date(b.p.updated_at||0)-new Date(a.p.updated_at||0));
 }
 function renderVideoAlerts(){
@@ -1248,9 +1252,9 @@ function renderVideoAlerts(){
   if(badge)badge.innerHTML=list.length?`<span class="tab-badge">${list.length}</span>`:'';
   if(!list.length){el.innerHTML='';return;}
   el.innerHTML=`<div class="card alert-card" style="margin-bottom:18px">
-    <div class="row-between" style="margin-bottom:4px"><strong>🔔 영상 시청 확인 필요 ${list.length}건</strong><span style="font-size:11px;color:var(--text3)">${FAST_RATE}배 초과 ${FAST_ALERT_SEC}초 넘게 · 건너뛴 구간 ${SKIP_ALERT_SEC}초 이상</span></div>
+    <div class="row-between" style="margin-bottom:4px"><strong>🔔 영상 시청 확인 필요 ${list.length}건</strong><span style="font-size:11px;color:var(--text3)">${FAST_RATE}배 초과 ${FAST_ALERT_SEC}초 넘게 · 건너뛴 구간 ${SKIP_ALERT_SEC}초 이상 · 다른 화면 ${AWAY_ALERT_N}번 이상</span></div>
     ${list.map(f=>{const v=db.videos.find(x=>x.id===f.p.video_id);return `<div class="alert-row"><div><strong>${esc(userName(f.p.student_id))}</strong> <span style="font-size:12px;color:var(--text2)">${esc(v?v.title:'(삭제된 영상)')}</span>
-      <div style="margin-top:2px;font-size:12px">${f.fast?`<span class="pill amber">최고 ${f.maxRate}배 · ${FAST_RATE}배 초과 ${fmtTime(f.fastSec)}</span> `:''}${f.skip?`<span class="pill red">건너뜀 ${fmtTime(f.skipTotal)}</span> <span style="color:var(--text2)">${f.skips.slice(0,4).map(([a,b])=>fmtClock(a)+'~'+fmtClock(b)).join(', ')}${f.skips.length>4?' 외':''}</span>`:''}</div></div>
+      <div style="margin-top:2px;font-size:12px">${f.fast?`<span class="pill amber">최고 ${f.maxRate}배 · ${FAST_RATE}배 초과 ${fmtTime(f.fastSec)}</span> `:''}${f.skip?`<span class="pill red">건너뜀 ${fmtTime(f.skipTotal)}</span> <span style="color:var(--text2)">${f.skips.slice(0,4).map(([a,b])=>fmtClock(a)+'~'+fmtClock(b)).join(', ')}${f.skips.length>4?' 외':''}</span>`:''} ${awayPill(f)}</div></div>
       <div style="display:flex;gap:6px;align-items:center"><span style="font-size:12px;color:var(--text2)">${f.p.updated_at?fmtMD(ymd(new Date(f.p.updated_at))):''}</span><button class="btn sm" onclick="ackVideoAlert('${esc(videoAckKey(f))}')">확인함</button></div></div>`;}).join('')}
   </div>`;
 }
@@ -1269,7 +1273,7 @@ function renderVideoWatchDetail(vid){
     const skipTxt=!f.hasRanges?'<span style="color:var(--text3)">기록 없음</span>':f.skips.length?`<span style="color:${f.skip?'var(--red)':'var(--text2)'}">${fmtTime(f.skipTotal)}</span><div style="font-size:11px;color:var(--text2)">${f.skips.map(([a,b])=>fmtClock(a)+'~'+fmtClock(b)).join(', ')}</div>`:'없음';
     return `<tr>${nm}${accCell(u)}<td>${f.pct}%${f.remaining>5?`<div style="font-size:11px;color:var(--text3)">남은 ${fmtTime(f.remaining)}</div>`:''}</td>
       <td><span style="color:${f.fast?'var(--amber)':'inherit'}">최고 ${f.maxRate}배</span><div style="font-size:11px;color:var(--text2)">${ratesText(f.rates)}</div></td>
-      <td>${skipTxt}</td><td style="font-size:12px;color:var(--text2)">${p.updated_at?fmtMD(ymd(new Date(p.updated_at))):''}</td></tr>`;}).join('');
+      <td>${skipTxt}${f.awayCount?`<div style="font-size:11px;color:${f.away?'var(--red)':'var(--text2)'}">다른 화면 ${f.awayCount}회 · ${fmtTime(f.awaySec)}</div>`:''}</td><td style="font-size:12px;color:var(--text2)">${p.updated_at?fmtMD(ymd(new Date(p.updated_at))):''}</td></tr>`;}).join('');
   el.innerHTML=`<div class="card"><strong>${esc(v?v.title:'')}</strong> <span style="color:var(--text2)">시청 권한·기록</span>
       ${gram?`<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:12px;color:var(--text2)">문법 기초 <input type="number" min="1" class="date-in" style="width:70px" id="vno-${esc(vid)}" value="${grammarNo(v)}">강 <button class="btn sm" onclick="setGrammarNo('${esc(vid)}')">적용</button><span>수강 승인한 학생 모두에게 열려요 (학교 상관없음)</span></div>
       <div class="vhint" style="margin:6px 0 0">수강 승인·취소는 여기나 <b>영상 승인</b> 탭에서 할 수 있어요. ${GRAMMAR_DONE}% 이상 보면 완강으로 쳐요. 건너뛴 구간 = 앞까지 봤는데 중간에 안 본 부분이에요.</div></div>`:`
@@ -1424,7 +1428,7 @@ function renderGrammarGrid(){
     head.innerHTML=g.total?`<div class="card"><div class="row-between"><strong>내 진도</strong><span>완강 <b>${g.done}</b>/${g.total}강 · 진도율 ${g.avg}%</span></div>
       <div class="progress-bar"><div class="progress-bar-fill" style="width:${g.avg}%;background:var(--green)"></div></div>
       ${g.next?`<div class="row-between" style="margin-top:10px;gap:8px"><span style="font-size:13px">다음 강의: <b>${g.next.no}강</b> ${esc(g.next.v.title)}</span><button class="btn blue sm" onclick="openPlay('${esc(g.next.v.id)}')">${g.next.pct>0?'이어서 보기':'보기'}</button></div>`:'<div style="margin-top:10px;font-size:13px;color:var(--green);font-weight:600">🎉 모든 강의를 다 들었어요!</div>'}
-      <div class="vhint" style="margin:8px 0 0">${STU_FAST_WARN}배속 이상으로 보거나 1분 넘게 건너뛰면 경고가 뜨고 부모님 성적표에 기록돼요.</div></div>`:'';
+      <div class="vhint" style="margin:8px 0 0">${STU_FAST_WARN}배속 이상으로 보거나 1분 넘게 건너뛰면 경고가 뜨고 부모님 성적표에 기록돼요. 보는 중에 다른 화면으로 나가면 영상이 멈추고 기록돼요.</div></div>`:'';
   }else{
     const pend=st&&st.status==='pending',rej=st&&st.status==='rejected';
     head.innerHTML=`<div class="card"><div style="font-weight:600;margin-bottom:6px">문법 기초 강의 ${g.total?`<span style="color:var(--text2);font-weight:400">(${g.total}강)</span>`:''}</div>
@@ -1525,6 +1529,7 @@ function openPlay(vid){
   currentStartPos=getLastPos(session.id,vid);
   const prog=db.progress.find(p=>p.student_id===session.id&&p.video_id===vid);
   baseRateSec=Object.assign({},(prog&&prog.rate_seconds)||{});rateSec={};
+  baseAwayCount=(prog&&prog.away_count)||0;baseAwaySec=(prog&&prog.away_seconds)||0;awayCount=0;awaySec=0;awayStart=0;lastPlayingAt=0;
   const id=ytId(v.url);
   if(!id){notify('유효하지 않은 유튜브 URL입니다.','error');return;}
   document.getElementById('play-title').textContent=v.title;
@@ -1583,6 +1588,7 @@ function startTracking(){
     if(lastPos>=0&&cur>lastPos&&cur-lastPos<=3){for(let i=lastPos;i<=cur;i++)watchedSet.add(i);}
     else{watchedSet.add(cur);}
     lastPos=cur;
+    lastPlayingAt=Date.now();
     let rateNow=1;
     try{const rate=ytPlayer.getPlaybackRate();rateNow=rate;if(rate>maxRateSeen)maxRateSeen=rate;const k=String(rate);rateSec[k]=(rateSec[k]||0)+1;}catch(e){}
     checkPlayWarnings(rateNow);
@@ -1627,14 +1633,36 @@ function checkPlayWarnings(rate){
     const links=sk.slice(0,4).map(([a,b])=>`<span class="seek" onclick="seekPlay(${a})">${fmtClock(a)}~${fmtClock(b)}</span>`).join(', ')+(sk.length>4?' 외':'');
     parts.push(`<div class="w"><span>⚠️ 건너뛴 구간이 있습니다: ${links} (총 ${fmtTime(total)})<br><b>건너뛴 구간으로 돌아가 다시 보지 않으면 영상 시청 안 함으로 부모님께 보고되며, 학원에 나와서 다시 영상을 봐야 합니다.</b><br><span style="font-size:12px;opacity:.8">구간을 누르면 그 부분부터 재생돼요.</span></span></div>`);
   }
+  if(awayCount)parts.push(`<div class="w"><span>⚠️ 영상을 보다가 <b>다른 화면으로 나갔어요</b> (이 영상에서 ${baseAwayCount+awayCount}번째). 나가면 영상이 멈춰요.<br><b>${AWAY_ALERT_N}번 이상 나가면 선생님께 알림이 가고 부모님 성적표에 기록돼요.</b></span></div>`);
   el.innerHTML=parts.join('');el.style.display=parts.length?'flex':'none';
 }
+/* ---- 재생 중 다른 화면(앱·탭·창)으로 나가면: 영상 멈춤 + 횟수·시간 기록 ---- */
+function playWatched(){return session&&session.role==='student'&&currentVid&&document.getElementById('modal-play').classList.contains('show');}
+function leavePlay(){
+  if(!playWatched()||awayStart)return;
+  let playing=false;try{playing=ytPlayer&&ytPlayer.getPlayerState()===YT.PlayerState.PLAYING;}catch(e){}
+  if(!playing&&Date.now()-lastPlayingAt>2500)return; // 멈춰 둔 상태에서 나간 건 괜찮아요
+  awayStart=Date.now();awayCount++;
+  try{ytPlayer.pauseVideo();}catch(e){}
+  doAutoSave();
+}
+function backToPlay(){
+  if(!awayStart)return;
+  awaySec+=(Date.now()-awayStart)/1000;awayStart=0;
+  checkPlayWarnings(ytPlayer&&ytPlayer.getPlaybackRate?ytPlayer.getPlaybackRate():1);
+  notify(`다른 화면으로 나가서 영상을 멈췄어요 (${baseAwayCount+awayCount}번째). 다시 재생해 주세요.`,'error');
+  scheduleSave();
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)leavePlay();else backToPlay();});
+// 영상 화면(유튜브 칸)을 누를 때도 창 포커스가 빠지므로, 그때는 나간 것으로 치지 않아요
+window.addEventListener('blur',()=>setTimeout(()=>{const a=document.activeElement;if(a&&a.tagName==='IFRAME')return;leavePlay();},0));
+window.addEventListener('focus',backToPlay);
 function dismissSkipWarn(total){skipWarnDismissed=total;checkPlayWarnings(ytPlayer&&ytPlayer.getPlaybackRate?ytPlayer.getPlaybackRate():1);}
 function seekPlay(sec){try{if(ytPlayer){ytPlayer.seekTo(sec,true);ytPlayer.playVideo();}}catch(e){}}
 function progressExtra(){
   const merged=Object.assign({},baseRateSec);
   Object.entries(rateSec).forEach(([k,v])=>{merged[k]=(merged[k]||0)+v;});
-  return{watched_ranges:toRanges(watchedSet),duration:Math.round(totalDur),rate_seconds:merged};
+  return{watched_ranges:toRanges(watchedSet),duration:Math.round(totalDur),rate_seconds:merged,away_count:baseAwayCount+awayCount,away_seconds:baseAwaySec+Math.round(awaySec)};
 }
 function updateTrackUI(pct){
   document.getElementById('trk-pct').textContent=pct+'%';
@@ -1647,12 +1675,12 @@ async function closePlay(){
     const pct=Math.min(Math.round((watchedSet.size/totalDur)*100),100);
     const curPct=getPct(session.id,currentVid);
     const curPos=ytPlayer?Math.floor(ytPlayer.getCurrentTime()):0;
-    if(pct>=curPct||Object.keys(rateSec).length)await upsertProgress(session.id,currentVid,Math.max(pct,curPct),watchedSet.size,curPos,maxRateSeen,progressExtra());
+    if(pct>=curPct||Object.keys(rateSec).length||awayCount)await upsertProgress(session.id,currentVid,Math.max(pct,curPct),watchedSet.size,curPos,maxRateSeen,progressExtra());
   }
   if(ytPlayer){try{ytPlayer.stopVideo();ytPlayer.destroy();}catch(e){}ytPlayer=null;}
   document.getElementById('yt-player').innerHTML='';
   document.getElementById('modal-play').classList.remove('show');
-  currentVid=null;currentStartPos=0;watchedSet=new Set();lastPos=-1;totalDur=0;maxRateSeen=1;rateSec={};baseRateSec={};
+  currentVid=null;currentStartPos=0;watchedSet=new Set();lastPos=-1;totalDur=0;maxRateSeen=1;rateSec={};baseRateSec={};awayCount=0;awaySec=0;baseAwayCount=0;baseAwaySec=0;awayStart=0;
   skipWarnDismissed=0;const pw=document.getElementById('play-warn');if(pw){pw.innerHTML='';pw.style.display='none';}
   if(session&&session.role==='student'){renderLectures();renderReviewGrid();renderGrammarGrid();}
 }
@@ -2689,13 +2717,13 @@ function parentReportHTML(sid,note,start,end){
   const attBox=box('출석',attN?`<div>${d.att.map(a=>{const m=stMap[a.status]||[a.status,C.ink,C.soft];return chip(`${mdWd(a.date)} ${m[0]}`,m[1],m[2]);}).join('')}</div>`:empty('이 기간에 출석 기록이 없어요.'),attN?`출석률 <b style="color:${C.ink}">${Math.round(okN/attN*100)}%</b> (${okN}/${attN}회)`:'');
   // 보충 강의 (본 강의가 있을 때만)
   const vidBox=d.vids.length?box('보충 강의 시청',`<table style="width:100%;border-collapse:collapse;font-size:13px">${d.vids.map(({p,v,f})=>{
-      const notes=[];if(f&&f.fast)notes.push(`<span style="color:${C.amber}">${FAST_RATE}배 초과 ${fmtTime(f.fastSec)}</span>`);if(f&&f.skip)notes.push(`<span style="color:${C.red}">건너뜀 ${fmtTime(f.skipTotal)}</span>`);
+      const notes=[];if(f&&f.fast)notes.push(`<span style="color:${C.amber}">${FAST_RATE}배 초과 ${fmtTime(f.fastSec)}</span>`);if(f&&f.skip)notes.push(`<span style="color:${C.red}">건너뜀 ${fmtTime(f.skipTotal)}</span>`);if(f&&f.away)notes.push(`<span style="color:${C.red}">다른 화면 ${f.awayCount}회</span>`);
       const pct=f?f.pct:0;
       return `<tr class="pb"><td style="padding:7px 8px;border-top:1px solid ${C.line}">${esc(v.title)}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};text-align:right;font-weight:600;white-space:nowrap;color:${pct>=100?C.green:C.ink}">${pct}%</td><td style="padding:7px 8px;border-top:1px solid ${C.line};font-size:12px;white-space:nowrap">${notes.join(' · ')||'<span style="color:#b0b6c3">정상 시청</span>'}</td></tr>`;}).join('')}</table>`):'';
   // 문법 기초 (수강생만): 이번 주 본 강의 + 누적 완강
   const gram=d.grammar;
   const gramBox=gram?box('문법 기초 강의',(gram.week.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">${gram.week.map(({p,v,f,no})=>{
-      const notes=[];if(f&&f.fast)notes.push(`<span style="color:${C.amber}">${FAST_RATE}배 초과 ${fmtTime(f.fastSec)}</span>`);if(f&&f.skip)notes.push(`<span style="color:${C.red}">건너뜀 ${fmtTime(f.skipTotal)}</span>`);
+      const notes=[];if(f&&f.fast)notes.push(`<span style="color:${C.amber}">${FAST_RATE}배 초과 ${fmtTime(f.fastSec)}</span>`);if(f&&f.skip)notes.push(`<span style="color:${C.red}">건너뜀 ${fmtTime(f.skipTotal)}</span>`);if(f&&f.away)notes.push(`<span style="color:${C.red}">다른 화면 ${f.awayCount}회</span>`);
       const pct=f?f.pct:0;
       return `<tr class="pb"><td style="padding:7px 8px;border-top:1px solid ${C.line}"><b style="color:${C.blue}">${no}강</b> ${esc(v.title)}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};text-align:right;font-weight:600;white-space:nowrap;color:${pct>=GRAMMAR_DONE?C.green:C.ink}">${pct>=GRAMMAR_DONE?'완강':pct+'%'}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};font-size:12px;white-space:nowrap">${notes.join(' · ')||'<span style="color:#b0b6c3">정상 시청</span>'}</td></tr>`;}).join('')}</table>`
       :`<div style="color:${C.red};font-size:14px;font-weight:600">이 기간에 시청한 강의가 없어요.</div>`)+

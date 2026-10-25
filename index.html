@@ -2292,7 +2292,10 @@ async function addCertWeek(){
 }
 /* --- 인증 공통 --- */
 // 과제 마감: 마감일 다음 날부터 '마감 지남'
-function certPastDue(item){return !!item.due_date&&todayStr()>item.due_date;}
+// 마감일 다음 날 0시 + 10분까지는 제때 낸 것으로 쳐요 (자정 직전에 누르고 올리는 사이 넘어가는 것 봐주기)
+const CERT_GRACE_MIN=10;
+function certDeadline(item){const [y,m,d]=item.due_date.split('-').map(Number);return new Date(y,m-1,d+1,0,CERT_GRACE_MIN);}
+function certPastDue(item){return !!item.due_date&&Date.now()>certDeadline(item);}
 // 과제 대상 학교: targets가 비어 있으면 전체, 아니면 ["수지고","풍덕고"] 같은 목록
 function certTargets(item){try{const v=item&&item.targets?JSON.parse(item.targets):null;return Array.isArray(v)&&v.length?v:null;}catch(e){return null;}}
 function certForSchool(item,school){const v=certTargets(item);return !v||v.includes(school||'');}
@@ -2314,7 +2317,7 @@ async function loadCert(){
 }
 // 학생의 가장 최근 제출 (재제출하면 예전 거절 기록은 지워져요)
 function certSubOf(itemId,sid){return db.certSubmissions.filter(s=>s.item_id===itemId&&s.student_id===sid).sort((a,b)=>new Date(b.submitted_at||0)-new Date(a.submitted_at||0))[0]||null;}
-function certLate(item,sub){return !!(item.due_date&&sub&&sub.submitted_at&&ymd(new Date(sub.submitted_at))>item.due_date);}
+function certLate(item,sub){return !!(item.due_date&&sub&&sub.submitted_at&&new Date(sub.submitted_at)>certDeadline(item));}
 // 상태: approved 통과 / pending 확인 대기 / rejected 미통과 / missing 미제출(마감 지남) / open 미제출(마감 전)
 function certState(item,sub){
   if(sub)return sub.status==='approved'?'approved':sub.status==='rejected'?'rejected':'pending';
@@ -2325,7 +2328,7 @@ function certPill(state){const [t,c]=CERT_LABEL[state];return `<span class="pill
 function certDueText(item){
   if(!item.due_date)return '마감 없음';
   const d=daysUntil(item.due_date);
-  return `${mdWd(item.due_date)}까지 · ${d>0?'D-'+d:d===0?'오늘 마감':'마감 지남'}`;
+  return `${mdWd(item.due_date)}까지 · ${d>0?'D-'+d:d===0?'오늘 마감':certPastDue(item)?'마감 지남':'마감 직후 '+CERT_GRACE_MIN+'분 여유'}`;
 }
 function certSortItems(items){return items.slice().sort((a,b)=>(b.due_date||'9999').localeCompare(a.due_date||'9999')||String(b.created_at||'').localeCompare(String(a.created_at||'')));}
 // 사진 여러 장은 주소를 줄바꿈으로 이어서 한 칸(photo_url)에 저장해요

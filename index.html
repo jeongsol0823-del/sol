@@ -2328,9 +2328,13 @@ function certDueText(item){
   return `${mdWd(item.due_date)}까지 · ${d>0?'D-'+d:d===0?'오늘 마감':'마감 지남'}`;
 }
 function certSortItems(items){return items.slice().sort((a,b)=>(b.due_date||'9999').localeCompare(a.due_date||'9999')||String(b.created_at||'').localeCompare(String(a.created_at||'')));}
+// 사진 여러 장은 주소를 줄바꿈으로 이어서 한 칸(photo_url)에 저장해요
+const CERT_MAX_PHOTOS=10;
+function certPhotos(url){return String(url||'').split(/\s+/).filter(Boolean);}
 async function removeCertPhoto(url){
-  if(!url)return;const i=url.indexOf('/cert-photos/');if(i<0)return;
-  try{await sb.storage.from('cert-photos').remove([decodeURIComponent(url.slice(i+'/cert-photos/'.length))]);}catch(e){}
+  const paths=certPhotos(url).map(u=>{const i=u.indexOf('/cert-photos/');return i<0?null:decodeURIComponent(u.slice(i+'/cert-photos/'.length));}).filter(Boolean);
+  if(!paths.length)return;
+  try{await sb.storage.from('cert-photos').remove(paths);}catch(e){}
 }
 
 /* --- 인증 — 강사 --- */
@@ -2366,7 +2370,7 @@ function certItemAdminHtml(item){
   const groups={};rows.forEach(r=>{const k=r.u.school||'학교 미지정';(groups[k]=groups[k]||[]).push(r);});
   const schoolNames=Object.keys(groups).sort((a,b)=>(a==='학교 미지정')-(b==='학교 미지정')||a.localeCompare(b));
   const subRow=r=>`<div class="row-between" style="padding:6px 0;border-top:1px solid var(--border);gap:8px">
-      <span>${esc(r.u.name)}${certLate(item,r.sub)?' <span class="pill amber">늦게 제출</span>':''}${r.sub.photo_url?` · <a href="${esc(r.sub.photo_url)}" target="_blank" rel="noopener" style="color:var(--accent)">사진 보기</a>`:''}</span>
+      <span>${esc(r.u.name)}${certLate(item,r.sub)?' <span class="pill amber">늦게 제출</span>':''}${certPhotos(r.sub.photo_url).map((u,i,a)=>` · <a href="${esc(u)}" target="_blank" rel="noopener" style="color:var(--accent)">사진${a.length>1?' '+(i+1):' 보기'}</a>`).join('')}</span>
       ${r.state==='pending'?`<div style="display:flex;gap:6px"><button class="btn green sm" onclick="setCertStatus('${esc(r.sub.id)}','approved')">통과</button><button class="btn red sm" onclick="setCertStatus('${esc(r.sub.id)}','rejected')">미통과</button></div>`
         :r.state==='approved'?`<span style="display:flex;gap:6px;align-items:center">${certPill('approved')}<button class="btn sm" onclick="setCertStatus('${esc(r.sub.id)}','rejected')">미통과로</button></span>`
         :`<span style="display:flex;gap:6px;align-items:center"><span class="pill red">미통과 · 재제출 대기</span><button class="btn sm" onclick="setCertStatus('${esc(r.sub.id)}','approved')">통과로</button></span>`}
@@ -2901,7 +2905,8 @@ function renderCertMy(){
     const canSubmit=state==='open'||state==='missing'||state==='rejected';
     const btnTxt=state==='rejected'?'재제출':item.type==='photo'?'제출':'완료 체크';
     const form=!canSubmit?'':item.type==='photo'
-      ?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px"><input type="file" accept="image/*" id="cert-file-${esc(item.id)}" style="max-width:190px;font-size:11px"><button class="btn blue sm" onclick="submitCertItem('${esc(item.id)}')">${btnTxt}</button></div>`
+      ?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px"><input type="file" accept="image/*" multiple id="cert-file-${esc(item.id)}" style="max-width:190px;font-size:11px" onchange="document.getElementById('cert-cnt-${esc(item.id)}').textContent=this.files.length>1?this.files.length+'장 선택':''"><span id="cert-cnt-${esc(item.id)}" style="font-size:12px;color:var(--accent)"></span><button class="btn blue sm" id="cert-btn-${esc(item.id)}" onclick="submitCertItem('${esc(item.id)}')">${btnTxt}</button></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">사진은 한 번에 여러 장(최대 ${CERT_MAX_PHOTOS}장) 고를 수 있어요.</div>`
       :`<div style="margin-top:8px"><button class="btn blue sm" onclick="submitCertItem('${esc(item.id)}')">${btnTxt}</button></div>`;
     const note=state==='missing'?'<div style="font-size:12px;color:var(--red);margin-top:6px">마감이 지났어요. 지금 내도 \'늦게 제출\'로 표시돼요.</div>'
       :state==='rejected'?'<div style="font-size:12px;color:var(--red);margin-top:6px">쏠T가 확인했는데 통과하지 못했어요. 다시 해서 제출해 주세요.</div>':'';
@@ -2918,18 +2923,26 @@ async function submitCertItem(itemId){
   const existing=certSubOf(itemId,session.id);
   if(existing&&existing.status!=='rejected'){notify('이미 제출했어요.','info');return;}
   let photoUrl=null;
+  const btn=document.getElementById('cert-btn-'+itemId);const btnTxt=btn?btn.textContent:'';
+  const reset=()=>{if(btn){btn.disabled=false;btn.textContent=btnTxt;}};
   if(item.type==='photo'){
     const fileEl=document.getElementById('cert-file-'+itemId);
-    const file=fileEl&&fileEl.files&&fileEl.files[0];
-    if(!file){notify('사진을 선택해주세요.','error');return;}
-    const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').slice(0,5)||'jpg';
-    const path=session.id+'/'+itemId+'_'+Date.now()+'.'+ext;
-    const{error:upErr}=await sb.storage.from('cert-photos').upload(path,file,{upsert:true});
-    if(upErr){notify('사진 업로드 실패: '+upErr.message,'error');return;}
-    photoUrl=sb.storage.from('cert-photos').getPublicUrl(path).data.publicUrl;
+    const files=[...((fileEl&&fileEl.files)||[])];
+    if(!files.length){notify('사진을 선택해주세요.','error');return;}
+    if(files.length>CERT_MAX_PHOTOS){notify(`사진은 한 번에 ${CERT_MAX_PHOTOS}장까지 올릴 수 있어요.`,'error');return;}
+    // 덮어쓰기(upsert) 없이 새 이름으로 올려요 (저장소 목록 보기를 막아 둬서 덮어쓰기는 거부돼요)
+    const urls=[];
+    if(btn)btn.disabled=true;
+    for(let i=0;i<files.length;i++){
+      if(btn)btn.textContent=`올리는 중 ${i+1}/${files.length}`;
+      try{urls.push(await uploadPhoto('cert-photos',files[i]));}
+      catch(e){notify(e.message.replace(/ \(schema_add5.*$/,''),'error');removeCertPhoto(urls.join('\n'));reset();return;}
+    }
+    photoUrl=urls.join('\n');
   }
   const{data:fail,error}=await sb.rpc('student_cert_submit',{p_token:sessionToken,p_item_id:itemId,p_photo_url:photoUrl});
-  if(error||fail){notify('제출 실패: '+(error?error.message:fail==='forbidden'?'다시 로그인해 주세요.':fail),'error');return;}
+  reset();
+  if(error||fail){notify('제출 실패: '+(error?error.message:fail==='forbidden'?'다시 로그인해 주세요.':fail),'error');removeCertPhoto(photoUrl);return;}
   // 재제출이면 서버가 예전 미통과 기록을 지웠어요. 예전 사진 파일도 지워요
   db.certSubmissions.filter(s=>s.item_id===itemId&&s.student_id===session.id&&s.status==='rejected').forEach(s=>removeCertPhoto(s.photo_url));
   await loadCert();

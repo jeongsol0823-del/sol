@@ -1099,7 +1099,7 @@ async function removeStudent(id){
   for(const r of db.reportLinks.filter(x=>x.student_id===id)){try{await sb.storage.from('reports').remove([r.path]);}catch(e){}}
   await sb.from('report_links').delete().eq('student_id',id);db.reportLinks=db.reportLinks.filter(x=>x.student_id!==id);
   for(const b of ['qa-photos','cert-photos']){
-    try{const{data}=await sb.storage.from(b).list(id,{limit:1000});if(data&&data.length)await sb.storage.from(b).remove(data.map(f=>id+'/'+f.name));}catch(e){}
+    const files=await storageList(b,id);if(files.length)await storageRemove(b,files.map(f=>id+'/'+f.name));
   }
   const delFail=await teacherRpc('teacher_user_delete',{p_id:id});
   if(delFail){notify('학생 삭제 실패: '+delFail,'error');return;}
@@ -2429,15 +2429,26 @@ async function cleanupCertPhotos(){
   if(!session||session.role!=='teacher')return;
   const old=db.certSubmissions.filter(s=>s.status==='approved'&&s.photo_url&&s.reviewed_at&&Date.now()-new Date(s.reviewed_at)>CERT_PHOTO_KEEP_H*3600e3);
   if(!old.length)return;
-  for(const s of old)await removeCertPhoto(s.photo_url);
-  const fail=await teacherRpc('teacher_cert_photos_cleared',{p_ids:old.map(s=>s.id)});
+  // 파일을 다 지운 것만 기록에서 사진 주소를 비워요 (못 지운 건 다음에 다시 시도)
+  const done=[];for(const s of old){if(await removeCertPhoto(s.photo_url))done.push(s);}
+  if(!done.length)return;
+  const fail=await teacherRpc('teacher_cert_photos_cleared',{p_ids:done.map(s=>s.id)});
   if(fail){console.error('사진 정리 기록 실패:',fail);return;}
-  old.forEach(s=>s.photo_url=null);renderCertAdmin();
+  done.forEach(s=>s.photo_url=null);renderCertAdmin();
+}
+// 저장소 목록·지우기는 로그인 토큰을 실어 보내야 돼요 (강사는 전체, 학생은 자기 폴더만 · schema_add22)
+function storageHeaders(){return{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json','x-sol-token':sessionToken||''};}
+async function storageList(bucket,prefix){
+  try{const r=await fetch(`${SB_URL}/storage/v1/object/list/${bucket}`,{method:'POST',headers:storageHeaders(),body:JSON.stringify({prefix,limit:1000})});const d=r.ok?await r.json():[];return Array.isArray(d)?d:[];}catch(e){return[];}
+}
+// 다 지웠으면 true (권한이 없으면 저장소가 오류 없이 0개를 지우므로 개수로 확인해요)
+async function storageRemove(bucket,paths){
+  if(!paths.length)return true;
+  try{const r=await fetch(`${SB_URL}/storage/v1/object/${bucket}`,{method:'DELETE',headers:storageHeaders(),body:JSON.stringify({prefixes:paths})});const d=r.ok?await r.json():[];return Array.isArray(d)&&d.length===paths.length;}catch(e){return false;}
 }
 async function removeCertPhoto(url){
   const paths=certPhotos(url).map(u=>{const i=u.indexOf('/cert-photos/');return i<0?null:decodeURIComponent(u.slice(i+'/cert-photos/'.length));}).filter(Boolean);
-  if(!paths.length)return;
-  try{await sb.storage.from('cert-photos').remove(paths);}catch(e){}
+  return storageRemove('cert-photos',paths);
 }
 
 /* --- 인증 — 강사 --- */

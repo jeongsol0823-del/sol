@@ -1781,14 +1781,35 @@ async function uploadPhoto(bucket,file,maxSide=1600,quality=0.82){
   if(error)throw new Error('사진 업로드 실패: '+error.message+' (schema_add5.sql을 실행했는지 확인해주세요)');
   return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
-async function uploadVideo(bucket,blob,ext){
-  const path=`${session.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
-  const{error}=await sb.storage.from(bucket).upload(path,blob,{contentType:blob.type||'video/'+ext,upsert:false});
-  if(error)throw new Error('영상 업로드 실패: '+error.message);
-  return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+const VIDEO_STALL_MS=45000; // 이만큼 한 글자도 안 올라가면 멈춘 걸로 봐요 (예전에는 오류 없이 끝없이 기다렸어요)
+// 진행률을 보고 멈춤을 알아채려고 XHR로 직접 올려요. 실패하면 이유가 담긴 Error를 던져요
+function putVideoOnce(bucket,path,blob,onPct){
+  return new Promise((resolve,reject)=>{
+    const x=new XMLHttpRequest();let stall;
+    const fail=m=>{clearTimeout(stall);reject(new Error(m));};
+    const watch=()=>{clearTimeout(stall);stall=setTimeout(()=>{x.abort();fail('stalled');},VIDEO_STALL_MS);};
+    x.open('POST',`${SB_URL}/storage/v1/object/${bucket}/${path}`);
+    x.setRequestHeader('apikey',SB_KEY);x.setRequestHeader('Authorization','Bearer '+SB_KEY);x.setRequestHeader('Content-Type',blob.type);
+    x.upload.onprogress=e=>{watch();if(onPct&&e.lengthComputable)onPct(Math.floor(e.loaded/e.total*100));};
+    x.onload=()=>{clearTimeout(stall);if(x.status>=200&&x.status<300){resolve();return;}let m='HTTP '+x.status;try{m=JSON.parse(x.responseText).message||m;}catch(e){}reject(new Error(m));};
+    x.onerror=()=>fail('network');
+    watch();x.send(blob);
+  });
+}
+async function uploadVideo(bucket,blob,ext,onPct){
+  let m='';
+  for(let i=0;i<2;i++){ // 영상은 커서 휴대폰 인터넷에서 끊기기 쉬워요. 끊기면 한 번 더 올려요
+    const path=`${session.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+    try{await putVideoOnce(bucket,path,blob,onPct);return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;}
+    catch(e){m=e.message||'';if(m!=='stalled'&&m!=='network')break;}
+  }
+  throw new Error(/exceeded|too large/i.test(m)?`영상 용량이 너무 커요(${(blob.size/1e6).toFixed(0)}MB). 다시 찍어 주세요.`
+    :m==='stalled'||m==='network'?'인터넷이 약해서 영상을 못 올렸어요. 와이파이에 연결하고 이 화면을 켜 둔 채 "제출"을 다시 눌러 주세요. 찍은 영상은 그대로 있어요.'
+    :'영상 업로드 실패: '+m);
 }
 /* ---- 인증 영상: 앱 안에서 바로 찍기 (미리 찍어 둔 영상은 못 올려요) ---- */
-const CERT_VIDEO_MAX=60;   // 최대 1분
+const CERT_VIDEO_MAX=180;  // 최대 3분
+const CERT_VIDEO_MAX_BYTES=47*1024*1024; // 저장소 한도(50MB)보다 조금 작게. 화질 설정을 안 따르는 휴대폰은 3분 전에 여기서 멈춰요
 const certVideos={};       // 과제별로 찍어 둔 영상 {blob, ext, sec} (제출하면 비워요)
 let certCam=null;          // 지금 열려 있는 카메라 {itemId, stream, rec, chunks, start, timer, blob, ext, sec, url}
 function certPickText(itemId){
@@ -1814,7 +1835,7 @@ function renderCertCam(step,msg){
   else if(step==='review'){
     if(certCam.url)URL.revokeObjectURL(certCam.url);certCam.url=URL.createObjectURL(certCam.blob);
     el.innerHTML=`<video controls playsinline src="${certCam.url}" style="width:100%;border-radius:10px;background:#000;max-height:60vh"></video>
-      <div style="font-size:12px;color:var(--text2);margin-top:6px">${fmtClock(certCam.sec)} · ${(certCam.blob.size/1e6).toFixed(1)}MB · 풀이가 잘 보이는지 확인해 주세요</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:6px">${fmtClock(certCam.sec)} · ${(certCam.blob.size/1e6).toFixed(1)}MB · 풀이가 잘 보이는지 확인해 주세요${certCam.full?'<br><b style="color:var(--red)">용량이 다 차서 여기까지만 찍혔어요. 끝까지 안 찍혔으면 더 빨리 넘기면서 다시 찍어 주세요.</b>':''}</div>
       <div style="display:flex;gap:8px;margin-top:10px"><button class="btn" style="flex:1" onclick="retakeCertCam()">다시 찍기</button><button class="btn blue" style="flex:1" onclick="useCertVideo()">이 영상으로 내기</button></div>`;
   }
 }
@@ -1830,24 +1851,32 @@ async function startCertCamera(){
 }
 function recCertCam(){
   const cam=certCam;if(!cam||!cam.stream)return;
-  const mime=certVideoMime();const opts={videoBitsPerSecond:900000}; // 1분에 약 7MB (풀이 글씨가 읽히는 정도)
+  const mime=certVideoMime();const opts={videoBitsPerSecond:900000}; // 3분에 약 20MB (풀이 글씨가 읽히는 정도)
   if(mime)opts.mimeType=mime;
   let rec;try{rec=new MediaRecorder(cam.stream,opts);}catch(e){rec=new MediaRecorder(cam.stream);}
-  cam.rec=rec;cam.chunks=[];
-  rec.ondataavailable=e=>{if(e.data&&e.data.size)cam.chunks.push(e.data);};
+  cam.rec=rec;cam.chunks=[];cam.size=0;cam.full=false;
+  rec.ondataavailable=e=>{
+    if(!e.data||!e.data.size)return;
+    cam.chunks.push(e.data);cam.size+=e.data.size;
+    if(cam.size>=CERT_VIDEO_MAX_BYTES&&!cam.full){cam.full=true;stopCertRec();}
+  };
   rec.onstop=()=>{
     stopCamStream(cam);
     if(cam.closing||certCam!==cam)return;
-    const type=(rec.mimeType||mime||'video/webm').split(';')[0];
-    cam.blob=new Blob(cam.chunks,{type});cam.ext=/mp4/.test(type)?'mp4':'webm';cam.sec=Math.max(1,Math.round((Date.now()-cam.start)/1000));
+    // 저장소는 mp4·webm만 받아요. 다른 이름(x-matroska 등)으로 찍히는 브라우저도 webm으로 올려요
+    const type=/mp4/.test(rec.mimeType||mime)?'video/mp4':'video/webm';
+    cam.blob=new Blob(cam.chunks,{type});cam.ext=type==='video/mp4'?'mp4':'webm';cam.sec=Math.max(1,Math.round((Date.now()-cam.start)/1000));
+    if(!cam.blob.size){cam.blob=null;renderCertCam('error','영상이 제대로 찍히지 않았어요. 다시 찍어 주세요.');return;}
     renderCertCam('review');
   };
   rec.start(1000);cam.start=Date.now();
+  // 3분 찍는 동안 화면이 꺼지면 녹화가 끊겨요 (안 되는 브라우저는 그냥 넘어가요)
+  try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>{if(cam.stream)cam.wake=w;else w.release();}).catch(()=>{});}catch(e){}
   renderCertCam('rec');document.getElementById('cam-view').srcObject=cam.stream;
   cam.timer=setInterval(()=>{const sec=Math.floor((Date.now()-cam.start)/1000);const t=document.getElementById('cam-time');if(t)t.textContent=fmtClock(sec)+' / '+fmtClock(CERT_VIDEO_MAX);if(sec>=CERT_VIDEO_MAX)stopCertRec();},250);
 }
 function stopCertRec(){const cam=certCam;if(!cam)return;if(cam.timer){clearInterval(cam.timer);cam.timer=null;}if(cam.rec&&cam.rec.state!=='inactive')cam.rec.stop();}
-function stopCamStream(cam){cam=cam||certCam;if(cam&&cam.stream){cam.stream.getTracks().forEach(t=>t.stop());cam.stream=null;}}
+function stopCamStream(cam){cam=cam||certCam;if(cam&&cam.stream){cam.stream.getTracks().forEach(t=>t.stop());cam.stream=null;}if(cam&&cam.wake){cam.wake.release().catch(()=>{});cam.wake=null;}}
 function useCertVideo(){const cam=certCam;if(!cam||!cam.blob)return;certVideos[cam.itemId]={blob:cam.blob,ext:cam.ext,sec:cam.sec};const id=cam.itemId;closeCertCam();certPickText(id);notify('영상을 준비했어요. "제출"을 눌러 주세요.','success');}
 function retakeCertCam(){const id=certCam.itemId;if(certCam.url)URL.revokeObjectURL(certCam.url);certCam={itemId:id};startCertCamera();}
 function closeCertCam(){
@@ -2423,18 +2452,22 @@ function certLinks(url){
   const link=(u,t)=>` · <a href="${esc(u)}" target="_blank" rel="noopener" style="color:var(--accent)">${t}</a>`;
   return ph.map((u,i)=>link(u,'사진'+(ph.length>1?' '+(i+1):' 보기'))).join('')+vd.map((u,i)=>link(u,'🎬 영상'+(vd.length>1?' '+(i+1):''))).join('')+(all.length>a.length?' · <span style="color:var(--red);font-size:12px">확인할 수 없는 주소 '+(all.length-a.length)+'개</span>':'');
 }
-// 통과 24시간 뒤 사진 파일만 정리해요 (강사가 앱을 열 때). 통과 기록은 그대로 남아요
-const CERT_PHOTO_KEEP_H=24;
+// 통과한 제출의 사진·영상 파일을 저장소에서 지워요. 통과 기록은 그대로 남아요
+// 통과를 누를 때 바로 지우고, 그때 못 지운 것은 강사가 앱을 열 때 다시 시도해요
+async function clearApprovedMedia(list){
+  // 파일을 다 지운 것만 기록에서 사진 주소를 비워요 (못 지운 건 다음에 다시 시도)
+  const done=[];for(const s of list){if(await removeCertPhoto(s.photo_url))done.push(s);}
+  if(!done.length)return false;
+  const fail=await teacherRpc('teacher_cert_photos_cleared',{p_ids:done.map(s=>s.id)});
+  if(fail){console.error('사진 정리 기록 실패:',fail);return false;}
+  done.forEach(s=>s.photo_url=null);
+  return done.length===list.length;
+}
 async function cleanupCertPhotos(){
   if(!session||session.role!=='teacher')return;
-  const old=db.certSubmissions.filter(s=>s.status==='approved'&&s.photo_url&&s.reviewed_at&&Date.now()-new Date(s.reviewed_at)>CERT_PHOTO_KEEP_H*3600e3);
+  const old=db.certSubmissions.filter(s=>s.status==='approved'&&s.photo_url);
   if(!old.length)return;
-  // 파일을 다 지운 것만 기록에서 사진 주소를 비워요 (못 지운 건 다음에 다시 시도)
-  const done=[];for(const s of old){if(await removeCertPhoto(s.photo_url))done.push(s);}
-  if(!done.length)return;
-  const fail=await teacherRpc('teacher_cert_photos_cleared',{p_ids:done.map(s=>s.id)});
-  if(fail){console.error('사진 정리 기록 실패:',fail);return;}
-  done.forEach(s=>s.photo_url=null);renderCertAdmin();
+  await clearApprovedMedia(old);renderCertAdmin();
 }
 // 저장소 목록·지우기는 로그인 토큰을 실어 보내야 돼요 (강사는 전체, 학생은 자기 폴더만 · schema_add22)
 function storageHeaders(){return{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json','x-sol-token':sessionToken||''};}
@@ -2548,8 +2581,11 @@ async function setCertStatus(subId,status){
   const fail=await teacherRpc('teacher_cert_status',{p_id:subId,p_status:status});
   if(fail){notify('저장 실패: '+fail,'error');return;}
   const s=db.certSubmissions.find(x=>x.id===subId);if(s){s.status=status;s.reviewed_at=new Date().toISOString();}
+  if(status!=='approved'){renderCertAdmin();notify('미통과로 처리했어요. 학생 화면에 "미통과 - 재제출 필요"로 보여요.','info');return;}
+  const had=s&&s.photo_url;
+  const cleared=had?await clearApprovedMedia([s]):true;
   renderCertAdmin();
-  notify(status==='approved'?`통과로 처리했습니다. 사진은 ${CERT_PHOTO_KEEP_H}시간 뒤 지워져요.`:'미통과로 처리했어요. 학생 화면에 "미통과 - 재제출 필요"로 보여요.','info');
+  notify(!had?'통과로 처리했습니다.':cleared?'통과로 처리하고 사진·영상을 서버에서 지웠어요.':'통과로 처리했어요. 사진·영상은 다음에 앱을 열 때 다시 지울게요.',cleared?'info':'error');
 }
 /* ===================== 출석 — 강사 ===================== */
 function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -3055,8 +3091,9 @@ async function submitCertItem(itemId){
       catch(e){notify(e.message.replace(/ \(schema_add5.*$/,''),'error');removeCertPhoto(urls.join('\n'));reset();return;}
     }
     if(vid){
-      if(btn)btn.textContent=`영상 올리는 중 ${steps}/${steps}`;
-      try{urls.push(await uploadVideo('cert-photos',vid.blob,vid.ext));}
+      if(btn)btn.textContent='영상 올리는 중 0%';
+      notify('영상을 올리고 있어요. 다 될 때까지 이 화면을 켜 두세요.','info');
+      try{urls.push(await uploadVideo('cert-photos',vid.blob,vid.ext,p=>{if(btn)btn.textContent=`영상 올리는 중 ${p}%`;}));}
       catch(e){notify(e.message,'error');removeCertPhoto(urls.join('\n'));reset();return;}
     }
     photoUrl=urls.join('\n');

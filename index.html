@@ -3132,7 +3132,7 @@ function renderCertMy(){
     const w=db.certWeeks.find(x=>x.id===item.week_id);
     const canSubmit=state==='open'||state==='missing'||state==='rejected';
     const btnTxt=state==='rejected'?'재제출':item.type==='photo'?'제출':'완료 체크';
-    const form=!canSubmit?'':item.type==='photo'
+    const form=!canSubmit?(state==='pending'?`<div style="margin-top:8px"><button class="btn sm" onclick="cancelCertSub('${esc(item.id)}')">제출 취소하고 다시 내기</button><div style="font-size:11px;color:var(--text3);margin-top:2px">잘못 냈으면 쏠T가 확인하기 전까지 직접 취소할 수 있어요.</div></div>`:''):item.type==='photo'
       ?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px"><input type="file" accept="image/*" multiple id="cert-file-${esc(item.id)}" style="max-width:190px;font-size:11px" onchange="certPickText('${esc(item.id)}')"><button class="btn sm" onclick="openCertCam('${esc(item.id)}')">🎬 영상 찍기</button><button class="btn blue sm" id="cert-btn-${esc(item.id)}" onclick="submitCertItem('${esc(item.id)}')">${btnTxt}</button></div>
         <div id="cert-cnt-${esc(item.id)}" style="font-size:12px;color:var(--accent);margin-top:4px">${certVideos[item.id]?'영상 1개 ('+fmtClock(certVideos[item.id].sec)+')':''}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">영상(최대 ${CERT_VIDEO_MAX/60}분)을 권해요. 영상이 안 되면 사진(최대 ${CERT_MAX_PHOTOS}장)으로 내도 돼요. 영상은 앱에서 바로 찍은 것만 돼요.</div>`
@@ -3146,6 +3146,21 @@ function renderCertMy(){
         ${certPill(state)}
       </div>${note}${form}</div>`;
   }).join('');
+}
+// 학생이 잘못 낸 제출을 쏠T 확인 전에 직접 취소해요. 서버가 "확인 대기"인 것만 지워 줘요
+async function cancelCertSub(itemId){
+  const item=db.certItems.find(x=>x.id===itemId);const sub=certSubOf(itemId,session.id);
+  if(!item||!sub)return;
+  if(!confirm(`제출을 취소할까요?\n\n낸 사진·영상이 지워지고 되돌릴 수 없어요. 취소한 뒤 다시 내 주세요.${certPastDue(item)?"\n\n마감이 지나서 다시 내면 '늦게 제출'로 표시돼요.":''}`))return;
+  const{data:fail,error}=await sb.rpc('student_cert_cancel',{p_token:sessionToken,p_item_id:itemId});
+  if(error||fail){
+    notify('취소 실패: '+(error?error.message:fail==='forbidden'?'다시 로그인해 주세요.':fail),'error');
+    await loadCert();renderCertMy();return; // 그사이 쏠T가 확인했으면 바뀐 상태를 보여 줘요
+  }
+  if(sub.photo_url)removeCertPhoto(sub.photo_url);
+  await loadCert();
+  renderCertMy();try{renderMyReportCard();}catch(e){}
+  notify('제출을 취소했어요. 다시 내 주세요.','success');
 }
 const CERT_UPLOAD_AT_ONCE=3;
 const certUploaded={}; // 과제별로 이미 올린 사진 {파일표시:주소} (제출이 끝나면 비워요)

@@ -637,6 +637,13 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
   </div>
 </div>
 
+<div class="modal" id="modal-gallery">
+  <div class="modal-box" style="max-width:1000px">
+    <div class="modal-head"><h3 id="gallery-title"></h3><button class="btn sm" onclick="closeCertGallery()">닫기 ✕</button></div>
+    <div class="modal-body" id="gallery-body"></div>
+  </div>
+</div>
+
 <div class="modal" id="modal-cam">
   <div class="modal-box" style="max-width:520px">
     <div class="modal-head"><h3>🎬 숙제 영상 찍기</h3><button class="btn sm" onclick="closeCertCam()">닫기 ✕</button></div>
@@ -1768,7 +1775,9 @@ async function shrinkImage(file,maxSide=1600,quality=0.82){
     const k=Math.min(1,maxSide/Math.max(bmp.width,bmp.height));
     const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
     c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    bmp.close(); // 사진이 많으면 휴대폰 메모리가 모자라요. 다 쓴 원본은 바로 비워요
     const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',quality));
+    c.width=c.height=0;
     return blob||file;
   }catch(e){return file;}
 }
@@ -1781,13 +1790,13 @@ async function uploadPhoto(bucket,file,maxSide=1600,quality=0.82){
   if(error)throw new Error('사진 업로드 실패: '+error.message+' (schema_add5.sql을 실행했는지 확인해주세요)');
   return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
-const VIDEO_STALL_MS=45000; // 이만큼 한 글자도 안 올라가면 멈춘 걸로 봐요 (예전에는 오류 없이 끝없이 기다렸어요)
+const UPLOAD_STALL_MS=45000; // 이만큼 한 글자도 안 올라가면 멈춘 걸로 봐요 (예전에는 오류 없이 끝없이 기다렸어요)
 // 진행률을 보고 멈춤을 알아채려고 XHR로 직접 올려요. 실패하면 이유가 담긴 Error를 던져요
-function putVideoOnce(bucket,path,blob,onPct){
+function putFileOnce(bucket,path,blob,onPct){
   return new Promise((resolve,reject)=>{
     const x=new XMLHttpRequest();let stall;
     const fail=m=>{clearTimeout(stall);reject(new Error(m));};
-    const watch=()=>{clearTimeout(stall);stall=setTimeout(()=>{x.abort();fail('stalled');},VIDEO_STALL_MS);};
+    const watch=()=>{clearTimeout(stall);stall=setTimeout(()=>{x.abort();fail('stalled');},UPLOAD_STALL_MS);};
     x.open('POST',`${SB_URL}/storage/v1/object/${bucket}/${path}`);
     x.setRequestHeader('apikey',SB_KEY);x.setRequestHeader('Authorization','Bearer '+SB_KEY);x.setRequestHeader('Content-Type',blob.type);
     x.upload.onprogress=e=>{watch();if(onPct&&e.lengthComputable)onPct(Math.floor(e.loaded/e.total*100));};
@@ -1800,12 +1809,31 @@ async function uploadVideo(bucket,blob,ext,onPct){
   let m='';
   for(let i=0;i<2;i++){ // 영상은 커서 휴대폰 인터넷에서 끊기기 쉬워요. 끊기면 한 번 더 올려요
     const path=`${session.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
-    try{await putVideoOnce(bucket,path,blob,onPct);return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;}
+    try{await putFileOnce(bucket,path,blob,onPct);return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;}
     catch(e){m=e.message||'';if(m!=='stalled'&&m!=='network')break;}
   }
   throw new Error(/exceeded|too large/i.test(m)?`영상 용량이 너무 커요(${(blob.size/1e6).toFixed(0)}MB). 다시 찍어 주세요.`
     :m==='stalled'||m==='network'?'인터넷이 약해서 영상을 못 올렸어요. 와이파이에 연결하고 이 화면을 켜 둔 채 "제출"을 다시 눌러 주세요. 찍은 영상은 그대로 있어요.'
     :'영상 업로드 실패: '+m);
+}
+// 과제 사진 한 장 올리기. 멈추거나 끊기면 두 번 더 시도해요
+async function uploadCertImage(file){
+  if(!file.type||!file.type.startsWith('image/'))throw new Error(`사진 파일만 올릴 수 있어요. (${file.name})`);
+  const blob=await shrinkImage(file,1200,0.7); // 과제 사진은 장수가 많아서 더 작게 (손글씨는 충분히 읽혀요)
+  const ext=blob===file?((file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg'):'jpg';
+  let m='';
+  for(let i=0;i<3;i++){
+    const path=`${session.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+    try{await putFileOnce('cert-photos',path,blob);return sb.storage.from('cert-photos').getPublicUrl(path).data.publicUrl;}
+    catch(e){m=e.message||'';if(m!=='stalled'&&m!=='network')break;}
+  }
+  const err=new Error(m==='stalled'||m==='network'?'':`사진 업로드 실패: ${m}`);throw err;
+}
+// 제출하는 동안 화면이 꺼지지 않게 해요. 돌려주는 함수를 부르면 풀려요
+function keepScreenOn(){
+  let w=null,off=false;
+  try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(x=>{if(off)x.release();else w=x;}).catch(()=>{});}catch(e){}
+  return ()=>{off=true;if(w)w.release().catch(()=>{});};
 }
 /* ---- 인증 영상: 앱 안에서 바로 찍기 (미리 찍어 둔 영상은 못 올려요) ---- */
 const CERT_VIDEO_MAX=180;  // 최대 3분
@@ -1815,7 +1843,8 @@ let certCam=null;          // 지금 열려 있는 카메라 {itemId, stream, re
 function certPickText(itemId){
   const el=document.getElementById('cert-cnt-'+itemId);if(!el)return;
   const f=document.getElementById('cert-file-'+itemId);const n=f&&f.files?f.files.length:0;const v=certVideos[itemId];
-  el.textContent=[n?`사진 ${n}장`:'',v?`영상 1개 (${fmtClock(v.sec)})`:''].filter(Boolean).join(' · ');
+  el.style.color=n>CERT_MAX_PHOTOS?'var(--red)':'';
+  el.textContent=[n?`사진 ${n}장`+(n>CERT_MAX_PHOTOS?` (최대 ${CERT_MAX_PHOTOS}장까지예요. 다시 골라 주세요)`:''):'',v?`영상 1개 (${fmtClock(v.sec)})`:''].filter(Boolean).join(' · ');
 }
 // 휴대폰마다 찍을 수 있는 영상 형식이 달라서, 어디서나 잘 열리는 mp4를 먼저 골라요
 function certVideoMime(){for(const t of ['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']){try{if(window.MediaRecorder&&MediaRecorder.isTypeSupported(t))return t;}catch(e){}}return '';}
@@ -2475,14 +2504,32 @@ function certDueText(item){
 }
 function certSortItems(items){return items.slice().sort((a,b)=>(b.due_date||'9999').localeCompare(a.due_date||'9999')||String(b.created_at||'').localeCompare(String(a.created_at||'')));}
 // 사진 여러 장은 주소를 줄바꿈으로 이어서 한 칸(photo_url)에 저장해요
-const CERT_MAX_PHOTOS=10;
+const CERT_MAX_PHOTOS=100;
 function certPhotos(url){return String(url||'').split(/\s+/).filter(Boolean);}
 function certIsVideo(u){return /\.(mp4|webm|mov)(\?|$)/i.test(u);}
-function certLinks(url){
+function certLinks(url,subId){
   const all=certPhotos(url),a=all.filter(u=>storageUrlOk(u,'cert-photos')),ph=a.filter(u=>!certIsVideo(u)),vd=a.filter(certIsVideo);
   const link=(u,t)=>` · <a href="${esc(u)}" target="_blank" rel="noopener" style="color:var(--accent)">${t}</a>`;
-  return ph.map((u,i)=>link(u,'사진'+(ph.length>1?' '+(i+1):' 보기'))).join('')+vd.map((u,i)=>link(u,'🎬 영상'+(vd.length>1?' '+(i+1):''))).join('')+(all.length>a.length?' · <span style="color:var(--red);font-size:12px">확인할 수 없는 주소 '+(all.length-a.length)+'개</span>':'');
+  // 사진이 여러 장이면 링크를 줄줄이 늘어놓지 않고 한 화면에 모아 봐요
+  const photos=ph.length>1&&subId?` · <a href="#" onclick="openCertGallery('${esc(subId)}');return false" style="color:var(--accent)">🖼 사진 ${ph.length}장 모아 보기</a>`:ph.map((u,i)=>link(u,'사진'+(ph.length>1?' '+(i+1):' 보기'))).join('');
+  return photos+vd.map((u,i)=>link(u,'🎬 영상'+(vd.length>1?' '+(i+1):''))).join('')+(all.length>a.length?' · <span style="color:var(--red);font-size:12px">확인할 수 없는 주소 '+(all.length-a.length)+'개</span>':'');
 }
+/* --- 제출 사진 모아 보기 (강사): 여기서 바로 통과·미통과 --- */
+function openCertGallery(subId){
+  const s=db.certSubmissions.find(x=>x.id===subId);if(!s)return;
+  const a=certPhotos(s.photo_url).filter(u=>storageUrlOk(u,'cert-photos')),ph=a.filter(u=>!certIsVideo(u)),vd=a.filter(certIsVideo);
+  document.getElementById('gallery-title').textContent=`${userName(s.student_id)} · 사진 ${ph.length}장`;
+  const btns=s.status==='approved'?`<button class="btn red" style="flex:1" onclick="decideCertGallery('${esc(subId)}','rejected')">미통과로</button>`
+    :`<button class="btn green" style="flex:2" onclick="decideCertGallery('${esc(subId)}','approved')">통과</button>${s.status==='rejected'?'':`<button class="btn red" style="flex:1" onclick="decideCertGallery('${esc(subId)}','rejected')">미통과</button>`}`;
+  document.getElementById('gallery-body').innerHTML=`
+    <div class="row-between" style="margin-bottom:8px;gap:8px"><span style="font-size:12px;color:var(--text2)">사진을 누르면 새 창에서 크게 열려요.${vd.length?' '+vd.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener" style="color:var(--accent)">🎬 영상${vd.length>1?' '+(i+1):''}</a>`).join(' '):''}</span><button class="btn sm" onclick="toggleCertGallery(this)">크게 보기</button></div>
+    <div id="gallery-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px">${ph.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener" style="position:relative;display:block;background:var(--bg3);border-radius:8px;overflow:hidden;min-height:120px"><span style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;padding:1px 6px;border-radius:6px">${i+1}</span><img src="${esc(u)}" alt="사진 ${i+1}" loading="lazy" style="width:100%;display:block"></a>`).join('')}</div>
+    <div style="position:sticky;bottom:0;background:var(--bg2);padding:10px 0;margin-top:10px;border-top:1px solid var(--border)"><div style="display:flex;gap:8px">${btns}</div>${s.status==='approved'?'':'<div style="font-size:11px;color:var(--text3);margin-top:4px;text-align:center">통과하면 사진과 영상이 서버에서 바로 지워져요.</div>'}</div>`;
+  document.getElementById('modal-gallery').classList.add('show');
+}
+function toggleCertGallery(b){const g=document.getElementById('gallery-grid');const big=g.style.gridTemplateColumns==='1fr';g.style.gridTemplateColumns=big?'repeat(auto-fill,minmax(240px,1fr))':'1fr';b.textContent=big?'크게 보기':'작게 보기';}
+function closeCertGallery(){document.getElementById('modal-gallery').classList.remove('show');document.getElementById('gallery-body').innerHTML='';}
+function decideCertGallery(subId,status){closeCertGallery();setCertStatus(subId,status);}
 // 통과한 제출의 사진·영상 파일을 저장소에서 지워요. 통과 기록은 그대로 남아요
 // 통과를 누를 때 바로 지우고, 그때 못 지운 것은 강사가 앱을 열 때 다시 시도해요
 async function clearApprovedMedia(list){
@@ -2548,7 +2595,7 @@ function certItemAdminHtml(item){
   const groups={};rows.forEach(r=>{const k=r.u.school||'학교 미지정';(groups[k]=groups[k]||[]).push(r);});
   const schoolNames=Object.keys(groups).sort((a,b)=>(a==='학교 미지정')-(b==='학교 미지정')||a.localeCompare(b));
   const subRow=r=>`<div class="row-between" style="padding:6px 0;border-top:1px solid var(--border);gap:8px">
-      <span>${esc(r.u.name)}${certLate(item,r.sub)?' <span class="pill amber">늦게 제출</span>':''}${certLinks(r.sub.photo_url)}${item.type==='photo'&&r.sub.status==='approved'&&!r.sub.photo_url?' · <span style="color:var(--text3);font-size:12px">사진 정리됨</span>':''}</span>
+      <span>${esc(r.u.name)}${certLate(item,r.sub)?' <span class="pill amber">늦게 제출</span>':''}${certLinks(r.sub.photo_url,r.sub.id)}${item.type==='photo'&&r.sub.status==='approved'&&!r.sub.photo_url?' · <span style="color:var(--text3);font-size:12px">사진 정리됨</span>':''}</span>
       ${r.state==='pending'?`<div style="display:flex;gap:6px"><button class="btn green sm" onclick="setCertStatus('${esc(r.sub.id)}','approved')">통과</button><button class="btn red sm" onclick="setCertStatus('${esc(r.sub.id)}','rejected')">미통과</button></div>`
         :r.state==='approved'?`<span style="display:flex;gap:6px;align-items:center">${certPill('approved')}<button class="btn sm" onclick="setCertStatus('${esc(r.sub.id)}','rejected')">미통과로</button></span>`
         :`<span style="display:flex;gap:6px;align-items:center"><span class="pill red">미통과 · 재제출 대기</span><button class="btn sm" onclick="setCertStatus('${esc(r.sub.id)}','approved')">통과로</button></span>`}
@@ -3088,7 +3135,7 @@ function renderCertMy(){
     const form=!canSubmit?'':item.type==='photo'
       ?`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px"><input type="file" accept="image/*" multiple id="cert-file-${esc(item.id)}" style="max-width:190px;font-size:11px" onchange="certPickText('${esc(item.id)}')"><button class="btn sm" onclick="openCertCam('${esc(item.id)}')">🎬 영상 찍기</button><button class="btn blue sm" id="cert-btn-${esc(item.id)}" onclick="submitCertItem('${esc(item.id)}')">${btnTxt}</button></div>
         <div id="cert-cnt-${esc(item.id)}" style="font-size:12px;color:var(--accent);margin-top:4px">${certVideos[item.id]?'영상 1개 ('+fmtClock(certVideos[item.id].sec)+')':''}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">사진(최대 ${CERT_MAX_PHOTOS}장)과 영상을 함께 낼 수 있어요. 영상은 앱에서 바로 찍은 것만 돼요.</div>`
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">영상(최대 ${CERT_VIDEO_MAX/60}분)을 권해요. 영상이 안 되면 사진(최대 ${CERT_MAX_PHOTOS}장)으로 내도 돼요. 영상은 앱에서 바로 찍은 것만 돼요.</div>`
       :`<div style="margin-top:8px"><button class="btn blue sm" onclick="submitCertItem('${esc(item.id)}')">${btnTxt}</button></div>`;
     const note=state==='missing'?'<div style="font-size:12px;color:var(--red);margin-top:6px">마감이 지났어요. 지금 내도 \'늦게 제출\'로 표시돼요.</div>'
       :state==='rejected'?'<div style="font-size:12px;color:var(--red);margin-top:6px">쏠T가 확인했는데 통과하지 못했어요. 다시 해서 제출해 주세요.</div>':'';
@@ -3100,6 +3147,8 @@ function renderCertMy(){
       </div>${note}${form}</div>`;
   }).join('');
 }
+const CERT_UPLOAD_AT_ONCE=3;
+const certUploaded={}; // 과제별로 이미 올린 사진 {파일표시:주소} (제출이 끝나면 비워요)
 async function submitCertItem(itemId){
   const item=db.certItems.find(x=>x.id===itemId);if(!item)return;
   const existing=certSubOf(itemId,session.id);
@@ -3112,25 +3161,36 @@ async function submitCertItem(itemId){
     const files=[...((fileEl&&fileEl.files)||[])];const vid=certVideos[itemId];
     if(!files.length&&!vid){notify('사진을 고르거나 영상을 찍어 주세요.','error');return;}
     if(files.length>CERT_MAX_PHOTOS){notify(`사진은 한 번에 ${CERT_MAX_PHOTOS}장까지 올릴 수 있어요.`,'error');return;}
-    // 덮어쓰기(upsert) 없이 새 이름으로 올려요 (저장소 목록 보기를 막아 둬서 덮어쓰기는 거부돼요)
-    const urls=[];
     if(btn)btn.disabled=true;
-    const steps=files.length+(vid?1:0);
-    for(let i=0;i<files.length;i++){
-      if(btn)btn.textContent=`올리는 중 ${i+1}/${steps}`;
-      try{urls.push(await uploadPhoto('cert-photos',files[i],1200,0.7));} // 과제 사진은 장수가 많아서 더 작게 (손글씨는 충분히 읽혀요)
-      catch(e){notify(e.message.replace(/ \(schema_add5.*$/,''),'error');removeCertPhoto(urls.join('\n'));reset();return;}
-    }
+    const cntEl=document.getElementById('cert-cnt-'+itemId);
+    const showFail=m=>{notify(m,'error');if(cntEl){cntEl.style.color='var(--red)';cntEl.textContent=m;}};
+    // 이미 올린 사진은 기억해 두고, "제출"을 다시 누르면 못 올린 사진만 올려요 (덮어쓰기 없이 새 이름으로 올려요)
+    const done=certUploaded[itemId]||(certUploaded[itemId]={});
+    const key=f=>[f.name,f.size,f.lastModified].join('|');
+    const keys=new Set(files.map(key));
+    const stale=Object.keys(done).filter(k=>!keys.has(k)); // 사진을 다시 골랐으면 안 쓰게 된 것은 지워요
+    if(stale.length){removeCertPhoto(stale.map(k=>done[k]).join('\n'));stale.forEach(k=>delete done[k]);}
+    const todo=[...new Map(files.filter(f=>!done[key(f)]).map(f=>[key(f),f])).values()];
+    const total=keys.size;let sent=total-todo.length,failed=0,why='',next=0;
+    const showSent=()=>{if(btn)btn.textContent=`사진 올리는 중 ${sent}/${total}`;};
+    const release=keepScreenOn();
+    if(files.length){showSent();notify('다 올라갈 때까지 이 화면을 켜 두세요.','info');}
+    const worker=async()=>{while(next<todo.length){const f=todo[next++];try{done[key(f)]=await uploadCertImage(f);sent++;showSent();}catch(e){failed++;why=why||e.message;}}};
+    await Promise.all(Array.from({length:Math.min(CERT_UPLOAD_AT_ONCE,todo.length)},worker)); // 여러 장을 동시에 올려서 시간을 줄여요
+    if(failed){release();showFail(`사진 ${failed}장을 못 올렸어요(${sent}장은 올라갔어요). ${why||'인터넷이 약해요. 와이파이에 연결하고'} "제출"을 다시 누르면 못 올린 사진만 올려요.`);reset();return;}
+    const urls=[...new Set(files.map(f=>done[key(f)]))];
     if(vid){
       if(btn)btn.textContent='영상 올리는 중 0%';
       notify('영상을 올리고 있어요. 다 될 때까지 이 화면을 켜 두세요.','info');
       try{urls.push(await uploadVideo('cert-photos',vid.blob,vid.ext,p=>{if(btn)btn.textContent=`영상 올리는 중 ${p}%`;}));}
-      catch(e){notify(e.message,'error');removeCertPhoto(urls.join('\n'));reset();return;}
+      catch(e){release();showFail(e.message);reset();return;}
     }
+    release();
     photoUrl=urls.join('\n');
   }
   const{data:fail,error}=await sb.rpc('student_cert_submit',{p_token:sessionToken,p_item_id:itemId,p_photo_url:photoUrl});
   reset();
+  delete certUploaded[itemId];
   if(error||fail){notify('제출 실패: '+(error?error.message:fail==='forbidden'?'다시 로그인해 주세요.':fail),'error');removeCertPhoto(photoUrl);return;}
   delete certVideos[itemId];
   // 재제출이면 서버가 예전 미통과 기록을 지웠어요. 예전 사진 파일도 지워요

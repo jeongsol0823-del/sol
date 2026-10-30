@@ -1830,12 +1830,13 @@ function renderCertCam(step,msg){
       <div style="font-size:12px;color:var(--text2);margin-top:8px">최대 ${CERT_VIDEO_MAX/60}분 · 소리는 녹음되지 않아요 · 카메라 사용을 "허용"해 주세요</div></div>
     <button class="btn blue" style="width:100%;margin-top:10px" onclick="startCertCamera()">카메라 켜기</button>`;
   else if(step==='error')el.innerHTML=`<div class="empty-hint">${esc(msg)}</div><button class="btn" style="width:100%;margin-top:10px" onclick="startCertCamera()">다시 시도</button>`;
-  else if(step==='live')el.innerHTML=view+`<button class="btn blue" style="width:100%;margin-top:10px" onclick="recCertCam()">● 녹화 시작</button>`;
+  else if(step==='live')el.innerHTML=view+`<div style="font-size:12px;color:var(--text2);margin-top:6px">종이에서 20~30cm 떨어져서, 글씨가 또렷해지면 시작하세요. 뿌옇게 보이면 렌즈를 닦아 주세요.</div><button class="btn blue" style="width:100%;margin-top:10px" onclick="recCertCam()">● 녹화 시작</button>`;
   else if(step==='rec')el.innerHTML=view+`<div class="row-between" style="margin-top:8px"><span style="color:var(--red);font-weight:700">● 녹화 중</span><span id="cam-time" style="font-family:var(--mono)">0:00 / ${fmtClock(CERT_VIDEO_MAX)}</span></div><button class="btn red" style="width:100%;margin-top:8px" onclick="stopCertRec()">■ 녹화 끝내기</button>`;
   else if(step==='review'){
     if(certCam.url)URL.revokeObjectURL(certCam.url);certCam.url=URL.createObjectURL(certCam.blob);
     el.innerHTML=`<video controls playsinline src="${certCam.url}" style="width:100%;border-radius:10px;background:#000;max-height:60vh"></video>
       <div style="font-size:12px;color:var(--text2);margin-top:6px">${fmtClock(certCam.sec)} · ${(certCam.blob.size/1e6).toFixed(1)}MB · 풀이가 잘 보이는지 확인해 주세요${certCam.full?'<br><b style="color:var(--red)">용량이 다 차서 여기까지만 찍혔어요. 끝까지 안 찍혔으면 더 빨리 넘기면서 다시 찍어 주세요.</b>':''}</div>
+      <div id="cam-blur"></div>
       <div style="display:flex;gap:8px;margin-top:10px"><button class="btn" style="flex:1" onclick="retakeCertCam()">다시 찍기</button><button class="btn blue" style="flex:1" onclick="useCertVideo()">이 영상으로 내기</button></div>`;
   }
 }
@@ -1847,7 +1848,33 @@ async function startCertCamera(){
   catch(e){renderCertCam('error','카메라를 켤 수 없어요. 휴대폰 설정에서 이 앱(브라우저)의 카메라 사용을 "허용"으로 바꾼 뒤 다시 해 주세요.');return;}
   if(certCam!==cam){stream.getTracks().forEach(t=>t.stop());return;} // 카메라 허용을 기다리는 사이 창을 닫았으면 끄기
   cam.stream=stream;
+  // 되는 휴대폰에서는 계속 자동 초점을 맞춰요 (안 되는 휴대폰은 그냥 넘어가요)
+  try{const t=stream.getVideoTracks()[0];const fm=t.getCapabilities&&t.getCapabilities().focusMode;if(fm&&fm.includes('continuous'))t.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{});}catch(e){}
   renderCertCam('live');document.getElementById('cam-view').srcObject=stream;
+}
+// 찍은 영상이 얼마나 또렷한지 재요 (높을수록 또렷함). 잴 수 없는 휴대폰이면 null이고, 그때는 경고하지 않아요
+const CERT_BLUR_LIMIT=35; // 흐린 영상 2~11, 글씨가 읽히는 영상 114 이상을 보고 정한 값
+async function certSharpness(blob,sec){
+  const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='auto';
+  const url=URL.createObjectURL(blob);v.src=url;
+  const wait=ev=>new Promise((ok,no)=>{const t=setTimeout(()=>no(new Error('timeout')),3000);v.addEventListener(ev,()=>{clearTimeout(t);ok();},{once:true});});
+  try{
+    await wait('loadeddata');
+    const k=Math.min(1,540/Math.min(v.videoWidth,v.videoHeight));
+    const c=document.createElement('canvas');const W=c.width=Math.round(v.videoWidth*k),H=c.height=Math.round(v.videoHeight*k);
+    const g=c.getContext('2d',{willReadFrequently:true});const vals=[];
+    for(const p of [.2,.35,.5,.65,.8]){
+      v.currentTime=sec*p;await wait('seeked');
+      g.drawImage(v,0,0,W,H);const a=g.getImageData(0,0,W,H).data;
+      const Y=(x,y)=>{const i=(y*W+x)*4;return .3*a[i]+.59*a[i+1]+.11*a[i+2];};
+      let s=0,s2=0,n=0,lum=0;
+      for(let y=2;y<H-2;y+=2)for(let x=2;x<W-2;x+=2){const l=4*Y(x,y)-Y(x-2,y)-Y(x+2,y)-Y(x,y-2)-Y(x,y+2);s+=l;s2+=l*l;lum+=Y(x,y);n++;}
+      if(lum/n>10)vals.push(s2/n-(s/n)**2); // 까맣게 읽힌 장면은 빼요
+    }
+    if(!vals.length)return null;
+    vals.sort((x,y)=>x-y);return vals[Math.floor(vals.length/2)];
+  }catch(e){return null;}
+  finally{URL.revokeObjectURL(url);v.removeAttribute('src');v.load();}
 }
 function recCertCam(){
   const cam=certCam;if(!cam||!cam.stream)return;
@@ -1868,6 +1895,10 @@ function recCertCam(){
     cam.blob=new Blob(cam.chunks,{type});cam.ext=type==='video/mp4'?'mp4':'webm';cam.sec=Math.max(1,Math.round((Date.now()-cam.start)/1000));
     if(!cam.blob.size){cam.blob=null;renderCertCam('error','영상이 제대로 찍히지 않았어요. 다시 찍어 주세요.');return;}
     renderCertCam('review');
+    certSharpness(cam.blob,cam.sec).then(s=>{
+      const b=document.getElementById('cam-blur');
+      if(b&&certCam===cam&&s!==null&&s<CERT_BLUR_LIMIT)b.innerHTML='<div style="color:var(--red);font-weight:700;font-size:13px;margin-top:6px">⚠️ 영상이 많이 흐려요. 글씨가 안 보이면 통과하기 어려워요. 렌즈를 닦고 조금 떨어져서 다시 찍어 주세요.</div>';
+    });
   };
   rec.start(1000);cam.start=Date.now();
   // 3분 찍는 동안 화면이 꺼지면 녹화가 끊겨요 (안 되는 브라우저는 그냥 넘어가요)

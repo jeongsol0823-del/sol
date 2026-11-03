@@ -277,6 +277,19 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
   .exam-timer{top:12px}
 }
 
+/* ---- 강사: 학교별 학생 목록 ---- */
+.sch-group{background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px}
+.sch-group summary{display:flex;align-items:center;gap:10px;padding:13px 16px;cursor:pointer;list-style:none;user-select:none}
+.sch-group summary::-webkit-details-marker{display:none}
+.sch-group summary::before{content:'▸';color:var(--text2);font-size:13px;transition:transform .15s}
+.sch-group[open] summary::before{transform:rotate(90deg)}
+.sch-group[open] summary{border-bottom:1px solid var(--border)}
+.sch-group summary:hover{background:var(--bg2)}
+.sch-name{font-weight:700;font-size:15px}
+.sch-cnt{color:var(--text2);font-size:13px}
+.sch-group table.simple{margin:4px 0}
+.sch-group table.simple th:first-child,.sch-group table.simple td:first-child{padding-left:16px}
+
 /* ---- 학생: 오늘 할 일 ---- */
 .h-head h1{font-size:22px;font-weight:800;letter-spacing:-.5px;margin-top:2px}
 .h-date{font-size:13px;color:var(--text2)}
@@ -1113,11 +1126,12 @@ function renderPending(){
       </div>
     </div>`).join('');
 }
+const openSchools=new Set(); // 학생 목록에서 펼쳐 둔 학교 (다시 그려도 그대로 열어 둬요)
 function renderActive(){
   const el=document.getElementById('active-list');
   const active=db.users.filter(u=>u.role==='student'&&u.status==='active');
   if(!active.length){el.innerHTML='<div class="empty-hint">등록된 학생이 없습니다.</div>';return;}
-  const rows=active.map(u=>{
+  const row=u=>{
     const myProg=db.progress.filter(p=>p.student_id===u.id);
     const watched=myProg.length;
     const avg=watched?Math.round(myProg.reduce((a,p)=>a+(p.percent||0),0)/watched):0;
@@ -1132,8 +1146,18 @@ function renderActive(){
       <td>${fast?`<span class="pill amber">배속 ${fast}</span> `:''}${skip?`<span class="pill red">건너뜀 ${skip}</span> `:''}${away?`<span class="pill red">이탈 ${away}</span>`:''}${!fast&&!skip&&!away?'<span style="color:var(--text3)">-</span>':''}</td>
       <td style="white-space:nowrap"><button class="btn sm" onclick="showStudentPw('${esc(u.id)}')">비번 보기</button> <button class="btn sm" onclick="resetStudentPw('${esc(u.id)}')">새 비번</button> <button class="btn sm" onclick="renameStudent('${esc(u.id)}')">이름 수정</button> <button class="btn red sm" onclick="removeStudent('${esc(u.id)}')">삭제</button><div id="pw-${esc(u.id)}" style="font-size:12px;margin-top:4px"></div></td>
     </tr>`;
+  };
+  // 학교별로 묶어서 접고 펼 수 있게 (학교 목록 순서, 학교 미입력은 맨 뒤)
+  const order=schoolNames();
+  const groups=[...new Set(active.map(u=>u.school||''))].sort((a,b)=>(!a)-(!b)||((order.indexOf(a)+1||999)-(order.indexOf(b)+1||999))||a.localeCompare(b));
+  el.innerHTML=groups.map(sch=>{
+    const list=active.filter(u=>(u.school||'')===sch).sort((a,b)=>a.name.localeCompare(b.name));
+    const warn=list.reduce((n,u)=>n+(videoFlagsFor(u.id).some(f=>f.skip||f.away)?1:0),0);
+    return `<details class="sch-group" data-sch="${esc(sch)}"${openSchools.has(sch)?' open':''} ontoggle="openSchools[this.open?'add':'delete'](this.dataset.sch)">
+      <summary><span class="sch-name">${esc(sch||'학교 미입력')}</span><span class="sch-cnt">${list.length}명</span>${warn?`<span class="pill red">영상 확인 ${warn}명</span>`:''}</summary>
+      <div style="overflow-x:auto"><table class="simple" style="min-width:860px"><thead><tr><th>이름</th><th>학교·학년</th><th>시청 현황</th><th>평균 진도</th><th>영상 확인</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>
+    </details>`;
   }).join('');
-  el.innerHTML=`<div style="overflow-x:auto"><table class="simple" style="min-width:860px"><thead><tr><th>이름</th><th>학교·학년</th><th>시청 현황</th><th>평균 진도</th><th>영상 확인</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 async function renameStudent(id){
   const u=db.users.find(x=>x.id===id);if(!u)return;

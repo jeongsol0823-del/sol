@@ -288,6 +288,13 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 .sch-name{font-weight:700;font-size:15px}
 .sch-cnt{color:var(--text2);font-size:13px}
 .sch-group table.simple{margin:4px 0}
+.sch-body>.card{margin:10px 12px;box-shadow:none}
+.sch-body>.card:last-child{margin-bottom:12px}
+.form-fold{margin-bottom:6px}
+.form-fold>summary{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--radius-sm);background:var(--ink);color:#fff;font-weight:600;font-size:14px;cursor:pointer;list-style:none;user-select:none}
+.form-fold>summary::-webkit-details-marker{display:none}
+.form-fold[open]>summary{margin-bottom:10px;background:#fff;color:var(--text);border:1px solid var(--border2)}
+.form-fold[open]>summary::after{content:'접기 ▴';font-size:12px;color:var(--text2);font-weight:500;margin-left:6px}
 .sch-group table.simple th:first-child,.sch-group table.simple td:first-child{padding-left:16px}
 
 /* ---- 학생: 오늘 할 일 ---- */
@@ -409,7 +416,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 
     <div class="section" id="t-videos">
       <div id="video-alerts"></div>
-      <div class="section-head"><h2>새 영상 등록</h2></div>
+      <details class="form-fold" id="v-form-box"><summary>＋ 새 영상 등록</summary>
       <div class="card">
         <div class="admin-form">
           <div class="full form-group"><label>영상 종류</label><select class="form-select" id="v-kind" onchange="onVideoKindChange()"><option value="review">복습 영상 (결석생 · 학교별 수업)</option><option value="grammar">문법 기초 (학교 상관없음 · 수강 승인한 학생)</option></select></div>
@@ -425,7 +432,8 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
         </div>
         <button class="btn blue" style="margin-top:10px" onclick="addVideo()">영상 등록</button>
       </div>
-      <div class="section-head" style="margin-top:24px"><h2>등록된 영상</h2></div>
+      </details>
+      <div class="section-head" style="margin-top:20px"><h2>등록된 영상</h2></div>
       <div id="video-admin-list"></div>
       <div id="video-watch-detail" style="margin-top:12px"></div>
     </div>
@@ -456,7 +464,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     </div>
 
     <div class="section" id="t-exams">
-      <div class="section-head"><h2 id="ex-form-title">새 시험 만들기</h2></div>
+      <details class="form-fold" id="ex-form-box"><summary id="ex-form-title">＋ 새 시험 만들기</summary>
       <div class="card">
         <div class="admin-form">
           <div class="form-group"><label>시험 이름</label><input class="form-input" id="ex-name" placeholder="예: 1학기 중간 대비 1회"></div>
@@ -468,7 +476,8 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
         <button class="btn sm" onclick="addExamQRow()">+ 문항 추가</button>
         <div style="display:flex;gap:6px;margin-top:10px"><button class="btn blue" id="ex-save-btn" onclick="saveExam()">시험 저장</button><button class="btn" id="ex-cancel-btn" style="display:none" onclick="resetExamForm()">수정 취소</button></div>
       </div>
-      <div class="section-head" style="margin-top:24px"><h2>만든 시험 목록</h2></div>
+      </details>
+      <div class="section-head" style="margin-top:20px"><h2>만든 시험 목록</h2></div>
       <div id="exam-list"></div>
       <div class="section-head" style="margin-top:24px"><h2>응시 결과</h2></div>
       <div id="exam-results"><div class="empty-hint">시험 목록에서 "결과 보기"를 눌러주세요.</div></div>
@@ -1127,6 +1136,14 @@ function renderPending(){
     </div>`).join('');
 }
 const openSchools=new Set(); // 학생 목록에서 펼쳐 둔 학교 (다시 그려도 그대로 열어 둬요)
+const openGroups=new Set(); // 영상·시험 목록에서 펼쳐 둔 묶음
+// 학교별 접고 펴는 묶음 하나. key는 펼침 상태를 기억하는 이름
+function foldGroup(key,title,count,extra,body){
+  return `<details class="sch-group" data-key="${esc(key)}"${openGroups.has(key)?' open':''} ontoggle="openGroups[this.open?'add':'delete'](this.dataset.key)">
+    <summary><span class="sch-name">${esc(title)}</span><span class="sch-cnt">${count}</span>${extra||''}</summary><div class="sch-body">${body}</div></details>`;
+}
+// 학교 목록 순서대로 정렬 (없는 학교·기타는 뒤로)
+function schoolOrder(a,b){const o=schoolNames();const ia=o.indexOf(a),ib=o.indexOf(b);return (ia<0?999:ia)-(ib<0?999:ib)||a.localeCompare(b);}
 function renderActive(){
   const el=document.getElementById('active-list');
   const active=db.users.filter(u=>u.role==='student'&&u.status==='active');
@@ -1311,8 +1328,13 @@ function renderVideoAdmin(){
       <div style="display:flex;gap:6px"><button class="btn sm" onclick="renderVideoWatchDetail('${esc(v.id)}')">시청 ${gram?'기록':'권한·기록'}</button><button class="btn red sm" onclick="deleteVideo('${esc(v.id)}')">삭제</button></div>
     </div>`;};
   const gv=grammarVideos(),rv=db.videos.filter(v=>!isGrammar(v)).reverse();
-  el.innerHTML=(gv.length?`<div style="font-weight:600;margin:4px 0 8px">문법 기초 <span style="color:var(--text2);font-weight:400">${gv.length}강</span></div>`+gv.map(card).join(''):'')
-    +(rv.length?`<div style="font-weight:600;margin:${gv.length?'18px':'4px'} 0 8px">복습 영상 <span style="color:var(--text2);font-weight:400">${rv.length}개</span></div>`+rv.map(card).join(''):'');
+  // 복습 영상은 학교별로, 학교 안에서는 최근 수업부터
+  const schs=[...new Set(rv.map(v=>v.school||''))].sort((a,b)=>(!a)-(!b)||schoolOrder(a,b));
+  el.innerHTML=schs.map(sch=>{
+    const list=rv.filter(v=>(v.school||'')===sch).sort((a,b)=>String(b.class_date||'').localeCompare(String(a.class_date||'')));
+    const last=list.find(v=>v.class_date);
+    return foldGroup('v:'+sch,sch||'전체 학교',`${list.length}개`,last?`<span class="sch-cnt">· 최근 ${mdWd(last.class_date)} 수업</span>`:'',list.map(card).join(''));
+  }).join('')+(gv.length?foldGroup('v:grammar','문법 기초',`${gv.length}강`,'',gv.map(card).join('')):'');
   renderVideoAlerts();
 }
 /* ---- 영상 시청 분석: 배속 · 건너뛴 구간 ---- */
@@ -2294,7 +2316,7 @@ function resetExamForm(){
   editingExamId=null;
   document.getElementById('ex-name').value='';document.getElementById('ex-time').value='';
   document.getElementById('ex-q-rows').innerHTML='';
-  document.getElementById('ex-form-title').textContent='새 시험 만들기';
+  document.getElementById('ex-form-title').textContent='＋ 새 시험 만들기';
   document.getElementById('ex-save-btn').textContent='시험 저장';
   document.getElementById('ex-cancel-btn').style.display='none';
 }
@@ -2307,6 +2329,7 @@ function editExam(id){
   document.getElementById('ex-q-rows').innerHTML='';
   (ex.questions||[]).forEach(q=>addExamQRow(q));
   document.getElementById('ex-form-title').textContent=`시험 수정 중: ${ex.name}`;
+  document.getElementById('ex-form-box').open=true;
   document.getElementById('ex-save-btn').textContent='수정 내용 저장';
   document.getElementById('ex-cancel-btn').style.display='';
   document.getElementById('t-exams').scrollIntoView({behavior:'smooth',block:'start'});
@@ -2380,7 +2403,9 @@ function renderExamAdmin(){
   renderTagAdmin();renderTagAnalysis();
   const el=document.getElementById('exam-list');
   if(!db.exams.length){el.innerHTML='<div class="empty-hint">만든 시험이 없습니다.</div>';return;}
-  el.innerHTML=db.exams.map(ex=>{
+  const schs=schoolNames();
+  const schOf=ex=>schs.find(n=>(ex.name||'').includes(n)||(ex.name||'').includes(n.replace(/고$/,'')))||'';
+  const card=ex=>{
     const code=String(ex.id).slice(0,8).toUpperCase();
     const list=db.examResponses.filter(r=>r.exam_id===ex.id);
     const done=list.filter(isSubmitted).length,doing=list.length-done;
@@ -2388,12 +2413,18 @@ function renderExamAdmin(){
     return `<div class="card">
       <div class="row-between"><div><span class="pill ${ex.category==='school'?'blue':'green'}">${examCatLabel(ex.category)}</span> <strong>${esc(ex.name)}</strong> <span style="color:var(--text2)">· 문항 ${ex.total_q}개 · 제출 ${done}명${doing?` · 응시 중 ${doing}명`:''}</span>${pend?` <span class="pill amber">주관식 채점 대기 ${pend}</span>`:''}${ex.answers_revealed?' <span class="pill green">정답 공개됨</span>':' <span class="pill red">정답 비공개</span>'}
         <div style="font-family:var(--mono);color:var(--accent);margin-top:4px">코드: ${code}</div></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" onclick="renderExamResults('${esc(ex.id)}')">결과 보기</button><button class="btn sm ${ex.answers_revealed?'':'green'}" onclick="toggleRevealAnswers('${esc(ex.id)}')">${ex.answers_revealed?'정답 공개 취소':'정답 공개'}</button><button class="btn sm" onclick="editExam('${esc(ex.id)}')">수정</button><button class="btn red sm" onclick="deleteExam('${esc(ex.id)}')">삭제</button></div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" onclick="renderExamResults('${esc(ex.id)}');document.getElementById('exam-results').scrollIntoView({behavior:'smooth',block:'start'})">결과 보기</button><button class="btn sm ${ex.answers_revealed?'':'green'}" onclick="toggleRevealAnswers('${esc(ex.id)}')">${ex.answers_revealed?'정답 공개 취소':'정답 공개'}</button><button class="btn sm" onclick="editExam('${esc(ex.id)}')">수정</button><button class="btn red sm" onclick="deleteExam('${esc(ex.id)}')">삭제</button></div></div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--text2);flex-wrap:wrap">제한시간
         <input type="number" min="0" class="date-in" style="width:70px" id="extime-${esc(ex.id)}" value="${ex.time_limit||''}" placeholder="없음"> 분
         <button class="btn sm" onclick="setExamTimeLimit('${esc(ex.id)}')">적용</button>
         <span>${ex.time_limit?`현재 ${ex.time_limit}분`:'현재 제한 없음'} · 비우면 제한 없음</span></div>
     </div>`;
+  };
+  const groups=[...new Set(db.exams.map(schOf))].sort((a,b)=>(!a)-(!b)||schoolOrder(a,b));
+  el.innerHTML=groups.map(sch=>{
+    const list=db.exams.filter(ex=>schOf(ex)===sch);
+    const pend=list.reduce((n,ex)=>n+db.examResponses.filter(r=>r.exam_id===ex.id&&isSubmitted(r)&&descPending(ex,r)).length,0);
+    return foldGroup('e:'+sch,sch||'기타',`${list.length}개`,pend?`<span class="pill amber">채점 대기 ${pend}</span>`:'',list.map(card).join(''));
   }).join('');
 }
 function renderExamResults(examId){

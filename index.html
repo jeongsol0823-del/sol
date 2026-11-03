@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>정말 쏠쏠한 국어</title>
 <meta name="description" content="정말 쏠쏠한 국어 · 쏠T 온라인 학습 시스템"/>
-<meta name="theme-color" content="#f6f7f9"/>
+<meta name="theme-color" content="#161a24"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"/>
 <link rel="icon" type="image/png" sizes="32x32" href="icons/face-32.png?v=3"/>
 <link rel="icon" type="image/png" sizes="48x48" href="icons/face-48.png?v=3"/>
@@ -15,7 +15,7 @@
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
-<script>try{if(localStorage.getItem('sk_theme')==='dark')document.documentElement.dataset.theme='dark';}catch(e){}</script>
+<script>var _t='dark';try{_t=localStorage.getItem('sk_theme')||'dark';}catch(e){}if(_t!=='light')document.documentElement.dataset.theme='dark';</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function(){
@@ -333,7 +333,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
   #page-student .tabnav .tab-badge{position:absolute;top:3px;right:6px;margin:0}
 }
 
-/* ---- 어두운 화면 (기기마다 🌙 버튼으로 선택) ---- */
+/* ---- 어두운 화면 (기본. ☀️ 버튼으로 기기마다 밝은 화면 선택) ---- */
 :root[data-theme="dark"]{
   --bg:#0f1117;--bg2:#161a24;--bg3:#1e2333;--card:#1b202c;
   --border:rgba(255,255,255,0.09);--border2:rgba(255,255,255,0.16);

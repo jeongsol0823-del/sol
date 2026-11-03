@@ -276,6 +276,37 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
   #page-teacher .content,#page-student .content{margin-left:220px;width:auto;max-width:1120px;padding:32px 40px 60px}
   .exam-timer{top:12px}
 }
+
+/* ---- 학생: 오늘 할 일 ---- */
+.h-head h1{font-size:22px;font-weight:800;letter-spacing:-.5px;margin-top:2px}
+.h-date{font-size:13px;color:var(--text2)}
+.h-tiles{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--border);border-radius:var(--radius);margin-top:16px;overflow:hidden;background:#fff}
+.h-tile{display:flex;align-items:baseline;gap:8px;padding:14px 16px;background:none;border:none;border-left:1px solid var(--border);cursor:pointer;text-align:left;font-family:var(--font);color:var(--text2);font-size:13px}
+.h-tile:first-child{border-left:none}
+.h-tile:hover{background:var(--bg2)}
+.h-tile b{font-size:24px;color:var(--text);font-weight:800;border-bottom:3px solid var(--lime);line-height:1.1}
+.h-tile b small{font-size:14px;color:var(--text2);font-weight:600}
+.h-tile.warn b{border-bottom-color:var(--red)}
+#home-body{max-width:860px}
+.h-list{display:flex;flex-direction:column;gap:8px}
+.h-row{display:flex;align-items:center;gap:12px;justify-content:space-between;background:#fff;border:1px solid var(--border);border-left:4px solid var(--border2);border-radius:var(--radius-sm);padding:12px 14px}
+.h-row.red{border-left-color:var(--red)}.h-row.amber{border-left-color:var(--amber)}.h-row.blue{border-left-color:var(--accent)}
+.h-txt{min-width:0}
+.h-tag{font-size:11px;font-weight:700;color:var(--text2)}
+.h-row.red .h-tag{color:var(--red)}.h-row.amber .h-tag{color:var(--amber)}.h-row.blue .h-tag{color:var(--accent)}
+.h-title{font-weight:700;font-size:15px;line-height:1.35;word-break:keep-all}
+.h-sub{font-size:12px;color:var(--text2);margin-top:2px}
+.h-row .btn{flex-shrink:0;padding:8px 14px;font-size:13px}
+.h-more{font-size:13px;color:var(--text2);padding:4px 2px;cursor:pointer}
+.tabnav .ti{font-style:normal;margin-right:7px}
+@media(max-width:640px){.h-tiles{grid-template-columns:repeat(2,1fr)}.h-tile:nth-child(3){border-left:none}.h-tile:nth-child(n+3){border-top:1px solid var(--border)}}
+@media(max-width:899px){
+  #page-student .tabnav{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:10px 12px 12px;overflow:visible}
+  #page-student .tabnav button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px 7px;border:1px solid var(--border);border-radius:10px;background:#fff;font-size:12px;position:relative}
+  #page-student .tabnav button.active{background:var(--ink);border-color:var(--ink);color:#fff}
+  #page-student .tabnav .ti{margin:0;font-size:19px;line-height:1.2}
+  #page-student .tabnav .tab-badge{position:absolute;top:3px;right:6px;margin:0}
+}
 </style>
 </head>
 <body>
@@ -558,28 +589,30 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     <div class="topbar-right"><span id="student-name"></span><button class="btn sm" onclick="doLogout()">로그아웃</button></div>
   </div>
   <div class="tabnav">
-    <button class="active" data-t="s-review" onclick="switchTab('student','s-review')">복습 영상</button>
-    <button data-t="s-grammar" onclick="switchTab('student','s-grammar')">문법 기초</button>
-    <button data-t="s-qa" onclick="switchTab('student','s-qa')">질문답변</button>
-    <button data-t="s-exams" onclick="switchTab('student','s-exams')">시험</button>
-    <button data-t="s-vocab" onclick="switchTab('student','s-vocab')">어휘</button>
-    <button data-t="s-cert" onclick="switchTab('student','s-cert')">인증</button>
-    <button data-t="s-attendance" onclick="switchTab('student','s-attendance')">출석</button>
-    <button data-t="s-announce" onclick="switchTab('student','s-announce')">공지사항<span id="ann-tab-badge"></span></button>
-    <button data-t="s-report" onclick="switchTab('student','s-report')">성적표</button>
+    <button class="active" data-t="s-home" onclick="switchTab('student','s-home')"><i class="ti">🏠</i>오늘 할 일</button>
+    <button data-t="s-review" onclick="switchTab('student','s-review')"><i class="ti">▶️</i>수업 영상</button>
+    <button data-t="s-vocab" onclick="switchTab('student','s-vocab')"><i class="ti">📚</i>어휘</button>
+    <button data-t="s-cert" onclick="switchTab('student','s-cert')"><i class="ti">✅</i>인증</button>
+    <button data-t="s-exams" onclick="switchTab('student','s-exams')"><i class="ti">📝</i>시험</button>
+    <button data-t="s-qa" onclick="switchTab('student','s-qa')"><i class="ti">💬</i>질문</button>
+    <button data-t="s-announce" onclick="switchTab('student','s-announce')"><i class="ti">📢</i>공지<span id="ann-tab-badge"></span></button>
+    <button data-t="s-report" onclick="switchTab('student','s-report')"><i class="ti">📊</i>내 기록</button>
   </div>
   <div class="content">
 
-    <div class="section active" id="s-review">
-      <div class="section-head"><h2>복습 영상</h2></div>
-      <div id="review-hint"></div>
-      <div class="video-grid" id="review-grid"></div>
+    <div class="section active" id="s-home">
+      <div id="home-body"></div>
     </div>
 
-    <div class="section" id="s-grammar">
-      <div class="section-head"><h2>문법 기초</h2></div>
-      <div id="grammar-head"></div>
-      <div class="video-grid" id="grammar-grid"></div>
+    <div class="section" id="s-review">
+      <div class="section-head"><h2>수업 영상</h2></div>
+      <div id="review-hint"></div>
+      <div class="video-grid" id="review-grid"></div>
+      <div id="s-grammar" style="margin-top:32px">
+        <div class="section-head"><h2>문법 기초</h2></div>
+        <div id="grammar-head"></div>
+        <div class="video-grid" id="grammar-grid"></div>
+      </div>
     </div>
 
     <div class="section" id="s-qa">
@@ -640,10 +673,6 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div id="cert-my-items"></div>
     </div>
 
-    <div class="section" id="s-attendance">
-      <div class="section-head"><h2>내 출석 기록</h2></div>
-      <div id="my-attendance"></div>
-    </div>
 
     <div class="section" id="s-announce">
       <div class="section-head"><h2>공지사항</h2></div>
@@ -653,6 +682,8 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     <div class="section" id="s-report">
       <div class="section-head"><h2>내 성적표</h2></div>
       <div id="my-report-card"></div>
+      <div class="section-head" style="margin-top:28px"><h2>내 출석 기록</h2></div>
+      <div id="my-attendance"></div>
     </div>
 
   </div>
@@ -1478,6 +1509,7 @@ function onVideoKindChange(){
 }
 // 학생 화면
 function renderGrammarGrid(){
+  refreshHome();
   const head=document.getElementById('grammar-head'),grid=document.getElementById('grammar-grid');if(!head||!grid)return;
   const ok=grammarOk(session.id),st=grammarStatus(session.id),g=grammarSummary(session.id);
   if(ok){
@@ -1510,7 +1542,7 @@ async function requestGrammar(){
 /* ===================== 학생 화면 ===================== */
 function launchStudent(){
   document.getElementById('student-name').textContent=session.name+' 학생';
-  showPage('page-student');
+  showPage('page-student');switchTab('student','s-home');
   renderLectures();renderReviewGrid();renderGrammarGrid();
   loadQa().then(()=>{renderMyQa();renderMyQaFree();}); // 내 질문만 서버에서 받아와요
   renderMyExamResults();
@@ -1519,6 +1551,52 @@ function launchStudent(){
   renderMyAnnounce();
   renderMyReportCard();
   renderVocabPick();renderMyVocabResults();
+}
+/* ---- 오늘 할 일 (학생 첫 화면) ---- */
+const HOME_VIDEO_DONE=90; // 이만큼 보면 다 본 것으로 쳐요
+function refreshHome(){clearTimeout(refreshHome.t);refreshHome.t=setTimeout(()=>{try{renderStudentHome();}catch(e){console.error(e);}},0);}
+function goTab(id){switchTab('student',id);window.scrollTo(0,0);}
+function renderStudentHome(){
+  const el=document.getElementById('home-body');if(!el||!session||!document.getElementById('page-student').classList.contains('active'))return;
+  const sid=session.id;
+  // 영상: 결석한 날 보강 영상 먼저, 그다음 보다 만 영상
+  const absent=new Set(db.attendance.filter(a=>a.student_id===sid&&a.status==='absent').map(a=>a.date));
+  const vids=db.videos.filter(v=>!isGrammar(v)&&hasAccess(sid,v.id)).sort((a,b)=>String(b.class_date||'').localeCompare(String(a.class_date||'')));
+  const makeup=vids.filter(v=>v.class_date&&absent.has(v.class_date)&&getPct(sid,v.id)<HOME_VIDEO_DONE);
+  const going=vids.filter(v=>!makeup.includes(v)&&getPct(sid,v.id)>0&&getPct(sid,v.id)<HOME_VIDEO_DONE).slice(0,2);
+  // 인증: 미통과 → 마감 지남 → 마감 전 (마감 가까운 순)
+  const order={rejected:0,missing:1,open:2};
+  const certs=db.certItems.filter(it=>certForSchool(it,session.school)).map(item=>({item,state:certState(item,certSubOf(item.id,sid))}))
+    .filter(x=>x.state in order).sort((a,b)=>(order[a.state]-order[b.state])||(a.item.due_date||'9999').localeCompare(b.item.due_date||'9999'));
+  // 어휘
+  const track=pickDefaultTrack(sid);const st=track?missionStates(track,sid):[];
+  const cleared=st.filter(m=>m.cleared).length,cur=st.find(m=>m.state==='open');
+  // 공지
+  const unread=db.announcements.filter(a=>!db.announcementReads.some(r=>r.announcement_id===a.id&&r.student_id===sid));
+  // 문법 기초
+  const g=grammarOk(sid)?grammarSummary(sid):null;
+
+  const tile=(n,label,tab,warn)=>`<button type="button" class="h-tile${warn?' warn':''}" onclick="goTab('${tab}')"><b>${n}</b><span>${label}</span></button>`;
+  const row=(tone,tag,title,sub,btn,act)=>`<div class="h-row ${tone}"><div class="h-txt"><div class="h-tag">${tag}</div><div class="h-title">${title}</div>${sub?`<div class="h-sub">${sub}</div>`:''}</div><button class="btn${tone==='gray'?'':' blue'} sm" onclick="${act}">${btn}</button></div>`;
+  const rows=[];
+  makeup.forEach(v=>{const p=getPct(sid,v.id);rows.push(row('red','보강 영상',esc(v.title),`${mdWd(v.class_date)} 결석한 수업이에요 · ${p}% 봤어요`,p>0?'이어서 보기':'보기',`openPlay('${esc(v.id)}')`));});
+  certs.slice(0,4).forEach(({item,state})=>rows.push(row(state==='open'?'amber':'red','인증 과제',esc(item.title),state==='rejected'?'통과하지 못했어요. 다시 해서 내 주세요.':certDueText(item),state==='rejected'?'다시 내기':'내러 가기',`goTab('s-cert')`)));
+  if(certs.length>4)rows.push(`<div class="h-more" onclick="goTab('s-cert')">인증 과제 ${certs.length-4}개 더 보기 ›</div>`);
+  if(cur){const{title}=splitTitle(cur.set.lesson_title||cur.set.name);rows.push(row('blue','어휘 미션',`MISSION ${pad2(cur.no)} · ${esc(title)}`,cur.tries?'다 맞혀야 다음 미션이 열려요. 다시 도전!':'다 맞혀야 다음 미션이 열려요',cur.tries?'재도전':'도전하기',`goTab('s-vocab');openVocabStudy('${esc(cur.set.id)}')`));}
+  unread.slice(0,2).forEach(a=>rows.push(row('blue','새 공지',esc(a.title),'','읽기',`goTab('s-announce')`)));
+  going.forEach(v=>{const p=getPct(sid,v.id);rows.push(row('gray','보던 영상',esc(v.title),`${p}% 봤어요`,'이어서 보기',`openPlay('${esc(v.id)}')`));});
+  if(g&&g.next)rows.push(row('gray','문법 기초',`${g.next.no}강 ${esc(g.next.v.title)}`,`완강 ${g.done}/${g.total}강`,g.next.pct>0?'이어서 보기':'보기',`openPlay('${esc(g.next.v.id)}')`));
+
+  const d=new Date(),wd='일월화수목금토'[d.getDay()];
+  el.innerHTML=`<div class="h-head"><div class="h-date">${d.getMonth()+1}월 ${d.getDate()}일 (${wd})</div><h1>${esc(session.name)} 학생, 오늘 할 일</h1></div>
+    <div class="h-tiles">
+      ${tile(makeup.length,'볼 보강 영상','s-review',makeup.length>0)}
+      ${tile(certs.length,'낼 인증 과제','s-cert',certs.some(x=>x.state!=='open'))}
+      ${tile(st.length?`${cleared}<small>/${st.length}</small>`:'-','어휘 미션 클리어','s-vocab',false)}
+      ${tile(unread.length,'새 공지','s-announce',false)}
+    </div>
+    <div class="section-head" style="margin-top:22px"><h2>할 일</h2></div>
+    ${rows.length?`<div class="h-list">${rows.join('')}</div>`:'<div class="empty-hint">🎉 지금 할 일을 모두 끝냈어요!</div>'}`;
 }
 function renderLectures(){
   const el=document.getElementById('lecture-grid');if(!el)return; // 일반 강의 탭은 없앴어요
@@ -1537,6 +1615,7 @@ function renderLectures(){
   }).join('');
 }
 function renderReviewGrid(){
+  refreshHome();
   const el=document.getElementById('review-grid');
   const me=db.users.find(u=>u.id===session.id)||session;
   const list=db.videos.filter(v=>!isGrammar(v)&&(hasAccess(session.id,v.id)||videoFor(v,me))).sort((a,b)=>String(b.class_date||b.created_at||'').localeCompare(String(a.class_date||a.created_at||'')));
@@ -2765,6 +2844,7 @@ function renderAttendanceHistory(){
 
 /* ===================== 출석 — 학생 ===================== */
 function renderMyAttendance(){
+  refreshHome();
   const el=document.getElementById('my-attendance');
   const mine=db.attendance.filter(a=>a.student_id===session.id).sort((a,b)=>b.date.localeCompare(a.date));
   if(!mine.length){el.innerHTML='<div class="empty-hint">출석 기록이 없습니다.</div>';return;}
@@ -2801,6 +2881,7 @@ function renderAnnounceAdmin(){
 
 /* ===================== 공지사항 — 학생 ===================== */
 function renderMyAnnounce(){
+  refreshHome();
   const el=document.getElementById('announce-my-list');const badge=document.getElementById('ann-tab-badge');
   const isRead=a=>db.announcementReads.some(r=>r.announcement_id===a.id&&r.student_id===session.id);
   const unreadN=db.announcements.filter(a=>!isRead(a)).length;
@@ -3192,6 +3273,7 @@ async function deleteParentReport(id){
 
 /* ===================== 인증 — 학생 ===================== */
 function renderCertMy(){
+  refreshHome();
   const el=document.getElementById('cert-my-items');const sumEl=document.getElementById('cert-my-summary');
   if(!db.certItems.length){el.innerHTML='<div class="empty-hint">등록된 인증 과제가 없습니다.</div>';if(sumEl)sumEl.innerHTML='';return;}
   const list=db.certItems.filter(item=>certForSchool(item,session.school)).map(item=>{const sub=certSubOf(item.id,session.id);return{item,sub,state:certState(item,sub)};});
@@ -3715,6 +3797,7 @@ async function saveVocabSet(){
 
 /* ===================== 어휘 미션 — 학생 ===================== */
 function renderVocabPick(){
+  refreshHome();
   const el=document.getElementById('vocab-set-pick');
   if(!el||!session)return;
   renderHallStudent();

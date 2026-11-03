@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>정말 쏠쏠한 국어</title>
 <meta name="description" content="정말 쏠쏠한 국어 · 쏠T 온라인 학습 시스템"/>
-<meta name="theme-color" content="#4f7cff"/>
+<meta name="theme-color" content="#f6f7f9"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"/>
 <link rel="icon" type="image/png" sizes="32x32" href="icons/face-32.png?v=3"/>
 <link rel="icon" type="image/png" sizes="48x48" href="icons/face-48.png?v=3"/>
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=3"/>
@@ -30,15 +31,16 @@
 @font-face{font-family:'RP Body';font-weight:700;src:local('KoPubWorldDotum Bold'),local('KoPubWorld돋움체 Bold'),url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/KoPubDotumMedium.woff') format('woff')}
 
 :root{
-  --bg:#0f1117;--bg2:#181c27;--bg3:#1e2333;--card:#242938;
-  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
-  --text:#e8eaf0;--text2:#8b90a0;--text3:#555c70;
-  --accent:#4f7cff;--accent2:#3d63e0;
-  --green:#22c55e;--green-bg:rgba(34,197,94,0.1);
-  --amber:#f59e0b;--amber-bg:rgba(245,158,11,0.1);
-  --red:#ef4444;--red-bg:rgba(239,68,68,0.1);
-  --radius:12px;--radius-sm:8px;
-  --font:'Noto Sans KR',sans-serif;--mono:'DM Mono',monospace;
+  --bg:#ffffff;--bg2:#f6f7f9;--bg3:#eceef2;--card:#ffffff;
+  --border:#e4e6eb;--border2:#cfd3da;
+  --text:#14161b;--text2:#666d7a;--text3:#a2a8b3;
+  --accent:#3560f0;--accent2:#2a4fd0;
+  --ink:#17191e;--lime:#a3d82b;
+  --green:#16a34a;--green-bg:rgba(22,163,74,0.1);
+  --amber:#d97706;--amber-bg:rgba(217,119,6,0.1);
+  --red:#dc2626;--red-bg:rgba(220,38,38,0.08);
+  --radius:10px;--radius-sm:7px;
+  --font:'Pretendard','Noto Sans KR',sans-serif;--mono:'DM Mono',monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.6}
@@ -238,7 +240,42 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 .exam-timer{position:sticky;top:64px;z-index:15;background:var(--bg2);border:1.5px solid var(--accent);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;font-size:15px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
 .exam-timer.warn{border-color:var(--amber);color:var(--amber)}
 .exam-timer.danger{border-color:var(--red);color:var(--red)}
-.date-in{padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--font);color-scheme:dark}
+.date-in{padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--font);color-scheme:light}
+
+/* ---- 밝은 테마 손질 ---- */
+.form-input,.form-select,textarea.form-input,.date-in{background:#fff}
+.btn-primary,.btn.blue,.role-tab.active,.chip.active{background:var(--ink);border-color:var(--ink);color:#fff}
+.btn-primary:hover,.btn.blue:hover{background:#000}
+.btn{background:#fff}
+.btn:hover{border-color:var(--text3)}
+.pill.gray{background:rgba(0,0,0,.05)}
+.pill.blue{background:rgba(53,96,240,.1)}
+.modal{background:rgba(20,22,27,.35)}
+.modal-box{background:#fff;box-shadow:0 18px 50px rgba(0,0,0,.18)}
+.notif{box-shadow:0 6px 20px rgba(0,0,0,.12)}
+.exam-timer{background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+.section-head h2{font-size:17px;padding-left:10px;border-left:4px solid var(--lime);line-height:1.2}
+.topbar,.tabnav{background:var(--bg2)}
+.tb-name small{font-size:inherit;font-weight:inherit}
+.tb-name small::before{content:' · '}
+.tabnav button.active{border-color:var(--ink)}
+#page-login{background:var(--bg2)}
+.login-card{box-shadow:0 8px 30px rgba(0,0,0,.06)}
+
+/* ---- 넓은 화면: 왼쪽 메뉴 ---- */
+@media(min-width:900px){
+  #page-teacher .topbar,#page-student .topbar{position:fixed;left:0;top:0;width:220px;height:150px;flex-direction:column;align-items:flex-start;justify-content:flex-start;padding:22px 18px 12px;border-bottom:none;border-right:1px solid var(--border);gap:12px}
+  .topbar-title{font-size:17px;letter-spacing:-.4px;line-height:1.25}
+  .tb-name small{display:block;font-size:12px;font-weight:500;color:var(--text2);letter-spacing:0;margin-top:2px}
+  .tb-name small::before{content:none}
+  .topbar-right{font-size:12px;gap:8px}
+  #page-teacher .tabnav,#page-student .tabnav{position:fixed;left:0;top:150px;bottom:0;width:220px;flex-direction:column;gap:2px;padding:6px 12px 20px;border-bottom:none;border-right:1px solid var(--border);overflow-y:auto}
+  .tabnav button{text-align:left;padding:9px 12px;border-bottom:none;border-left:3px solid var(--border2);border-radius:0 6px 6px 0;color:var(--text2);font-size:14px}
+  .tabnav button:hover{background:#eef0f3;color:var(--text)}
+  .tabnav button.active{background:#e9ebef;color:var(--text);font-weight:700;border-left-color:var(--lime)}
+  #page-teacher .content,#page-student .content{margin-left:220px;width:auto;max-width:1120px;padding:32px 40px 60px}
+  .exam-timer{top:12px}
+}
 </style>
 </head>
 <body>
@@ -284,7 +321,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 <!-- TEACHER -->
 <div class="page" id="page-teacher">
   <div class="topbar">
-    <div class="topbar-title"><div class="tb-icon" style="background:none;width:40px;height:40px"><img src="icons/face-128.png?v=3" alt="" style="width:40px;height:40px;border-radius:9px"></div>정말 쏠쏠한 국어 · 강사</div>
+    <div class="topbar-title"><div class="tb-icon" style="background:none;width:40px;height:40px"><img src="icons/face-128.png?v=3" alt="" style="width:40px;height:40px;border-radius:9px"></div><span class="tb-name">정말 쏠쏠한 국어<small>강사</small></span></div>
     <div class="topbar-right"><span id="teacher-name"></span><button class="btn sm" onclick="doLogout()">로그아웃</button></div>
   </div>
   <div class="tabnav">
@@ -517,7 +554,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 <!-- STUDENT -->
 <div class="page" id="page-student">
   <div class="topbar">
-    <div class="topbar-title"><div class="tb-icon" style="background:none;width:40px;height:40px"><img src="icons/face-128.png?v=3" alt="" style="width:40px;height:40px;border-radius:9px"></div>정말 쏠쏠한 국어</div>
+    <div class="topbar-title"><div class="tb-icon" style="background:none;width:40px;height:40px"><img src="icons/face-128.png?v=3" alt="" style="width:40px;height:40px;border-radius:9px"></div><span class="tb-name">정말 쏠쏠한 국어<small>학생</small></span></div>
     <div class="topbar-right"><span id="student-name"></span><button class="btn sm" onclick="doLogout()">로그아웃</button></div>
   </div>
   <div class="tabnav">

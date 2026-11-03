@@ -15,6 +15,7 @@
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script>try{if(localStorage.getItem('sk_theme')==='dark')document.documentElement.dataset.theme='dark';}catch(e){}</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function(){
@@ -331,6 +332,34 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
   #page-student .tabnav .ti{margin:0;font-size:19px;line-height:1.2}
   #page-student .tabnav .tab-badge{position:absolute;top:3px;right:6px;margin:0}
 }
+
+/* ---- 어두운 화면 (기기마다 🌙 버튼으로 선택) ---- */
+:root[data-theme="dark"]{
+  --bg:#0f1117;--bg2:#161a24;--bg3:#1e2333;--card:#1b202c;
+  --border:rgba(255,255,255,0.09);--border2:rgba(255,255,255,0.16);
+  --text:#e8eaf0;--text2:#9aa0b0;--text3:#5f6678;
+  --accent:#6b8dff;--accent2:#4f7cff;--ink:#4f7cff;
+  --green:#22c55e;--green-bg:rgba(34,197,94,0.14);
+  --amber:#f59e0b;--amber-bg:rgba(245,158,11,0.14);
+  --red:#ef4444;--red-bg:rgba(239,68,68,0.14);
+  color-scheme:dark;
+}
+[data-theme="dark"] .form-input,[data-theme="dark"] .form-select,[data-theme="dark"] textarea.form-input,[data-theme="dark"] .date-in,
+[data-theme="dark"] .btn,[data-theme="dark"] .modal-box,[data-theme="dark"] .exam-timer,[data-theme="dark"] .sch-group,
+[data-theme="dark"] .form-fold[open]>summary,[data-theme="dark"] .h-tiles,[data-theme="dark"] .h-row{background:var(--card)}
+[data-theme="dark"] .date-in{color-scheme:dark}
+[data-theme="dark"] .btn.blue,[data-theme="dark"] .btn-primary{background:var(--ink)}
+[data-theme="dark"] .btn.green{background:var(--green)}
+[data-theme="dark"] .btn.red{background:var(--red)}
+[data-theme="dark"] .btn-primary:hover,[data-theme="dark"] .btn.blue:hover{background:var(--accent2)}
+[data-theme="dark"] .pill.gray{background:rgba(255,255,255,.07)}
+[data-theme="dark"] .pill.blue{background:rgba(107,141,255,.16)}
+[data-theme="dark"] .modal{background:rgba(0,0,0,.6)}
+[data-theme="dark"] .login-card{box-shadow:none}
+[data-theme="dark"] .tabnav button:hover{background:rgba(255,255,255,.05)}
+[data-theme="dark"] .tabnav button.active{background:rgba(255,255,255,.08)}
+@media(max-width:899px){[data-theme="dark"] #page-student .tabnav button{background:var(--card)}[data-theme="dark"] #page-student .tabnav button.active{background:var(--ink)}}
+.theme-btn{min-width:34px}
 </style>
 </head>
 <body>
@@ -377,7 +406,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 <div class="page" id="page-teacher">
   <div class="topbar">
     <div class="topbar-title"><div class="tb-icon" style="background:none;width:40px;height:40px"><img src="icons/face-128.png?v=3" alt="" style="width:40px;height:40px;border-radius:9px"></div><span class="tb-name">정말 쏠쏠한 국어<small>강사</small></span></div>
-    <div class="topbar-right"><span id="teacher-name"></span><button class="btn sm" onclick="doLogout()">로그아웃</button></div>
+    <div class="topbar-right"><span id="teacher-name"></span><button class="btn sm theme-btn" onclick="toggleTheme()" title="화면 밝기 바꾸기">🌙</button><button class="btn sm" onclick="doLogout()">로그아웃</button></div>
   </div>
   <div class="tabnav">
     <button class="active" data-t="t-students" onclick="switchTab('teacher','t-students')">학생 관리</button>
@@ -612,7 +641,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 <div class="page" id="page-student">
   <div class="topbar">
     <div class="topbar-title"><div class="tb-icon" style="background:none;width:40px;height:40px"><img src="icons/face-128.png?v=3" alt="" style="width:40px;height:40px;border-radius:9px"></div><span class="tb-name">정말 쏠쏠한 국어<small>학생</small></span></div>
-    <div class="topbar-right"><span id="student-name"></span><button class="btn sm" onclick="doLogout()">로그아웃</button></div>
+    <div class="topbar-right"><span id="student-name"></span><button class="btn sm theme-btn" onclick="toggleTheme()" title="화면 밝기 바꾸기">🌙</button><button class="btn sm" onclick="doLogout()">로그아웃</button></div>
   </div>
   <div class="tabnav">
     <button class="active" data-t="s-home" onclick="switchTab('student','s-home')"><i class="ti">🏠</i>오늘 할 일</button>
@@ -880,6 +909,19 @@ async function upsertProgress(sid,vid,pct,watchSec,lastPosition,maxRate,extra){
 const USER_COLS='id,name,role,status,school_id,created_at,school,grade,grade_year';
 const TOKEN_KEY='sk_kr_tok';
 let sessionToken=null;
+// 밝은 화면 ↔ 어두운 화면 (이 기기에만 기억)
+function applyTheme(){
+  const dark=document.documentElement.dataset.theme==='dark';
+  document.querySelectorAll('.theme-btn').forEach(b=>{b.textContent=dark?'☀️':'🌙';b.title=dark?'밝은 화면으로':'어두운 화면으로';});
+  const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=dark?'#161a24':'#f6f7f9';
+}
+function toggleTheme(){
+  const dark=document.documentElement.dataset.theme!=='dark';
+  if(dark)document.documentElement.dataset.theme='dark';else delete document.documentElement.dataset.theme;
+  try{localStorage.setItem('sk_theme',dark?'dark':'light');}catch(e){}
+  applyTheme();
+}
+document.addEventListener('DOMContentLoaded',applyTheme);
 function saveToken(t){sessionToken=t;try{t?localStorage.setItem(TOKEN_KEY,t):localStorage.removeItem(TOKEN_KEY);localStorage.removeItem('sk_kr_sess');}catch(e){}}
 // 강사 전용 서버 함수 부르기: 성공하면 null, 실패하면 오류 문장
 async function teacherRpc(fn,args){

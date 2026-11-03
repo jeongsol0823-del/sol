@@ -1592,7 +1592,7 @@ function renderStudentHome(){
     <div class="h-tiles">
       ${tile(makeup.length,'볼 보강 영상','s-review',makeup.length>0)}
       ${tile(certs.length,'낼 인증 과제','s-cert',certs.some(x=>x.state!=='open'))}
-      ${tile(st.length?`${cleared}<small>/${st.length}</small>`:'-','어휘 미션 클리어','s-vocab',false)}
+      ${tile(st.length?`${cleared}<small>/${st.length}</small>`:'-','어휘 미션','s-vocab',false)}
       ${tile(unread.length,'새 공지','s-announce',false)}
     </div>
     <div class="section-head" style="margin-top:22px"><h2>할 일</h2></div>

@@ -297,6 +297,10 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 .form-fold[open]>summary::after{content:'접기 ▴';font-size:12px;color:var(--text2);font-weight:500;margin-left:6px}
 .sch-group table.simple th:first-child,.sch-group table.simple td:first-child{padding-left:16px}
 
+.tag-ctrl{display:flex;gap:8px;flex-wrap:wrap}
+.tag-ctrl #tag-q{flex:1;min-width:180px}
+.tag-ctrl #tag-school{width:auto;min-width:130px}
+
 /* ---- 학생: 오늘 할 일 ---- */
 .h-head h1{font-size:22px;font-weight:800;letter-spacing:-.5px;margin-top:2px}
 .h-date{font-size:13px;color:var(--text2)}
@@ -2270,20 +2274,31 @@ function tagTableHtml(stats,label='갈래'){
     <td style="font-size:12px;color:var(--text2)">${s.wrong.slice(-3).map(esc).join(', ')||'-'}${s.wrong.length>3?` 외 ${s.wrong.length-3}`:''}</td></tr>`).join('')}</tbody></table>`;
 }
 let tagStudentSel='';
+// 학생별 약점 유형: 이름 검색·학교 선택으로 학생을 골라 그 학생 것만 보여 줘요
+let tagQuery='',tagSchool='';
 function renderTagAnalysis(){
   const el=document.getElementById('tag-analysis');if(!el)return;
   const students=db.users.filter(u=>u.role==='student'&&u.status==='active');
   const withData=students.map(u=>({u,weak:weakTags(u.name),weakSub:weakTags(u.name,3,'subtag'),all:tagStats(u.name),allSub:tagStats(u.name,'subtag')})).filter(x=>x.all.length||x.allSub.length);
   if(!withData.length){el.innerHTML='<div class="empty-hint">아직 유형을 단 시험의 응시 기록이 없어요. 시험을 만들 때 문항마다 갈래와 세부유형을 골라 주세요.</div>';return;}
-  if(!withData.some(x=>x.u.id===tagStudentSel))tagStudentSel=withData[0].u.id;
-  const cur=withData.find(x=>x.u.id===tagStudentSel);
-  el.innerHTML=`<div class="card" style="padding:4px 6px;overflow-x:auto"><table class="simple"><thead><tr><th>학생</th><th>약한 갈래 TOP 3</th><th>약한 세부유형 TOP 3</th><th></th></tr></thead><tbody>${withData.map(x=>`<tr${x.u.id===tagStudentSel?' style="background:rgba(79,124,255,.08)"':''}>
-      <td style="white-space:nowrap">${esc(x.u.name)}<div style="font-size:11px;color:var(--text3)">${esc(x.u.school||'')}</div></td>
-      <td style="font-size:12px">${weakListHtml(x.weak,x.all)}</td>
-      <td style="font-size:12px">${weakListHtml(x.weakSub,x.allSub)}</td>
-      <td><button class="btn sm" onclick="tagStudentSel='${esc(x.u.id)}';renderTagAnalysis()">자세히</button></td></tr>`).join('')}</tbody></table></div>
-    <div class="card"><div style="font-weight:700;margin-bottom:8px">${esc(cur.u.name)} · 갈래별 정답률 <span style="font-size:12px;color:var(--text2);font-weight:400">(낮은 순)</span></div>${tagTableHtml(cur.all,'갈래')}</div>
-    <div class="card"><div style="font-weight:700;margin-bottom:8px">${esc(cur.u.name)} · 세부유형별 정답률 <span style="font-size:12px;color:var(--text2);font-weight:400">(낮은 순)</span></div>${tagTableHtml(cur.allSub,'세부유형')}</div>`;
+  // 검색칸은 한 번만 만들어서, 글자를 치는 동안 커서가 사라지지 않게 해요
+  if(!document.getElementById('tag-q')){
+    const schs=[...new Set(withData.map(x=>x.u.school||''))].filter(Boolean).sort(schoolOrder);
+    el.innerHTML=`<div class="tag-ctrl"><input class="form-input" id="tag-q" placeholder="🔍 학생 이름 검색" value="${esc(tagQuery)}" oninput="tagQuery=this.value.trim();renderTagAnalysis()">
+      <select class="form-select" id="tag-school" onchange="tagSchool=this.value;renderTagAnalysis()"><option value="">전체 학교</option>${schs.map(n=>`<option value="${esc(n)}"${tagSchool===n?' selected':''}>${esc(n)}</option>`).join('')}</select></div>
+      <div id="tag-pick"></div><div id="tag-detail"></div>`;
+  }
+  const list=withData.filter(x=>(!tagSchool||x.u.school===tagSchool)&&(!tagQuery||x.u.name.includes(tagQuery))).sort((a,b)=>a.u.name.localeCompare(b.u.name));
+  if(list.length===1)tagStudentSel=list[0].u.id; // 한 명만 남으면 바로 보여 줘요
+  document.getElementById('tag-pick').innerHTML=list.length?`<div class="chips" style="margin:10px 0 4px">${list.map(x=>`<button class="chip${x.u.id===tagStudentSel?' active':''}" onclick="tagStudentSel='${esc(x.u.id)}';renderTagAnalysis()">${esc(x.u.name)}${tagSchool?'':` <span style="opacity:.6">${esc(x.u.school||'')}</span>`}</button>`).join('')}</div>`
+    :'<div class="empty-hint" style="margin-top:10px">맞는 학생이 없어요. 유형을 단 시험을 본 학생만 나와요.</div>';
+  const cur=list.find(x=>x.u.id===tagStudentSel);
+  document.getElementById('tag-detail').innerHTML=!cur?(list.length?'<div class="vhint" style="margin-top:6px">위에서 학생 이름을 누르면 약점 유형이 나와요.</div>':'')
+    :`<div class="card" style="margin-top:10px"><div style="font-weight:700;font-size:16px">${esc(cur.u.name)} <span style="font-size:13px;color:var(--text2);font-weight:400">${esc(cur.u.school||'')}</span></div>
+      <div style="font-size:13px;margin-top:6px"><b>약한 갈래</b> ${weakListHtml(cur.weak,cur.all)}</div>
+      <div style="font-size:13px;margin-top:2px"><b>약한 세부유형</b> ${weakListHtml(cur.weakSub,cur.allSub)}</div></div>
+    <div class="card"><div style="font-weight:700;margin-bottom:8px">갈래별 정답률 <span style="font-size:12px;color:var(--text2);font-weight:400">(낮은 순)</span></div>${tagTableHtml(cur.all,'갈래')}</div>
+    <div class="card"><div style="font-weight:700;margin-bottom:8px">세부유형별 정답률 <span style="font-size:12px;color:var(--text2);font-weight:400">(낮은 순)</span></div>${tagTableHtml(cur.allSub,'세부유형')}</div>`;
 }
 function weakListHtml(weak,all){
   if(!all.length)return '<span style="color:var(--text3)">기록 없음</span>';

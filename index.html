@@ -24,6 +24,11 @@
 })();
 </script>
 <style>
+@font-face{font-family:'RP Title';font-weight:700;src:local('Paperlogy 7 Bold'),local('Paperlogy-7Bold'),url('https://cdn.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-7Bold.woff2') format('woff2')}
+@font-face{font-family:'RP Title';font-weight:400;src:local('Paperlogy 4 Regular'),local('Paperlogy-4Regular'),url('https://cdn.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-4Regular.woff2') format('woff2')}
+@font-face{font-family:'RP Body';font-weight:400;src:local('KoPubWorldDotum Medium'),local('KoPubWorld돋움체 Medium'),url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/KoPubDotumMedium.woff') format('woff')}
+@font-face{font-family:'RP Body';font-weight:700;src:local('KoPubWorldDotum Bold'),local('KoPubWorld돋움체 Bold'),url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/KoPubDotumMedium.woff') format('woff')}
+
 :root{
   --bg:#0f1117;--bg2:#181c27;--bg3:#1e2333;--card:#242938;
   --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
@@ -491,7 +496,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div class="form-group"><select class="form-select" id="report-student-sel" onchange="renderReportCard()"></select></div>
       <div class="card" style="margin-top:12px">
         <div style="font-weight:600;margin-bottom:4px">주간 성적표 (학부모님께 PDF로 보내기)</div>
-        <div class="vhint">고른 기간의 <b>출석(날짜별)</b>, <b>어휘 미션</b>, <b>시험 성적</b>이 들어가요. <b>문법 기초</b>는 수강생만, 보충 강의(복습 영상)는 그 기간에 본 학생만 들어가요. 아래 미리보기 모양 그대로 PDF가 돼요.</div>
+        <div class="vhint">고른 기간을 <b>주차별</b>로 나눠 <b>출석·보강 영상</b>, <b>어휘 미션</b>, <b>인증 과제</b>, <b>시험(학교 평균·최다 오답)</b>을 한 장에 보여 줘요. 보강 영상 미수강·숙제 미제출이 있으면 맨 위에 붉은 안내가 들어가요. 아래 미리보기 모양 그대로 PDF가 돼요.</div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
           <input type="date" class="date-in" id="rp-start" onchange="renderReportCard()"> ~ <input type="date" class="date-in" id="rp-end" onchange="renderReportCard()">
           <button class="btn sm" onclick="setReportRange('last7')">최근 7일</button><button class="btn sm" onclick="setReportRange('thisweek')">이번 주</button><button class="btn sm" onclick="setReportRange('lastweek')">지난주</button>
@@ -2936,70 +2941,100 @@ function weeklyReportData(sid,start,end){
     .filter(x=>(x.item.due_date&&x.item.due_date>=start&&x.item.due_date<=end)||(x.sub&&inRange(x.sub.submitted_at,start,end))).reverse();
   return{u,att,vids,vocab,vocabStarted:!!myTrack,exams,grammar,certs};
 }
-// 학부모용 A4 주간 성적표 (밝은 화면, 이 모양 그대로 PDF가 돼요)
+// 학부모용 A4 성적표: 주차별 표(출석·어휘·인증·시험) + 붉은 안내 + 쏠T 한마디. 이 모양 그대로 PDF가 돼요.
+// 제목은 페이퍼로지(RP Title), 본문은 KoPub 돋움(RP Body)
+const RP={ink:'#1f2430',sub:'#5b6474',line:'#e3e6ec',blue:'#2f5fd0',red:'#d92d20',green:'#12805c',soft:'#f4f6fa',TF:"'RP Title'",BF:"'RP Body'"};
+function rpDate(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
+function rpMD(s,wd){const x=rpDate(s);return (x.getMonth()+1)+'/'+x.getDate()+(wd?'('+'일월화수목금토'[x.getDay()]+')':'');}
+function rpMK(s){const x=rpDate(s);return (x.getMonth()+1)+'월 '+x.getDate()+'일';}
+// 기간을 월~일 주로 나눔. 주차 이름은 그 주 목요일이 속한 달 기준 (예: 10월 5주차)
+function reportWeeks(s,e){
+  const out=[];const m=rpDate(s);m.setDate(m.getDate()-((m.getDay()+6)%7));
+  while(ymd(m)<=e){
+    const sun=new Date(m);sun.setDate(m.getDate()+6);const th=new Date(m);th.setDate(m.getDate()+3);
+    out.push({label:`${th.getMonth()+1}월 ${Math.ceil(th.getDate()/7)}주차`,ws:ymd(m),we:ymd(sun),from:ymd(m)<s?s:ymd(m),to:ymd(sun)>e?e:ymd(sun)});
+    m.setDate(m.getDate()+7);
+  }
+  return out;
+}
+function rpWrong(r,ex){return((ex&&ex.questions)||[]).filter(q=>q.type!=='desc'&&q.answer!=null&&String((r.answers||{})[q.num]??'').trim()!==String(q.answer).trim()).map(q=>q.num);}
+// 같은 학교에서 그 시험을 본 학생들의 평균과 가장 많이 틀린 문항 3개
+function rpSchoolStat(exId,school){
+  const ex=db.exams.find(x=>x.id===exId);
+  const rs=db.examResponses.filter(r=>r.exam_id===exId&&isSubmitted(r)&&(db.users.find(u=>u.role==='student'&&u.name===r.student_name)||{}).school===school);
+  const avg=rs.length?Math.round(rs.reduce((a,r)=>a+Number(r.score||0),0)/rs.length):null;
+  const cnt={};rs.forEach(r=>rpWrong(r,ex).forEach(n=>{cnt[n]=(cnt[n]||0)+1;}));
+  const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]||a[0]-b[0]).slice(0,3).map(([n,c])=>`${n}번(${Math.round(c/rs.length*100)}%)`);
+  return{avg,n:rs.length,top};
+}
+function rpRange(ns){
+  ns=[...ns].sort((a,b)=>a-b);const out=[];let s=null,p=null;const f=n=>'M'+pad2(n);
+  const push=()=>out.push(s===p?f(s):f(s)+'~'+pad2(p));
+  for(const n of ns){if(s===null){s=p=n;continue;}if(n===p+1){p=n;continue;}push();s=p=n;}
+  if(s!==null)push();return out.join(', ');
+}
+// 결석한 날의 보강 영상 (그 학생에게 해당하는 것)과 시청 여부
+function rpMakeup(u,date){
+  const vs=db.videos.filter(v=>v.class_date===date&&!isGrammar(v)&&videoFor(v,u));
+  return{vs,seen:vs.length>0&&vs.every(v=>db.progress.some(p=>p.student_id===u.id&&p.video_id===v.id))};
+}
 function parentReportHTML(sid,note,start,end){
-  const d=weeklyReportData(sid,start,end);const u=d.u;
-  const C={ink:'#1d2433',sub:'#6b7385',line:'#e3e6ee',soft:'#f5f7fb',blue:'#3b63e6',green:'#1f9d57',amber:'#c27a00',red:'#d23b3b'};
-  const box=(title,body,sub)=>`<div class="pb" style="border:1px solid ${C.line};border-radius:12px;padding:18px 20px;margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><div style="font-size:15px;font-weight:700">${title}</div>${sub?`<div style="font-size:13px;color:${C.sub}">${sub}</div>`:''}</div>${body}</div>`;
-  const empty=t=>`<div style="color:${C.sub};font-size:14px">${t}</div>`;
-  const chip=(txt,color,bg)=>`<span style="display:inline-block;padding:5px 10px;border-radius:8px;background:${bg};color:${color};font-size:13px;font-weight:600;margin:0 6px 6px 0">${txt}</span>`;
-  // 출석
-  const stMap={present:['출석',C.green,'#e8f6ee'],late:['지각',C.amber,'#fbf1de'],absent:['결석',C.red,'#fbe7e7']};
-  const attN=d.att.length,okN=d.att.filter(a=>a.status!=='absent').length;
-  const attBox=box('출석',attN?`<div>${d.att.map(a=>{const m=stMap[a.status]||[a.status,C.ink,C.soft];return chip(`${mdWd(a.date)} ${m[0]}`,m[1],m[2]);}).join('')}</div>`:empty('이 기간에 출석 기록이 없어요.'),attN?`출석률 <b style="color:${C.ink}">${Math.round(okN/attN*100)}%</b> (${okN}/${attN}회)`:'');
-  // 보충 강의 (본 강의가 있을 때만)
-  const vidBox=d.vids.length?box('보충 강의 시청',`<table style="width:100%;border-collapse:collapse;font-size:13px">${d.vids.map(({p,v,f})=>{
-      const notes=[];if(f&&f.fast)notes.push(`<span style="color:${C.amber}">${FAST_RATE}배 초과 ${fmtTime(f.fastSec)}</span>`);if(f&&f.skip)notes.push(`<span style="color:${C.red}">건너뜀 ${fmtTime(f.skipTotal)}</span>`);if(f&&f.away)notes.push(`<span style="color:${C.red}">다른 화면 ${f.awayCount}회</span>`);
-      const pct=f?f.pct:0;
-      return `<tr class="pb"><td style="padding:7px 8px;border-top:1px solid ${C.line}">${esc(v.title)}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};text-align:right;font-weight:600;white-space:nowrap;color:${pct>=100?C.green:C.ink}">${pct}%</td><td style="padding:7px 8px;border-top:1px solid ${C.line};font-size:12px;white-space:nowrap">${notes.join(' · ')||'<span style="color:#b0b6c3">정상 시청</span>'}</td></tr>`;}).join('')}</table>`):'';
-  // 문법 기초 (수강생만): 이번 주 본 강의 + 누적 완강
-  const gram=d.grammar;
-  const gramBox=gram?box('문법 기초 강의',(gram.week.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">${gram.week.map(({p,v,f,no})=>{
-      const notes=[];if(f&&f.fast)notes.push(`<span style="color:${C.amber}">${FAST_RATE}배 초과 ${fmtTime(f.fastSec)}</span>`);if(f&&f.skip)notes.push(`<span style="color:${C.red}">건너뜀 ${fmtTime(f.skipTotal)}</span>`);if(f&&f.away)notes.push(`<span style="color:${C.red}">다른 화면 ${f.awayCount}회</span>`);
-      const pct=f?f.pct:0;
-      return `<tr class="pb"><td style="padding:7px 8px;border-top:1px solid ${C.line}"><b style="color:${C.blue}">${no}강</b> ${esc(v.title)}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};text-align:right;font-weight:600;white-space:nowrap;color:${pct>=GRAMMAR_DONE?C.green:C.ink}">${pct>=GRAMMAR_DONE?'완강':pct+'%'}</td><td style="padding:7px 8px;border-top:1px solid ${C.line};font-size:12px;white-space:nowrap">${notes.join(' · ')||'<span style="color:#b0b6c3">정상 시청</span>'}</td></tr>`;}).join('')}</table>`
-      :`<div style="color:${C.red};font-size:14px;font-weight:600">이 기간에 시청한 강의가 없어요.</div>`)+
-      `<div style="margin-top:12px"><div style="height:8px;border-radius:4px;background:${C.soft};overflow:hidden"><div style="height:100%;width:${gram.avg}%;background:${C.green}"></div></div>
-      <div style="font-size:12px;color:${C.sub};margin-top:6px">전체 진도율 ${gram.avg}%${gram.next?` · 다음 들을 강의 <b style="color:${C.ink}">${gram.next.no}강 ${esc(gram.next.v.title)}</b>`:` · <b style="color:${C.green}">모든 강의 완강</b>`}</div></div>`,
-      `누적 완강 <b style="color:${C.ink}">${gram.done}/${gram.total}강</b>`):'';
-  // 어휘
-  const vocabBox=!d.vocabStarted?box('어휘 미션',empty('아직 어휘 미션을 시작하지 않았어요.')):d.vocab.map(t=>{
-    const done=t.items.filter(x=>x.cleared).length;
-    const rows=t.items.length?t.items.map(x=>{const{title}=splitTitle(x.s.lesson_title||x.s.name);
-      const st=x.cleared?`<span style="color:${C.green};font-weight:700">완료 · ${x.best.score}/${x.best.total}</span>`
-        :`<span style="color:${C.amber};font-weight:700">도전 중 · 최고 ${x.best?x.best.score+'/'+x.best.total:'-'}</span>`;
-      return `<div class="pb" style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid ${C.line};font-size:14px"><span><b>MISSION ${pad2(x.no)}</b> · ${esc(title)}<span style="display:block;font-size:12px;color:${C.sub}">이 기간 ${x.tries}회 응시</span></span>${st}</div>`;}).join('')
-      :`<div style="color:${C.red};font-size:14px;font-weight:600">이 기간에 푼 어휘 미션이 없어요.</div>`;
-    const sub=t.items.length?`이 기간 완료 <b style="color:${C.ink}">${done}/${t.items.length}</b>`:'';
-    const curTxt=t.cur?` · 다음 도전 <b style="color:${C.ink}">MISSION ${pad2(t.cur.no)}</b>`:` · <b style="color:${C.green}">모든 미션 완료</b>`;
-    return box('어휘 미션',rows+
-      `<div style="font-size:12px;color:${C.sub};margin-top:8px">누적 ${t.clearedAll}/${t.total}개 완료${curTxt}</div>`,sub);
-  }).join('');
-  // 인증 과제 (이 기간에 마감이거나 제출한 과제가 있을 때만)
-  const certColor={approved:C.green,pending:C.blue,rejected:C.red,missing:C.red,open:C.sub};
-  const certText={approved:'통과',pending:'확인 중',rejected:'미통과 · 재제출 필요',missing:'미제출',open:'마감 전'};
-  const certBox=d.certs.length?box('인증 과제',d.certs.map(({item,sub,state})=>`<div class="pb" style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid ${C.line};font-size:14px">
-      <span>${esc(item.title)}<span style="display:block;font-size:12px;color:${C.sub}">${item.due_date?mdWd(item.due_date)+' 마감':'마감 없음'}${certLate(item,sub)?' · 늦게 제출':''}</span></span>
-      <span style="color:${certColor[state]};font-weight:700;white-space:nowrap">${certText[state]}</span></div>`).join(''),
-    `통과 <b style="color:${C.ink}">${d.certs.filter(x=>x.state==='approved').length}/${d.certs.length}</b>`):'';
-  // 시험 유형 분석 (누적, 유형을 단 문항이 있을 때만)
-  const tagAll=u?tagStats(u.name):[],subAll=u?tagStats(u.name,'subtag'):[];
-  const tagRows=(label,list)=>{const w=list.filter(s=>s.rate<100).slice(0,3);if(!list.length)return'';
-    return `<div style="font-size:13px;font-weight:700;color:${C.sub};margin:6px 0 2px">약한 ${label}</div>`+(w.length?w.map(s=>`<div class="pb" style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid ${C.line};font-size:14px"><span>${esc(s.tag)}<span style="display:block;font-size:12px;color:${C.sub}">${s.n}문항 중 ${Math.round(s.got*10)/10}문항 정답</span></span><span style="color:${s.rate>=80?C.green:s.rate>=50?C.amber:C.red};font-weight:700">${s.rate}%</span></div>`).join(''):empty('모두 맞혔어요.'));};
-  const tagBox=(tagAll.length||subAll.length)?box('시험 유형 분석',tagRows('갈래',tagAll)+tagRows('세부유형',subAll),'누적'):'';
-  // 시험
-  const examBox=box('시험 성적',d.exams.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">${d.exams.map(({r,ex})=>{
-      const score=ex&&descPending(ex,r)?`객관식 ${r.points_earned}/${examObjTotal(ex)}점 (주관식 채점 중)`:`${r.points_earned}/${r.points_total}점 (${r.score}%)`;
-      return `<tr class="pb"><td style="padding:7px 8px;border-top:1px solid ${C.line}">${ex?`<span style="font-size:11px;color:${ex.category==='school'?C.blue:C.green};font-weight:700">${examCatLabel(ex.category)}</span> `:''}${esc(ex?ex.name:'(삭제된 시험)')}<span style="display:block;font-size:12px;color:${C.sub}">${mdWd(ymd(new Date(r.submitted_at)))} 응시</span></td><td style="padding:7px 8px;border-top:1px solid ${C.line};text-align:right;white-space:nowrap;font-weight:600">${score}</td></tr>`;}).join('')}</table>`:empty('이 기간에 본 시험이 없어요.'));
-  const noteBox=note?`<div class="pb" style="background:${C.soft};border-radius:12px;padding:18px 20px;margin-bottom:14px"><div style="font-size:15px;font-weight:700;margin-bottom:8px">쏠T 선생님 한마디</div><div style="font-size:14px;line-height:1.7;white-space:pre-wrap">${esc(note)}</div></div>`:'';
-  return `<div style="width:794px;box-sizing:border-box;padding:44px 48px 40px;background:#fff;color:${C.ink};font-family:'Noto Sans KR',sans-serif">
-    <div class="pb" style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid ${C.blue};padding-bottom:14px;margin-bottom:20px">
-      <div><div style="font-size:13px;color:${C.blue};font-weight:700;letter-spacing:1px">정말 쏠쏠한 국어</div><div style="font-size:26px;font-weight:800;margin-top:2px">주간 학습 리포트</div></div>
-      <div style="text-align:right"><div style="font-size:20px;font-weight:700">${esc(u?u.name:'')} 학생</div><div style="font-size:13px;color:${C.sub}">${u&&u.school?esc(u.school)+' '+gradeName(gradeAt(u,end),end,u.school)+' · ':''}${mdWd(start)} ~ ${mdWd(end)}</div></div>
-    </div>
-    ${noteBox}${attBox}${vocabBox}${certBox}${examBox}${tagBox}${gramBox}${vidBox}
-    <div class="pb" style="font-size:11px;color:#9aa1b0;text-align:center;margin-top:18px">정말 쏠쏠한 국어 · 쏠T · ${koDate(start)} ~ ${koDate(end)} 기록</div>
-  </div>`;
+  const u=db.users.find(x=>x.id===sid);if(!u)return '';
+  const C=RP,TF=RP.TF,BF=RP.BF;
+  const red=t=>`<span style="color:${C.red}">${t}</span>`,gray=t=>`<span style="color:${C.sub}">${t}</span>`;
+  const weeks=reportWeeks(start,end);const lastWs=weeks[weeks.length-1].ws;
+  // 결석 보강: 마지막 주 이전 결석은 미수강이면 붉은 안내, 마지막 주 결석은 이번 주 안에 수강 안내
+  const absent=db.attendance.filter(a=>a.student_id===sid&&a.date>=start&&a.date<=end&&a.status==='absent').map(a=>a.date).sort();
+  const oldMiss=absent.filter(d=>d<lastWs&&(()=>{const m=rpMakeup(u,d);return m.vs.length&&!m.seen;})());
+  const newAbs=absent.filter(d=>d>=lastWs&&(()=>{const m=rpMakeup(u,d);return m.vs.length&&!m.seen;})());
+  const absWeeks=new Set(absent.map(d=>weeks.findIndex(w=>d>=w.ws&&d<=w.we)));
+  const L=[];
+  if(oldMiss.length){
+    const streak=absWeeks.size>=2&&absWeeks.size===weeks.length?`${absWeeks.size}주 연속 결석입니다. `:'';
+    L.push(newAbs.length
+      ?`${oldMiss.map(rpMK).join(', ')}에 이어 ${newAbs.map(rpMK).join(', ')}도 결석했습니다. ${streak}${oldMiss.map(rpMK).join(', ')} 보강 영상을 아직 수강하지 않았고, ${newAbs.map(rpMK).join(', ')} 보강 영상도 어플에 올라와 있습니다. 모두 수강한 뒤 숙제를 진행하도록 지도 부탁드립니다.`
+      :`${oldMiss.map(rpMK).join(', ')} 결석한 수업의 보강 영상을 아직 수강하지 않았습니다. 내신 대비 수업이니 반드시 영상을 수강한 뒤 숙제를 진행하도록 지도 부탁드립니다.`);
+  }
+  const certAll=certSortItems(db.certItems.filter(i=>certForSchool(i,u.school)&&i.due_date&&i.due_date>=start&&i.due_date<=end));
+  const miss=certAll.filter(i=>!certSubOf(i.id,sid)).map(i=>i.title);
+  if(miss.length)L.push(`아직 제출하지 않은 숙제가 있습니다(${miss.join(', ')}). 늦더라도 어플에서 영상으로 꼭 제출해야 합니다. 내신 기간인 만큼 숙제를 잘 챙길 수 있도록 함께 살펴봐 주세요.`);
+  const alert=L.length?`<div class="pb" style="border:2px solid ${C.red};background:#fff5f4;border-radius:10px;padding:10px 16px;margin-bottom:10px"><div style="font-family:${TF};font-weight:700;font-size:15px;color:${C.red}">꼭 확인해 주세요</div>${L.map(x=>`<div style="font-size:13px;line-height:1.6;color:${C.red};margin-top:3px">• ${esc(x)}</div>`).join('')}</div>`:'';
+  const notice=!oldMiss.length&&newAbs.length?`<div class="pb" style="font-size:13px;color:${C.sub};background:#f1f2f5;border-radius:8px;padding:7px 14px;margin-bottom:10px">${newAbs.map(rpMK).join(', ')} 결석한 수업의 보강 영상을 어플에 올렸습니다. 이번 주 안에 수강해 주세요.</div>`:'';
+  const noteBox=note?`<div class="pb" style="background:${C.soft};border-radius:10px;padding:10px 16px;margin-bottom:10px"><div style="font-family:${TF};font-weight:700;font-size:15px;margin-bottom:3px">쏠T 한마디</div><div style="font-size:12.5px;line-height:1.65;white-space:pre-line">${esc(note)}</div></div>`:'';
+  const cells=w=>{
+    const att=db.attendance.filter(a=>a.student_id===sid&&a.date>=w.from&&a.date<=w.to).sort((a,b)=>a.date.localeCompare(b.date));
+    const A=att.length?att.map(a=>{
+      if(a.status!=='absent')return `${rpMD(a.date,1)} ${a.status==='late'?'지각':'출석'}`;
+      const m=rpMakeup(u,a.date);
+      return red(`${rpMD(a.date,1)} 결석`)+(m.vs.length?' · 보강 '+(m.seen?`<span style="color:${C.green}">수강 완료</span>`:a.date>=lastWs?'이번 주 수강':red('미수강')):'');
+    }).join('<br>'):gray('수업 없음');
+    const d=weeklyReportData(sid,w.from,w.to);const vt=d.vocab&&d.vocab[0];
+    let V;
+    if(!vt||!vt.items.length)V=red('푼 미션 없음');
+    else if(vt.items.length>3){
+      const done=vt.items.filter(x=>x.cleared).map(x=>x.no),todo=vt.items.filter(x=>!x.cleared).map(x=>x.no),tries=vt.items.reduce((a,x)=>a+x.tries,0);
+      V=`완료 ${done.length}개${done.length?' ('+rpRange(done)+')':''}${todo.length?' · 미완료 '+todo.length+'개 ('+rpRange(todo)+')':''} · 응시 ${tries}회`;
+    }else V=vt.items.map(x=>{const{title}=splitTitle(x.s.lesson_title||x.s.name);return `M${pad2(x.no)} ${esc(title)} ${x.cleared?`<b style="color:${C.green}">완료</b>`:'<b>미완료</b>'}${x.best?` ${x.best.score}/${x.best.total}`:''}`;}).join('<br>');
+    if(vt)V+=`<div style="color:${C.sub};font-size:11px">누적 ${vt.clearedAll}/${vt.total}개 완료</div>`;
+    const cs=certSortItems(db.certItems.filter(i=>certForSchool(i,u.school)&&i.due_date&&i.due_date>=w.ws&&i.due_date<=w.we));
+    const I=cs.length?cs.map(i=>{const s=certSubOf(i.id,sid);return `${esc(i.title)} ${gray('('+rpMD(i.due_date)+' 마감)')} ${!s?red('<b>미제출</b>'):s.status==='approved'?`<b style="color:${C.green}">통과</b>`:s.status==='rejected'?red('<b>미통과</b>'):'<b>확인 중</b>'}`;}).join('<br>'):gray('마감 과제 없음');
+    const T=d.exams.length?d.exams.map(({r,ex})=>{
+      const st=rpSchoolStat(r.exam_id,u.school);const wr=rpWrong(r,ex);
+      return `<b>${esc(ex?ex.name:'시험')}</b><br><b style="color:${C.blue}">${r.score}점</b> ${gray(`(${r.correct_count}/${r.total_q})`+(st.avg!=null?` · 학교 평균 ${st.avg}점 · ${st.n}명 응시`:''))}`
+        +`<div style="font-size:12px">틀린 문항: ${wr.length?wr.join(', ')+'번':`<span style="color:${C.green}">없음</span>`}</div>`
+        +(st.top.length?`<div style="font-size:12px;color:${C.sub}">학교 최다 오답: ${st.top.join(', ')}</div>`:'');
+    }).join('<div style="height:6px"></div>'):gray('응시한 시험 없음');
+    return{A,V,I,T};
+  };
+  const cc=weeks.map(cells);
+  const th=`padding:8px 10px;font-family:${TF};font-weight:700;font-size:14px;text-align:left;border-bottom:2px solid ${C.blue}`;
+  const tr=(k,key)=>`<tr class="pb"><td style="padding:8px 10px;border-top:1px solid ${C.line};font-family:${TF};font-weight:700;font-size:13px;color:${C.sub};white-space:nowrap;vertical-align:top">${k}</td>${cc.map(c=>`<td style="padding:8px 10px;border-top:1px solid ${C.line};font-size:13px;line-height:1.55;vertical-align:top">${c[key]}</td>`).join('')}</tr>`;
+  const table=`<table style="width:100%;border-collapse:collapse;table-layout:fixed"><colgroup><col style="width:78px">${weeks.map(()=>'<col>').join('')}</colgroup><tr class="pb"><th style="${th}"></th>${weeks.map(w=>`<th style="${th}">${w.label} <span style="font-family:${BF};font-weight:400;font-size:12px;color:${C.sub}">${rpMD(w.ws)}~${rpMD(w.we)}</span></th>`).join('')}</tr>${tr('출석','A')}${tr('어휘 미션','V')}${tr('인증 과제','I')}${tr('시험','T')}</table>`;
+  return `<div style="width:794px;box-sizing:border-box;padding:36px 44px 30px;background:#fff;color:${C.ink};font-family:${BF},sans-serif">
+    <div class="pb" style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid ${C.blue};padding-bottom:10px;margin-bottom:14px"><div><div style="font-family:${TF};font-weight:700;font-size:12px;color:${C.blue}">정말 쏠쏠한 국어</div><div style="font-family:${TF};font-weight:700;font-size:25px">주간 학습 리포트</div></div>
+    <div style="text-align:right"><div style="font-family:${TF};font-weight:700;font-size:20px">${esc(u.name)} 학생</div><div style="font-size:12px;color:${C.sub}">${esc(u.school||'')} ${u.grade||''}학년 · ${rpMD(start,1)} ~ ${rpMD(end,1)}</div></div></div>
+    ${alert}${notice}${noteBox}${table}
+    <div class="pb" style="font-size:11px;color:#9aa1b0;text-align:center;margin-top:12px">정말 쏠쏠한 국어 · 쏠T · ${rpMK(start)} ~ ${rpMK(end)} 기록</div></div>`;
 }
 function reportRange(){
   const s=document.getElementById('rp-start'),e=document.getElementById('rp-end');
@@ -3026,6 +3061,7 @@ function renderReportPreview(){
 
 async function buildReportPdf(sid,note,start,end){
   await loadPdfLibs();
+  try{await Promise.all(["700 20px 'RP Title'","400 14px 'RP Body'","700 14px 'RP Body'"].map(f=>document.fonts.load(f,'가')));}catch(e){}
   const host=document.createElement('div');
   host.style.cssText='position:fixed;left:-10000px;top:0;z-index:-1';
   host.innerHTML=parentReportHTML(sid,note,start,end);

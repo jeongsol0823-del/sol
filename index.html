@@ -1554,6 +1554,7 @@ function launchStudent(){
 }
 /* ---- 오늘 할 일 (학생 첫 화면) ---- */
 const HOME_VIDEO_DONE=90; // 이만큼 보면 다 본 것으로 쳐요
+const VOCAB_WEEK_GOAL=1; // 어휘 미션 일주일(월~일) 목표 개수
 function refreshHome(){clearTimeout(refreshHome.t);refreshHome.t=setTimeout(()=>{try{renderStudentHome();}catch(e){console.error(e);}},0);}
 function goTab(id){switchTab('student',id);window.scrollTo(0,0);}
 function renderStudentHome(){
@@ -1570,7 +1571,11 @@ function renderStudentHome(){
     .filter(x=>x.state in order).sort((a,b)=>(order[a.state]-order[b.state])||(a.item.due_date||'9999').localeCompare(b.item.due_date||'9999'));
   // 어휘
   const track=pickDefaultTrack(sid);const st=track?missionStates(track,sid):[];
-  const cleared=st.filter(m=>m.cleared).length,cur=st.find(m=>m.state==='open');
+  const cur=st.find(m=>m.state==='open');
+  // 이번 주(월요일부터)에 처음 클리어한 미션 수
+  const mon=mondayOf(ymd(new Date()));
+  const weekDone=st.filter(m=>{if(!m.cleared)return false;let first=null;db.vocabAttempts.forEach(a=>{if(a.set_id===m.set.id&&a.student_id===sid&&a.total>0&&isCleared(a)&&(!first||a.submitted_at<first))first=a.submitted_at;});return first&&ymd(new Date(first))>=mon;}).length;
+  const weekOk=weekDone>=VOCAB_WEEK_GOAL;
   // 공지
   const unread=db.announcements.filter(a=>!db.announcementReads.some(r=>r.announcement_id===a.id&&r.student_id===sid));
   // 문법 기초
@@ -1582,7 +1587,7 @@ function renderStudentHome(){
   makeup.forEach(v=>{const p=getPct(sid,v.id);rows.push(row('red','보강 영상',esc(v.title),`${mdWd(v.class_date)} 결석한 수업이에요 · ${p}% 봤어요`,p>0?'이어서 보기':'보기',`openPlay('${esc(v.id)}')`));});
   certs.slice(0,4).forEach(({item,state})=>rows.push(row(state==='open'?'amber':'red','인증 과제',esc(item.title),state==='rejected'?'통과하지 못했어요. 다시 해서 내 주세요.':certDueText(item),state==='rejected'?'다시 내기':'내러 가기',`goTab('s-cert')`)));
   if(certs.length>4)rows.push(`<div class="h-more" onclick="goTab('s-cert')">인증 과제 ${certs.length-4}개 더 보기 ›</div>`);
-  if(cur){const{title}=splitTitle(cur.set.lesson_title||cur.set.name);rows.push(row('blue','어휘 미션',`MISSION ${pad2(cur.no)} · ${esc(title)}`,cur.tries?'다 맞혀야 다음 미션이 열려요. 다시 도전!':'다 맞혀야 다음 미션이 열려요',cur.tries?'재도전':'도전하기',`goTab('s-vocab');openVocabStudy('${esc(cur.set.id)}')`));}
+  if(cur){const{title}=splitTitle(cur.set.lesson_title||cur.set.name);rows.push(row(weekOk?'gray':'blue','어휘 미션',`MISSION ${pad2(cur.no)} · ${esc(title)}`,weekOk?`이번 주 목표 ${VOCAB_WEEK_GOAL}개 달성! 더 해도 좋아요`:`이번 주 목표 ${VOCAB_WEEK_GOAL}개 중 ${weekDone}개 · 다 맞혀야 클리어예요`,cur.tries?'재도전':'도전하기',`goTab('s-vocab');openVocabStudy('${esc(cur.set.id)}')`));}
   unread.slice(0,2).forEach(a=>rows.push(row('blue','새 공지',esc(a.title),'','읽기',`goTab('s-announce')`)));
   going.forEach(v=>{const p=getPct(sid,v.id);rows.push(row('gray','보던 영상',esc(v.title),`${p}% 봤어요`,'이어서 보기',`openPlay('${esc(v.id)}')`));});
   if(g&&g.next)rows.push(row('gray','문법 기초',`${g.next.no}강 ${esc(g.next.v.title)}`,`완강 ${g.done}/${g.total}강`,g.next.pct>0?'이어서 보기':'보기',`openPlay('${esc(g.next.v.id)}')`));
@@ -1592,7 +1597,7 @@ function renderStudentHome(){
     <div class="h-tiles">
       ${tile(makeup.length,'볼 보강 영상','s-review',makeup.length>0)}
       ${tile(certs.length,'낼 인증 과제','s-cert',certs.some(x=>x.state!=='open'))}
-      ${tile(st.length?`${cleared}<small>/${st.length}</small>`:'-','어휘 미션','s-vocab',false)}
+      ${tile(st.length?`${weekOk?'✓ ':''}${weekDone}<small>/${VOCAB_WEEK_GOAL}</small>`:'-','이번 주 어휘','s-vocab',false)}
       ${tile(unread.length,'새 공지','s-announce',false)}
     </div>
     <div class="section-head" style="margin-top:22px"><h2>할 일</h2></div>

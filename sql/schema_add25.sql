@@ -13,3 +13,27 @@ alter table exams add column if not exists assignee_name text;
 alter table exams add column if not exists bundle        text;
 create index if not exists exams_assignee_idx on exams (assignee_id);
 create index if not exists exams_bundle_idx   on exams (bundle);
+
+-- ------------------------------------------------------------
+-- 갈래 목록(exam_types)에 2개 추가 (숙제 방 요청, 11-06). 여러 번 실행해도 한 번만 들어가요.
+--   '문법 · 맞춤법 · 그 밖의 것 (제51~57항)' → '띄어쓰기' 바로 뒤
+--   '문법 · 국어사 · 단어의 의미 변화'       → '근대 국어의 특징' 바로 뒤
+-- ------------------------------------------------------------
+do $$
+declare v jsonb; outv jsonb := '[]'::jsonb; e text;
+  a text := '문법 · 맞춤법 · 그 밖의 것 (제51~57항)';
+  b text := '문법 · 국어사 · 단어의 의미 변화';
+begin
+  select value into v from app_settings where key = 'exam_types';
+  if v is null then return; end if;   -- 목록을 저장한 적이 없으면 앱 기본 목록을 써요
+  for e in select x from jsonb_array_elements_text(v) with ordinality t(x, i) order by i loop
+    if e in (a, b) then continue; end if;
+    outv := outv || to_jsonb(e);
+    if e = '문법 · 맞춤법 · 띄어쓰기' then outv := outv || to_jsonb(a); end if;
+    if e = '문법 · 국어사 · 근대 국어의 특징' then outv := outv || to_jsonb(b); end if;
+  end loop;
+  if not outv ? a then outv := outv || to_jsonb(a); end if;
+  if not outv ? b then outv := outv || to_jsonb(b); end if;
+  update app_settings set value = outv, updated_at = now() where key = 'exam_types';
+end $$;
+select jsonb_array_length(value) as "갈래 수 (51이면 정상)" from app_settings where key = 'exam_types';

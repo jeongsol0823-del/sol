@@ -2292,6 +2292,54 @@ function multiNote(q,a){
   return `정답 ${k.length}개 중 ${hit}개 고름${bad?` · 오답 ${bad}개 고름`:''}`;
 }
 function fmtAns(v){const n=normAns(v);return n?n.split(',').join(', '):String(v??'');}
+/* --- 틀린 영역: 문항마다 work(작품·문법 단원) → area(영역) → detail(세부 영역). 자유 입력, 같은 글자끼리 모아요 (쏠T 결정 11-06) --- */
+function qWork(q){return String((q&&q.work)||'').trim();}
+function hasArea(ex){return ((ex&&ex.questions)||[]).some(q=>qWork(q));}
+// 문학 문항의 작품 이름에는 〈 〉를 붙여요 (이미 붙어 있으면 그대로)
+function workLabel(w,q){return /^[〈《<「『]/.test(w)||!String((q&&q.tag)||'').startsWith('문학')?w:`〈${w}〉`;}
+// 한 시험 답안에서 영역이 붙은 문항마다 맞았는지 (아직 채점 안 한 주관식은 빼요)
+function areaItems(ex,r){
+  const ans=(r&&r.answers)||{},dp=(r&&r.thoughts&&r.thoughts.__descPoints)||null;
+  return ((ex&&ex.questions)||[]).filter(q=>qWork(q)).map(q=>{
+    let ok;if(q.type!=='desc')ok=qRight(q,ans);else{if(!dp||dp[q.num]==null)return null;ok=(q.points||0)>0&&Math.min(dp[q.num],q.points)>=q.points;}
+    return{q,ok,num:q.num,ind:qPart(q)==='개별'&&!!ex.bundle};
+  }).filter(Boolean);
+}
+// 작품 → 영역 → 세부로 묶기. 많이 틀린 것부터
+function areaTree(items){
+  const add=(m,k,it)=>{const g=m.get(k)||{key:k,n:0,wrong:0,items:[],kids:new Map()};g.n++;if(!it.ok){g.wrong++;g.items.push(it);}m.set(k,g);return g;};
+  const root=new Map();
+  items.forEach(it=>{const w=add(root,workLabel(qWork(it.q),it.q),it);const a=add(w.kids,String(it.q.area||'').trim()||'(영역 없음)',it);const d=String(it.q.detail||'').trim();if(d)add(a.kids,d,it);else a.loose=(a.loose||[]).concat(it.ok?[]:[it]);});
+  const sort=m=>[...m.values()].sort((x,y)=>y.wrong-x.wrong||y.n-x.n).map(g=>Object.assign(g,{kids:sort(g.kids)}));
+  return sort(root);
+}
+// 틀린 영역 HTML. C = 색 {red,sub,green,ind}. 번호는 그 학생 시험지 번호 (주황 = 지난주 오답 다시 풀기)
+function areaHTML(items,C,o={}){
+  if(!items.length)return '';
+  const tree=areaTree(items),nW=items.filter(x=>!x.ok).length,anyInd=items.some(x=>x.ind&&!x.ok);
+  const nums=list=>list.map(it=>`<span style="display:inline-block;border-radius:5px;padding:0 5px;margin-left:3px;font-size:${o.small?11:12}px;background:${it.ind?'#fff1e0':'rgba(127,127,127,.14)'};color:${it.ind?C.ind:'inherit'}">${it.num}번</span>`).join('');
+  const fs=o.small?12:14;
+  const works=tree.filter(w=>w.wrong).map(w=>`<div class="pb" style="border-left:3px solid ${C.red};padding:3px 0 3px 10px;margin:6px 0">
+    <div style="font-weight:700;font-size:${fs+1}px">${esc(w.key)} <span style="color:${C.red}">${w.n}문제 중 ${w.wrong}개 틀림</span></div>
+    ${w.kids.filter(a=>a.wrong).map(a=>`<div style="font-size:${fs}px;margin-left:4px">› ${esc(a.key)} <b style="color:${C.red}">${a.n}문제 중 ${a.wrong}개</b>${a.loose&&a.loose.length?nums(a.loose):''}</div>
+      ${a.kids.filter(d=>d.wrong).map(d=>`<div style="font-size:${fs-1}px;margin-left:20px;color:${C.sub}">› ${esc(d.key)} ${d.n}문제 중 ${d.wrong}개${nums(d.items)}</div>`).join('')}`).join('')}</div>`).join('');
+  const okAreas=[];tree.forEach(w=>w.kids.forEach(a=>{if(!a.wrong)okAreas.push(`${w.key} › ${a.key}`);}));
+  return `${o.head!==false?`<div style="font-size:${fs}px;color:${C.sub};margin-bottom:2px">영역 표시 ${items.length}문제 중 <b style="color:${nW?C.red:C.green}">${nW}개 틀림</b>${anyInd?` · <span style="color:${C.ind}">주황 번호</span> = 지난주 오답 다시 풀기`:''}</div>`:''}
+    ${works||`<div style="color:${C.green};font-weight:700;font-size:${fs}px">영역 표시한 문항을 모두 맞혔어요!</div>`}
+    ${works&&okAreas.length?`<div class="pb" style="font-size:${fs-1}px;color:${C.green};margin-top:6px">✔ 다 맞힌 영역: ${okAreas.map(esc).join(' · ')}</div>`:''}`;
+}
+const AREA_C_APP={red:'var(--red)',sub:'var(--text2)',green:'var(--green)',ind:'#c87400'};
+// 반 전체 많이 틀린 영역 (세부 영역이 있으면 세부까지): [{label,n,wrong}]
+function classAreaTop(pairs,k=5){
+  const by={};
+  pairs.forEach(({ex,r})=>areaItems(ex,r).forEach(it=>{const q=it.q;const label=[workLabel(qWork(q),q),String(q.area||'').trim(),String(q.detail||'').trim()].filter(Boolean).join(' › ');
+    const g=by[label]||(by[label]={label,n:0,wrong:0});g.n++;if(!it.ok)g.wrong++;}));
+  return Object.values(by).filter(g=>g.wrong).sort((a,b)=>b.wrong-a.wrong||b.wrong/b.n-a.wrong/a.n).slice(0,k);
+}
+function classAreaHTML(pairs){
+  const top=classAreaTop(pairs);if(!top.length)return '';
+  return `<div style="font-size:13px;margin-top:6px">많이 틀린 영역: ${top.map(g=>`${esc(g.label)} <b style="color:var(--red)">${g.wrong}/${g.n}</b>`).join(' · ')}</div>`;
+}
 // 한 부분(공통/개별)만 채점: 맞힌 문항 수, 점수(100점 환산), 틀린 문항
 function partStat(ex,r,part){
   const qs=((ex&&ex.questions)||[]).filter(q=>qPart(q)===part);
@@ -2422,7 +2470,7 @@ function addExamQRow(q){
     <input class="form-input exq-answer" placeholder="정답 (여러 개면 2,5,7)">
     <input class="form-input exq-expl" placeholder="해설(선택)">
     <button class="btn red sm" type="button" onclick="this.closest('.exq-row').remove();renumberExamRows()">삭제</button>`;
-  if(q){const x={};['part','ci','from','pair','bank_id','choices','multi'].forEach(k=>{if(q[k]!=null)x[k]=q[k];});if(Object.keys(x).length)div.dataset.extra=JSON.stringify(x);} // 묶음 시험의 공통/개별 표시는 수정해도 그대로
+  if(q){const x={};['part','ci','from','pair','bank_id','choices','multi','work','area','detail'].forEach(k=>{if(q[k]!=null)x[k]=q[k];});if(Object.keys(x).length)div.dataset.extra=JSON.stringify(x);} // 묶음 시험의 공통/개별 표시는 수정해도 그대로
   if(q){div.querySelector('.exq-type').value=q.type;div.querySelector('.exq-points').value=q.points;div.querySelector('.exq-answer').value=q.answer||'';div.querySelector('.exq-expl').value=q.explanation||'';}
   wrap.appendChild(div);
 }
@@ -2624,7 +2672,8 @@ function renderBundleResults(bi){
   const top=Object.entries(wrongCnt).sort((a,b)=>b[1]-a[1]||a[0]-b[0]).slice(0,5).map(([ci,c])=>`공통 ${ci}번 ${Math.round(c/nSub*100)}%`);
   el.innerHTML=`<div class="card"><strong>${esc(b)}</strong> <span style="color:var(--text2);font-size:12px">· 제출 ${nSub}/${list.length}명${nSub?` · 공통 평균 ${Math.round(sum/nSub)}점`:''}</span>
     ${top.length?`<div style="font-size:13px;margin-top:6px">많이 틀린 공통 문항: ${top.join(' · ')}</div>`:''}
-    <div style="font-size:12px;color:var(--text2);margin-top:4px">평균·많이 틀린 문항은 공통 부분만 계산해요. "공통 n번"은 이번 주 복습테스트의 n번째 문항이에요(학생 시험지에서는 개별 문항 수만큼 번호가 뒤로 밀려 있어요).</div></div>
+    ${classAreaHTML(list.map(ex=>({ex,r:db.examResponses.find(x=>x.exam_id===ex.id)})).filter(p=>p.r&&isSubmitted(p.r)))}
+    <div style="font-size:12px;color:var(--text2);margin-top:4px">평균·많이 틀린 문항은 공통 부분만 계산해요. 많이 틀린 영역은 공통·개별 모두 넣어 "틀린 수/푼 수"로 보여 줘요. "공통 n번"은 이번 주 복습테스트의 n번째 문항이에요(학생 시험지에서는 개별 문항 수만큼 번호가 뒤로 밀려 있어요).</div></div>
     <div style="overflow-x:auto"><table class="simple" style="min-width:560px"><thead><tr><th>학생</th><th>구분</th><th>지난주 오답 다시 풀기</th><th>이번 주 공통</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><div id="desc-grade-area" style="margin-top:12px"></div>`;
 }
 // 결과 화면 다시 그리기 (묶음 시험이면 묶음 결과로)
@@ -2643,7 +2692,7 @@ function renderExamResults(examId){
     return `<tr><td>${esc(r.student_name)}</td><td>${sub?`${r.correct_count}/${r.total_q}`:'-'}</td><td>${state}</td>
       <td style="white-space:nowrap">${sub&&hasDesc?`<button class="btn sm" onclick="openGradeDesc('${esc(examId)}','${esc(r.student_name)}')">주관식 채점</button> `:''}<button class="btn sm" onclick="allowRetake('${esc(examId)}','${esc(r.student_name)}')">재응시 허용</button></td></tr>`;
   }).join('');
-  el.innerHTML=`<div class="card"><strong>${esc(ex?ex.name:'')}</strong> <span style="color:var(--text2);font-size:12px">학생은 한 번만 제출할 수 있어요. 다시 보게 하려면 "재응시 허용"을 누르세요.</span></div><div style="overflow-x:auto"><table class="simple" style="min-width:520px"><thead><tr><th>학생</th><th>정답수</th><th>점수</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><div id="desc-grade-area" style="margin-top:12px"></div>`;
+  el.innerHTML=`<div class="card"><strong>${esc(ex?ex.name:'')}</strong> <span style="color:var(--text2);font-size:12px">학생은 한 번만 제출할 수 있어요. 다시 보게 하려면 "재응시 허용"을 누르세요.</span>${ex?classAreaHTML(list.filter(isSubmitted).map(r=>({ex,r}))):''}</div><div style="overflow-x:auto"><table class="simple" style="min-width:520px"><thead><tr><th>학생</th><th>정답수</th><th>점수</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><div id="desc-grade-area" style="margin-top:12px"></div>`;
 }
 async function allowRetake(examId,studentName){
   if(!confirm(`${studentName} 학생의 이 시험 기록을 지우고 다시 응시할 수 있게 할까요?\n지금까지의 답안과 점수는 사라져요.`))return;
@@ -2712,6 +2761,8 @@ async function readBundleFile(inp){
     }
     if(q.points!=null&&!(Number(q.points)>=0))errs.push(`${where}: 배점이 숫자가 아니에요.`);
     if(q.tag&&!tags.includes(q.tag))(badTag[q.tag]=badTag[q.tag]||[]).push(where);
+    ['work','area','detail'].forEach(k=>{if(q[k]!=null&&typeof q[k]!=='string')errs.push(`${where}: ${k}는 글자로 써야 해요.`);});
+    if(!String(q.work||'').trim()&&(String(q.area||'').trim()||String(q.detail||'').trim()))warns.push(`${where}: area·detail은 있는데 work(작품·단원)가 비어 있어서 '틀린 영역'에 안 잡혀요.`);
   };
   common.forEach((q,i)=>chkQ(q,`공통 ${i+1}번`));
   const seen=new Set();
@@ -2741,7 +2792,8 @@ function buildBundleExams(up,defPts,timeLimit,extra){
   const title=bundleTitle(up.d);
   const mk=(q,num,extra)=>Object.assign({num,type:q.type||'obj',points:q.points!=null?Number(q.points):defPts,
     answer:(q.type||'obj')==='obj'?normAns(Array.isArray(q.answer)?q.answer.join(','):q.answer):String(q.answer??'').trim()},
-    (q.type||'obj')==='obj'&&q.choices!=null&&Number(q.choices)!==5?{choices:Number(q.choices)}:{},q.multi?{multi:true}:{},{explanation:q.explanation||'',tag:q.tag||null,subtag:q.subtag||null,bank_id:q.bank_id??null},extra);
+    (q.type||'obj')==='obj'&&q.choices!=null&&Number(q.choices)!==5?{choices:Number(q.choices)}:{},q.multi?{multi:true}:{},
+    ...['work','area','detail'].map(k=>String(q[k]??'').trim()?{[k]:String(q[k]).trim()}:{}),{explanation:q.explanation||'',tag:q.tag||null,subtag:q.subtag||null,bank_id:q.bank_id??null},extra);
   return up.rows.map(({u,ind})=>{
     const qs=[];
     ind.forEach(q=>qs.push(mk(q,qs.length+1,{part:'개별',from:q.from??null,pair:q.pair||null})));
@@ -2753,11 +2805,12 @@ function renderBundlePreview(){
   const up=bundleUpload,pv=document.getElementById('bd-preview');if(!up){pv.innerHTML='';return;}
   const k={오답:0,결석:0,만점:0};up.rows.forEach(r=>{if(k[r.s.kind]!=null)k[r.s.kind]++;});
   const nInd=up.rows.reduce((n,r)=>n+r.ind.length,0);
+  const allQs=up.common.concat(...up.rows.map(r=>r.ind)),nArea=allQs.filter(q=>String(q.work||'').trim()).length;
   const nMulti=up.common.filter(q=>qMulti(Object.assign({},q,{answer:Array.isArray(q.answer)?q.answer.join(','):q.answer}))).length;
   const exist=db.exams.filter(x=>x.bundle===bundleTitle(up.d));
   const list=(arr,color)=>arr.length?`<div style="font-size:12px;color:${color};margin-top:6px;max-height:160px;overflow:auto">${arr.map(x=>'• '+esc(x)).join('<br>')}</div>`:'';
   pv.innerHTML=`<div class="card" style="margin-top:10px"><strong>${esc(bundleTitle(up.d))}</strong>
-    <div style="font-size:13px;margin-top:4px">학생 ${up.rows.length}명 (오답 ${k.오답} · 결석 ${k.결석} · 만점 ${k.만점}) · 공통 ${up.common.length}문항${nMulti?` (모두 고르시오 ${nMulti})`:''} · 개별 문항 합계 ${nInd}개${exist.length?` · <b style="color:var(--amber)">이미 올린 묶음이에요 (${exist.length}명)</b>`:''}</div>
+    <div style="font-size:13px;margin-top:4px">학생 ${up.rows.length}명 (오답 ${k.오답} · 결석 ${k.결석} · 만점 ${k.만점}) · 공통 ${up.common.length}문항${nMulti?` (모두 고르시오 ${nMulti})`:''} · 개별 문항 합계 ${nInd}개 · 영역 표시 ${nArea}/${allQs.length}문항${exist.length?` · <b style="color:var(--amber)">이미 올린 묶음이에요 (${exist.length}명)</b>`:''}</div>
     ${up.errs.length?`<div style="font-weight:700;color:var(--red);margin-top:8px">고쳐야 올릴 수 있어요 (${up.errs.length}건)</div>${list(up.errs,'var(--red)')}`:''}
     ${up.warns.length?`<div style="font-weight:700;color:var(--amber);margin-top:8px">확인해 주세요 (${up.warns.length}건)</div>${list(up.warns,'var(--amber)')}`:''}
     <div style="overflow-x:auto;margin-top:8px"><table class="simple"><thead><tr><th>학생</th><th>구분</th><th>개별</th><th>총 문항</th></tr></thead><tbody>${up.rows.map(r=>`<tr><td>${esc(r.u?r.u.name:(r.s.name||r.s.id))}</td><td>${esc(r.s.kind||'')}</td><td>${r.ind.length}</td><td>${r.ind.length+up.common.length}</td></tr>`).join('')}</tbody></table></div>
@@ -3372,6 +3425,11 @@ function weakTagCardHTML(name){
     return `<div style="font-size:12px;color:var(--text2);margin:10px 0 4px">약한 ${label}</div>`+(weak.length?weak.map(s=>`<div class="row-between" style="gap:6px;padding:3px 0"><span>${esc(s.tag)}</span><b style="color:${tagRateColor(s.rate)}">${s.rate}% <span style="font-size:11px;color:var(--text2);font-weight:400">(${s.n}문항)</span></b></div>`).join(''):`<div style="color:var(--green);font-weight:600">모두 맞혔어요!</div>`);};
   return `<div class="card"><div class="row-between"><strong>시험 유형 분석</strong><span style="font-size:12px;color:var(--text2)">누적</span></div>${part('갈래',all)}${part('세부유형',allSub)}</div>`;
 }
+function areaCardHTML(name){
+  const r=db.examResponses.filter(x=>x.student_name===name&&isSubmitted(x)&&hasArea(db.exams.find(e=>e.id===x.exam_id))).sort((a,b)=>String(b.submitted_at||'').localeCompare(String(a.submitted_at||'')))[0];
+  if(!r)return '';const ex=db.exams.find(e=>e.id===r.exam_id);const h=areaHTML(areaItems(ex,r),AREA_C_APP);if(!h)return '';
+  return `<div class="card"><div class="row-between"><strong>틀린 영역</strong><span style="font-size:12px;color:var(--text2)">${esc(ex.bundle||ex.name)}</span></div><div style="margin-top:6px">${h}</div></div>`;
+}
 function renderReportCardHTML(d){
   if(!d.student)return '<div class="empty-hint">학생 정보를 찾을 수 없습니다.</div>';
   const examRowsHtml=d.examRows.length?d.examRows.map(r=>{
@@ -3388,6 +3446,7 @@ function renderReportCardHTML(d){
     ${vocabReportHTML(d.vocab)}
     ${certReportHTML(d.cert)}
     ${weakTagCardHTML(d.student.name)}
+    ${areaCardHTML(d.student.name)}
     ${d.grammar&&d.grammar.total?`<div class="card"><div class="row-between"><strong>문법 기초</strong><span>완강 <b>${d.grammar.done}</b>/${d.grammar.total}강 · 진도율 ${d.grammar.avg}%</span></div>
       <div class="progress-bar"><div class="progress-bar-fill" style="width:${d.grammar.avg}%;background:var(--green)"></div></div>
       <div style="font-size:12px;color:var(--text2);margin-top:8px">${d.grammar.next?`다음 강의: ${d.grammar.next.no}강 ${esc(d.grammar.next.v.title)}`:'모든 강의 완강'}</div></div>`:''}
@@ -3495,6 +3554,14 @@ function rpBundleStat(bundle,school){
   const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]||a[0]-b[0]).slice(0,3).map(([ci,c])=>({ci:Number(ci),pct:Math.round(c/sts.length*100)}));
   return{avg,n:sts.length,top};
 }
+// 학부모 성적표 아래: 기간 안에 제출한 시험(영역 표시 있는 것)마다 틀린 영역
+function rpAreaHTML(u,start,end){
+  const C={red:RP.red,sub:RP.sub,green:RP.green,ind:'#c87400'};
+  const list=db.examResponses.filter(r=>r.student_name===u.name&&isSubmitted(r)&&inRange(r.submitted_at,start,end)).map(r=>({r,ex:db.exams.find(x=>x.id===r.exam_id)})).filter(x=>hasArea(x.ex))
+    .sort((a,b)=>String(a.r.submitted_at||'').localeCompare(String(b.r.submitted_at||'')));
+  const blocks=list.map(({r,ex})=>{const h=areaHTML(areaItems(ex,r),C,{small:true});return h?`<div style="margin-top:8px"><div class="pb" style="font-family:${RP.TF};font-weight:700;font-size:13px">${esc(ex.bundle||ex.name)}</div>${h}</div>`:'';}).join('');
+  return blocks?`<div style="margin-top:14px;border-top:2px solid ${RP.blue};padding-top:8px"><div class="pb" style="font-family:${RP.TF};font-weight:700;font-size:15px">틀린 영역 <span style="font-family:${RP.BF};font-weight:400;font-size:12px;color:${RP.sub}">작품(문법 단원) › 영역 › 세부 영역 · 번호는 학생 시험지 번호</span></div>${blocks}</div>`:'';
+}
 function rpRange(ns){
   ns=[...ns].sort((a,b)=>a-b);const out=[];let s=null,p=null;const f=n=>'M'+pad2(n);
   const push=()=>out.push(s===p?f(s):f(s)+'~'+pad2(p));
@@ -3570,7 +3637,7 @@ function parentReportHTML(sid,note,start,end){
   return `<div style="width:794px;box-sizing:border-box;padding:36px 44px 30px;background:#fff;color:${C.ink};font-family:${BF},sans-serif">
     <div class="pb" style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid ${C.blue};padding-bottom:10px;margin-bottom:14px"><div><div style="font-family:${TF};font-weight:700;font-size:12px;color:${C.blue}">정말 쏠쏠한 국어</div><div style="font-family:${TF};font-weight:700;font-size:25px">주간 학습 리포트</div></div>
     <div style="text-align:right"><div style="font-family:${TF};font-weight:700;font-size:20px">${esc(u.name)} 학생</div><div style="font-size:12px;color:${C.sub}">${esc(u.school||'')} ${u.grade||''}학년 · ${rpMD(start,1)} ~ ${rpMD(end,1)}</div></div></div>
-    ${alert}${notice}${noteBox}${table}
+    ${alert}${notice}${noteBox}${table}${rpAreaHTML(u,start,end)}
     <div class="pb" style="font-size:11px;color:#9aa1b0;text-align:center;margin-top:12px">정말 쏠쏠한 국어 · 쏠T · ${rpMK(start)} ~ ${rpMK(end)} 기록</div></div>`;
 }
 function reportRange(){

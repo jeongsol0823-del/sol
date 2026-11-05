@@ -2275,7 +2275,7 @@ function qPart(q){return q&&q.part==='개별'?'개별':'공통';}
 function normAns(v){return [...new Set(String(v??'').split(/[^0-9]+/).filter(Boolean).map(Number))].sort((x,y)=>x-y).join(',');}
 function qMulti(q){return !!(q&&q.type!=='desc'&&(q.multi||Number(q.choices)>5||normAns(q.answer).includes(',')));}
 function qChoices(q){const n=parseInt(q&&q.choices,10);if(n>=2)return n;return Math.max(5,...normAns(q&&q.answer).split(',').filter(Boolean).map(Number));}
-// 모두 고르시오 채점: 'all' = 전부 맞혀야 만점 / 'partial' = (맞게 고른 수 − 잘못 고른 수) ÷ 정답 수
+// 모두 고르시오 채점 (쏠T 확정 11-06: 'all' = 전부 맞혀야 5점, 부분 점수 없음) / 'partial' = (맞게 고른 수 − 잘못 고른 수) ÷ 정답 수
 const MULTI_GRADE='all';
 // 객관식 한 문항에서 받는 비율 (0~1)
 function objFrac(q,a){

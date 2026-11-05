@@ -510,6 +510,18 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
         <div style="display:flex;gap:6px;margin-top:10px"><button class="btn blue" id="ex-save-btn" onclick="saveExam()">시험 저장</button><button class="btn" id="ex-cancel-btn" style="display:none" onclick="resetExamForm()">수정 취소</button></div>
       </div>
       </details>
+      <details class="form-fold" id="bd-form-box" style="margin-top:10px"><summary>📦 학생별 시험 한 번에 올리기</summary>
+      <div class="card">
+        <div class="vhint" style="margin-top:0">숙제 방이 만든 <b>학생별 복습테스트 파일(.json)</b>을 고르면, 학생마다 시험이 하나씩 만들어져요. 학생은 로그인하면 <b>시험 탭에 자기 시험이 저절로</b> 떠요(공유코드 없음). 같은 파일을 다시 올리면 아직 안 푼 학생 것만 새 내용으로 바뀌어요.</div>
+        <div class="admin-form">
+          <div class="form-group"><label>파일 (.json)</label><input class="form-input" id="bd-file" type="file" accept=".json,application/json" onchange="readBundleFile(this)"></div>
+          <div class="form-group"><label>배점 (파일에 배점이 비어 있을 때 문항당)</label><input class="form-input" id="bd-points" type="number" min="1" value="5"></div>
+          <div class="form-group"><label>제한시간 (분, 비우면 제한 없음)</label><input class="form-input" id="bd-time" type="number" min="0" placeholder="예: 40"></div>
+          <div class="form-group"><label>개별 1문항마다 더 주는 시간 (분)</label><input class="form-input" id="bd-extra" type="number" min="0" placeholder="예: 2 (비우면 0)"></div>
+        </div>
+        <div id="bd-preview"></div>
+      </div>
+      </details>
       <div class="section-head" style="margin-top:20px"><h2>만든 시험 목록</h2></div>
       <div id="exam-list"></div>
       <div class="section-head" style="margin-top:24px"><h2>응시 결과</h2></div>
@@ -701,10 +713,11 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     </div>
 
     <div class="section" id="s-exams">
+      <div id="my-assigned-exams"></div>
       <div class="section-head"><h2>시험 응시</h2></div>
       <div class="card">
         <div style="display:flex;gap:8px">
-          <input class="form-input" id="ex-code" placeholder="공유코드 8자리 입력" style="flex:1">
+          <input class="form-input" id="ex-code" placeholder="공유코드 8자리 입력 (쏠T가 코드를 알려 준 시험만)" style="flex:1">
           <button class="btn blue sm" onclick="loadExamByCode()">불러오기</button>
         </div>
       </div>
@@ -829,6 +842,7 @@ function switchTab(scope,id){
   document.querySelectorAll(root+' .tabnav button').forEach(b=>b.classList.toggle('active',b.dataset.t===id));
   document.querySelectorAll(root+' .section').forEach(s=>s.classList.toggle('active',s.id===id));
   if(id==='t-report')renderReportPreview(); // 보이는 상태에서 크기를 다시 맞춤
+  if(id==='s-exams')refreshMyAssignedExams();
 }
 window.addEventListener('resize',()=>{const t=document.getElementById('t-report');if(t&&t.classList.contains('active'))renderReportPreview();});
 
@@ -1637,7 +1651,7 @@ function launchStudent(){
   showPage('page-student');switchTab('student','s-home');
   renderLectures();renderReviewGrid();renderGrammarGrid();
   loadQa().then(()=>{renderMyQa();renderMyQaFree();}); // 내 질문만 서버에서 받아와요
-  renderMyExamResults();
+  renderMyExamResults();renderMyAssignedExams();
   loadCert().then(()=>{renderCertMy();renderMyReportCard();}); // 내 제출 기록만 서버에서 받아와요
   renderMyAttendance();
   renderMyAnnounce();
@@ -2249,9 +2263,32 @@ function gradeExam(ex,answers,descPoints){
 }
 function examScoreText(ex,r){
   if(descPending(ex,r))return `객관식 ${r.points_earned}/${examObjTotal(ex)}점 · <span class="pill amber">주관식 채점 대기</span>`;
+  if(ex&&ex.bundle)return bundleScoreText(ex,r);
   return `${r.points_earned}/${r.points_total}점 (${r.score}%)`;
 }
 function examCatLabel(c){return c==='school'?'내신':'정규';}
+/* --- 학생별 시험 (묶음) : 문항마다 part '개별'(지난주 오답 다시 풀기) / '공통'(이번 주, ci = 공통 몇 번째) --- */
+function qPart(q){return q&&q.part==='개별'?'개별':'공통';}
+function qRight(q,ans){const a=String((ans||{})[q.num]??'').trim();return a!==''&&a===String(q.answer).trim();}
+// 한 부분(공통/개별)만 채점: 맞힌 문항 수, 점수(100점 환산), 틀린 문항
+function partStat(ex,r,part){
+  const qs=((ex&&ex.questions)||[]).filter(q=>qPart(q)===part);
+  const ans=(r&&r.answers)||{},dp=(r&&r.thoughts&&r.thoughts.__descPoints)||{};
+  let right=0,earned=0,total=0;const wrong=[];
+  qs.forEach(q=>{const p=q.points||0;total+=p;
+    if(q.type==='obj'){if(qRight(q,ans)){right++;earned+=p;}else wrong.push(q);}
+    else{const g=dp[q.num]!=null?Math.min(dp[q.num],p):0;earned+=g;if(p&&g>=p)right++;else wrong.push(q);}
+  });
+  return{n:qs.length,right,earned,total,score:total>0?Math.round(earned/total*100):(qs.length?Math.round(right/qs.length*100):0),wrong};
+}
+function indivLabel(ex){const qs=((ex&&ex.questions)||[]).filter(q=>qPart(q)==='개별');return qs.length&&qs.every(q=>q.pair==='결석')?'지난주 시험(결석) 다시 풀기':'지난주 오답 다시 풀기';}
+// 묶음 시험 점수 한 줄: 이번 주 공통 점수 + 개별 N문제 중 M개
+function bundleScoreText(ex,r){
+  const c=partStat(ex,r,'공통'),i=partStat(ex,r,'개별');
+  return (c.n?`이번 주 ${c.score}점 (${c.right}/${c.n})`:'')+(i.n?`${c.n?' · ':''}${indivLabel(ex)} ${i.n}문제 중 ${i.right}개`:'');
+}
+function examKind(ex){const ind=(ex.questions||[]).filter(q=>qPart(q)==='개별');return !ind.length?'만점':ind.every(q=>q.pair==='결석')?'결석':'오답';}
+function myAssignedExam(ex){return !!(ex&&ex.assignee_id&&session&&ex.assignee_id===session.id);}
 function fmtLeft(sec){sec=Math.max(0,Math.floor(sec));return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;}
 
 /* ===================== 시험 — 문제 유형 ===================== */
@@ -2363,6 +2400,7 @@ function addExamQRow(q){
     <input class="form-input exq-answer" placeholder="정답 (객관식은 숫자)">
     <input class="form-input exq-expl" placeholder="해설(선택)">
     <button class="btn red sm" type="button" onclick="this.closest('.exq-row').remove();renumberExamRows()">삭제</button>`;
+  if(q){const x={};['part','ci','from','pair','bank_id'].forEach(k=>{if(q[k]!=null)x[k]=q[k];});if(Object.keys(x).length)div.dataset.extra=JSON.stringify(x);} // 묶음 시험의 공통/개별 표시는 수정해도 그대로
   if(q){div.querySelector('.exq-type').value=q.type;div.querySelector('.exq-points').value=q.points;div.querySelector('.exq-answer').value=q.answer||'';div.querySelector('.exq-expl').value=q.explanation||'';}
   wrap.appendChild(div);
 }
@@ -2399,7 +2437,7 @@ async function saveExam(){
   const rows=[...document.querySelectorAll('#ex-q-rows .exq-row')];
   if(!name){notify('시험 이름을 입력하세요.','error');return;}
   if(!rows.length){notify('문항을 1개 이상 추가하세요.','error');return;}
-  const questions=rows.map((row,i)=>({
+  const questions=rows.map((row,i)=>Object.assign(row.dataset.extra?JSON.parse(row.dataset.extra):{},{
     num:i+1,
     type:row.querySelector('.exq-type').value,
     points:parseInt(row.querySelector('.exq-points').value)||0,
@@ -2477,13 +2515,98 @@ function renderExamAdmin(){
         <span>${ex.time_limit?`현재 ${ex.time_limit}분`:'현재 제한 없음'} · 비우면 제한 없음</span></div>
     </div>`;
   };
+  const pendOf=list=>list.reduce((n,ex)=>n+db.examResponses.filter(r=>r.exam_id===ex.id&&isSubmitted(r)&&descPending(ex,r)).length,0);
+  examBundles=[...new Set(db.exams.filter(ex=>ex.bundle).map(ex=>ex.bundle))];
+  // 묶음(학생별 시험) 하나: 접어 두고, 정답 공개·제한시간·결과는 묶음 단위로
+  const bundleBox=b=>{
+    const bi=examBundles.indexOf(b);const list=bundleExams(b);
+    const resp=list.map(ex=>db.examResponses.find(r=>r.exam_id===ex.id));
+    const done=resp.filter(r=>r&&isSubmitted(r)).length,doing=resp.filter(r=>r&&!isSubmitted(r)).length;
+    const rev=list.filter(ex=>ex.answers_revealed).length;
+    const tl=[...new Set(list.map(ex=>ex.time_limit||0))];
+    const pend=pendOf(list);
+    const kinds={오답:0,결석:0,만점:0};list.forEach(ex=>kinds[examKind(ex)]++);
+    const lines=list.map((ex,i)=>{const r=resp[i];const ni=(ex.questions||[]).filter(q=>qPart(q)==='개별').length;
+      return `<div class="row-between" style="padding:6px 0;border-top:1px solid var(--border);gap:6px;font-size:13px"><span><b>${esc(ex.assignee_name||ex.name)}</b> <span style="color:var(--text2)">· 개별 ${ni} + 공통 ${(ex.questions||[]).length-ni}문항</span> ${!r?'<span class="pill">미응시</span>':!isSubmitted(r)?'<span class="pill blue">응시 중</span>':`<span style="color:var(--text2)">${examScoreText(ex,r)}</span>`}</span>
+        <span style="display:flex;gap:4px"><button class="btn sm" onclick="editExam('${esc(ex.id)}')">수정</button><button class="btn red sm" onclick="deleteExam('${esc(ex.id)}')">삭제</button></span></div>`;}).join('');
+    const head=`<div class="card"><div class="row-between"><div><span class="pill blue">학생별</span> <strong>${esc(b)}</strong> <span style="color:var(--text2)">· 학생 ${list.length}명 (오답 ${kinds.오답} · 결석 ${kinds.결석} · 만점 ${kinds.만점}) · 제출 ${done}명${doing?` · 응시 중 ${doing}명`:''}</span>
+        ${rev===list.length?' <span class="pill green">정답 공개됨</span>':rev?` <span class="pill amber">정답 일부 공개 ${rev}/${list.length}</span>`:' <span class="pill red">정답 비공개</span>'}${pend?` <span class="pill amber">주관식 채점 대기 ${pend}</span>`:''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" onclick="renderBundleResults(${bi});document.getElementById('exam-results').scrollIntoView({behavior:'smooth',block:'start'})">결과 보기</button><button class="btn sm ${rev===list.length?'':'green'}" onclick="setBundleReveal(${bi},${rev!==list.length})">${rev===list.length?'정답 공개 취소':'정답 한 번에 공개'}</button><button class="btn red sm" onclick="deleteBundle(${bi})">묶음 삭제</button></div></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--text2);flex-wrap:wrap">제한시간 (묶음 전체)
+        <input type="number" min="0" class="date-in" style="width:64px" id="bdtime-${bi}" value="" placeholder="없음"> 분 + 개별 1문항마다
+        <input type="number" min="0" class="date-in" style="width:52px" id="bdextra-${bi}" value="" placeholder="0"> 분
+        <button class="btn sm" onclick="setBundleTime(${bi})">한 번에 적용</button>
+        <span>${tl.length>1?`현재 학생마다 ${Math.min(...tl)}~${Math.max(...tl)}분`:tl[0]?`현재 ${tl[0]}분`:'현재 제한 없음'} · 비우면 제한 없음 · 학생은 로그인하면 시험 탭에 저절로 떠요(코드 없음)</span></div></div>`;
+    return foldGroup('b:'+b,'📦 '+b,`${list.length}명`,pend?`<span class="pill amber">채점 대기 ${pend}</span>`:'',head+`<div class="card" style="padding-top:4px;padding-bottom:4px">${lines}</div>`);
+  };
   const groups=[...new Set(db.exams.map(schOf))].sort((a,b)=>(!a)-(!b)||schoolOrder(a,b));
   el.innerHTML=groups.map(sch=>{
     const list=db.exams.filter(ex=>schOf(ex)===sch);
-    const pend=list.reduce((n,ex)=>n+db.examResponses.filter(r=>r.exam_id===ex.id&&isSubmitted(r)&&descPending(ex,r)).length,0);
-    return foldGroup('e:'+sch,sch||'기타',`${list.length}개`,pend?`<span class="pill amber">채점 대기 ${pend}</span>`:'',list.map(card).join(''));
+    const singles=list.filter(ex=>!ex.bundle),bundles=[...new Set(list.filter(ex=>ex.bundle).map(ex=>ex.bundle))];
+    const pend=pendOf(list);
+    const cnt=[singles.length?`시험 ${singles.length}개`:'',bundles.length?`학생별 묶음 ${bundles.length}개`:''].filter(Boolean).join(' · ');
+    return foldGroup('e:'+sch,sch||'기타',cnt,pend?`<span class="pill amber">채점 대기 ${pend}</span>`:'',bundles.map(bundleBox).join('')+singles.map(card).join(''));
   }).join('');
 }
+let examBundles=[],shownBundle=null; // 강사 화면 묶음 목록 (버튼은 번호로 가리켜요)
+function bundleExams(b){return db.exams.filter(ex=>ex.bundle===b).sort((x,y)=>(x.assignee_name||x.name).localeCompare(y.assignee_name||y.name));}
+async function setBundleReveal(bi,v){
+  const b=examBundles[bi];if(!b)return;
+  if(v&&!confirm(`"${b}" 학생 ${bundleExams(b).length}명의 정답과 해설을 한 번에 공개할까요?\n이미 제출한 학생은 바로 볼 수 있어요.`))return;
+  const{error}=await sb.from('exams').update({answers_revealed:v}).eq('bundle',b);
+  if(error){notify('저장 실패: '+error.message,'error');return;}
+  bundleExams(b).forEach(ex=>ex.answers_revealed=v);renderExamAdmin();
+  notify(v?'묶음 전체 정답을 공개했어요.':'묶음 전체 정답 공개를 취소했어요.','success');
+}
+async function setBundleTime(bi){
+  const b=examBundles[bi];if(!b)return;
+  const v=readTimeLimit(document.getElementById('bdtime-'+bi).value),extra=readExtraMin(document.getElementById('bdextra-'+bi).value);
+  // 같은 시간끼리 모아서 한 번에 저장 (개별 문항 수가 같은 학생끼리)
+  const by={};bundleExams(b).forEach(ex=>{const t=bundleTimeFor(ex.questions,v,extra);(by[t]=by[t]||[]).push(ex);});
+  for(const list of Object.values(by)){
+    const t=bundleTimeFor(list[0].questions,v,extra);
+    const{error}=await sb.from('exams').update({time_limit:t}).in('id',list.map(ex=>ex.id));
+    if(error){notify('저장 실패: '+error.message,'error');renderExamAdmin();return;}
+    list.forEach(ex=>ex.time_limit=t);
+  }
+  renderExamAdmin();
+  notify(v?`묶음 제한시간을 ${v}분${extra?` + 개별 1문항마다 ${extra}분`:''}으로 바꿨어요. 응시 중인 학생에게도 1분 안에 반영돼요.`:'묶음 전체 제한시간을 없앴어요.','success');
+}
+async function deleteBundle(bi){
+  const b=examBundles[bi];if(!b)return;
+  const list=bundleExams(b),ids=list.map(ex=>ex.id);
+  const n=db.examResponses.filter(r=>ids.includes(r.exam_id)).length;
+  if(!confirm(`"${b}" 학생별 시험 ${list.length}개를 모두 삭제할까요?${n?`\n응시 기록 ${n}건도 함께 지워지고 성적표에서도 빠져요. 되돌릴 수 없어요.`:''}`))return;
+  if(n){const{error:e1}=await sb.from('exam_responses').delete().in('exam_id',ids);if(e1){notify('삭제 실패: '+e1.message,'error');return;}}
+  const{error}=await sb.from('exams').delete().eq('bundle',b);
+  if(error){notify('삭제 실패: '+error.message,'error');return;}
+  db.examResponses=db.examResponses.filter(r=>!ids.includes(r.exam_id));db.exams=db.exams.filter(ex=>ex.bundle!==b);
+  if(shownBundle===b)document.getElementById('exam-results').innerHTML='';
+  renderExamAdmin();notify('묶음을 삭제했어요.','info');
+}
+// 묶음 결과: 학생마다 개별(지난주 오답 다시 풀기) M/N, 공통 점수 + 공통 문항별 오답률
+function renderBundleResults(bi){
+  const b=typeof bi==='number'?examBundles[bi]:bi;if(!b)return;shownBundle=b;
+  const el=document.getElementById('exam-results');
+  const list=bundleExams(b);
+  const wrongCnt={};let nSub=0,sum=0;
+  const rows=list.map(ex=>{
+    const r=db.examResponses.find(x=>x.exam_id===ex.id);const sub=r&&isSubmitted(r);
+    const c=sub?partStat(ex,r,'공통'):null,i=sub?partStat(ex,r,'개별'):null;
+    if(sub){nSub++;sum+=c.score;c.wrong.forEach(q=>{wrongCnt[q.ci]=(wrongCnt[q.ci]||0)+1;});}
+    let state='<span class="pill">미응시</span>';
+    if(r&&!sub){const st=r.thoughts&&r.thoughts.__startedAt;const left=ex.time_limit&&st?ex.time_limit*60-(Date.now()-new Date(st))/1000:null;state=`<span class="pill blue">응시 중${left!=null?` · 남은 ${fmtLeft(left)}`:''}</span>`;}
+    return `<tr><td>${esc(ex.assignee_name||ex.name)}</td><td>${examKind(ex)}</td><td>${sub?(i.n?`${i.right}/${i.n}`:'-'):'-'}</td><td>${sub?(descPending(ex,r)?'<span class="pill amber">주관식 채점 대기</span>':`${c.score}점 (${c.right}/${c.n})`):state}</td>
+      <td style="white-space:nowrap">${sub&&examHasDesc(ex)?`<button class="btn sm" onclick="openGradeDesc('${esc(ex.id)}','${esc(r.student_name)}')">주관식 채점</button> `:''}${r?`<button class="btn sm" onclick="allowRetake('${esc(ex.id)}','${esc(r.student_name)}')">재응시 허용</button>`:''}</td></tr>`;
+  }).join('');
+  const top=Object.entries(wrongCnt).sort((a,b)=>b[1]-a[1]||a[0]-b[0]).slice(0,5).map(([ci,c])=>`공통 ${ci}번 ${Math.round(c/nSub*100)}%`);
+  el.innerHTML=`<div class="card"><strong>${esc(b)}</strong> <span style="color:var(--text2);font-size:12px">· 제출 ${nSub}/${list.length}명${nSub?` · 공통 평균 ${Math.round(sum/nSub)}점`:''}</span>
+    ${top.length?`<div style="font-size:13px;margin-top:6px">많이 틀린 공통 문항: ${top.join(' · ')}</div>`:''}
+    <div style="font-size:12px;color:var(--text2);margin-top:4px">평균·많이 틀린 문항은 공통 부분만 계산해요. "공통 n번"은 이번 주 복습테스트의 n번째 문항이에요(학생 시험지에서는 개별 문항 수만큼 번호가 뒤로 밀려 있어요).</div></div>
+    <div style="overflow-x:auto"><table class="simple" style="min-width:560px"><thead><tr><th>학생</th><th>구분</th><th>지난주 오답 다시 풀기</th><th>이번 주 공통</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><div id="desc-grade-area" style="margin-top:12px"></div>`;
+}
+// 결과 화면 다시 그리기 (묶음 시험이면 묶음 결과로)
+function refreshExamResults(examId){const ex=db.exams.find(x=>x.id===examId);if(ex&&ex.bundle)renderBundleResults(ex.bundle);else renderExamResults(examId);}
 function renderExamResults(examId){
   const el=document.getElementById('exam-results');
   const ex=db.exams.find(x=>x.id===examId);
@@ -2505,7 +2628,7 @@ async function allowRetake(examId,studentName){
   const{error}=await sb.from('exam_responses').delete().eq('exam_id',examId).eq('student_name',studentName);
   if(error){notify('처리 실패: '+error.message,'error');return;}
   db.examResponses=db.examResponses.filter(r=>!(r.exam_id===examId&&r.student_name===studentName));
-  renderExamResults(examId);renderExamAdmin();notify('재응시를 허용했어요.','success');
+  refreshExamResults(examId);renderExamAdmin();notify('재응시를 허용했어요.','success');
 }
 function openGradeDesc(examId,studentName){
   const ex=db.exams.find(x=>x.id===examId);
@@ -2536,8 +2659,103 @@ async function saveDescGrade(examId,studentName){
   const{error}=await sb.from('exam_responses').update({points_earned:g.points_earned,points_total:g.points_total,score:g.score,thoughts}).eq('exam_id',examId).eq('student_name',studentName);
   if(error){notify('저장 실패: '+error.message,'error');return;}
   Object.assign(resp,{points_earned:g.points_earned,points_total:g.points_total,score:g.score,thoughts});
-  renderExamResults(examId);renderExamAdmin();
+  refreshExamResults(examId);renderExamAdmin();
   notify('주관식 채점을 저장했습니다.','success');
+}
+
+/* ===================== 시험 — 학생별 시험 한 번에 올리기 ===================== */
+// 파일 형식: 01_고등 내신\숙제엔진\복습테스트\앱데이터_형식.md
+// 문항 번호는 개별(individual) → 공통(common) 순서로 1번부터 이어서 매겨요 (학생 PDF와 같은 순서)
+let bundleUpload=null;
+async function readBundleFile(inp){
+  const f=inp.files&&inp.files[0];bundleUpload=null;
+  const pv=document.getElementById('bd-preview');pv.innerHTML='';
+  if(!f)return;
+  let d;try{d=JSON.parse((await f.text()).replace(/^﻿/,''));}catch(e){pv.innerHTML=`<div class="empty-hint" style="color:var(--red)">파일을 읽지 못했어요: ${esc(e.message)}</div>`;return;}
+  const errs=[],warns=[],badTag={};const tags=examTags('tag');
+  const common=Array.isArray(d.common)?d.common:[],studs=Array.isArray(d.students)?d.students:[];
+  if(!d.school||!d.week)errs.push('맨 위 school·week가 비어 있어요.');
+  if(!studs.length)errs.push('students가 비어 있어요.');
+  if(!common.length)warns.push('공통 문항이 없어요.');
+  const chkQ=(q,where)=>{
+    const t=q.type||'obj';
+    if(!['obj','desc'].includes(t))errs.push(`${where}: type은 obj 또는 desc여야 해요.`);
+    if(t==='obj'&&!/^[1-5]$/.test(String(q.answer??'').trim()))errs.push(`${where}: 객관식 정답은 1~5 숫자 하나여야 해요 (지금: "${q.answer??''}").`);
+    if(q.points!=null&&!(Number(q.points)>=0))errs.push(`${where}: 배점이 숫자가 아니에요.`);
+    if(q.tag&&!tags.includes(q.tag))(badTag[q.tag]=badTag[q.tag]||[]).push(where);
+  };
+  common.forEach((q,i)=>chkQ(q,`공통 ${i+1}번`));
+  const seen=new Set();
+  const rows=studs.map(s=>{
+    const who=s.name||s.id||'(이름 없음)';
+    const u=db.users.find(x=>x.role==='student'&&x.id===s.id);
+    if(!u)errs.push(`${who}: 앱에 아이디 "${s.id??''}" 학생이 없어요.`);
+    else if(s.name&&u.name!==s.name)errs.push(`${who}: 아이디 ${s.id}의 앱 이름은 "${u.name}"이에요.`);
+    if(seen.has(s.id))errs.push(`${who}: 파일에 두 번 들어 있어요.`);seen.add(s.id);
+    const ind=Array.isArray(s.individual)?s.individual:[];
+    ind.forEach((q,i)=>chkQ(q,`${who} 개별 ${i+1}번`));
+    if(!['오답','결석','만점'].includes(s.kind))warns.push(`${who}: kind가 "${s.kind??''}"예요 (오답·결석·만점 중 하나).`);
+    else if(s.kind==='만점'&&ind.length)warns.push(`${who}: 만점인데 개별 문항이 ${ind.length}개 있어요.`);
+    else if(s.kind!=='만점'&&!ind.length)warns.push(`${who}: ${s.kind}인데 개별 문항이 없어요.`);
+    return{s,u,ind};
+  });
+  // 목록에 없는 갈래는 갈래마다 한 줄로 모아서
+  Object.entries(badTag).forEach(([t,ws])=>warns.push(`갈래 "${t}"가 앱 갈래 목록에 없어요 (그대로 저장돼요) — ${ws.length>4?ws.slice(0,4).join(', ')+` 외 ${ws.length-4}곳`:ws.join(', ')}`));
+  bundleUpload={d,common,rows,errs,warns};
+  renderBundlePreview();
+}
+// 제한시간 = 기본 + 개별 문항 수 × 추가 (기본이 비어 있으면 제한 없음)
+function bundleTimeFor(qs,base,extra){if(!base)return null;const ni=(qs||[]).filter(q=>qPart(q)==='개별').length;return Math.min(base+(extra||0)*ni,600);}
+function readExtraMin(v){const n=parseInt(v,10);return isNaN(n)||n<0?0:Math.min(n,30);}
+function bundleTitle(d){return String(d.title||`${d.school} ${d.week} 복습테스트`).trim();}
+function buildBundleExams(up,defPts,timeLimit,extra){
+  const title=bundleTitle(up.d);
+  const mk=(q,num,extra)=>Object.assign({num,type:q.type||'obj',points:q.points!=null?Number(q.points):defPts,answer:String(q.answer??'').trim(),explanation:q.explanation||'',tag:q.tag||null,subtag:q.subtag||null,bank_id:q.bank_id??null},extra);
+  return up.rows.map(({u,ind})=>{
+    const qs=[];
+    ind.forEach(q=>qs.push(mk(q,qs.length+1,{part:'개별',from:q.from??null,pair:q.pair||null})));
+    up.common.forEach((q,i)=>qs.push(mk(q,qs.length+1,{part:'공통',ci:i+1})));
+    return{name:`${title}_${u.name}`,category:'school',total_q:qs.length,questions:qs,time_limit:bundleTimeFor(qs,timeLimit,extra),bundle:title,assignee_id:u.id,assignee_name:u.name};
+  });
+}
+function renderBundlePreview(){
+  const up=bundleUpload,pv=document.getElementById('bd-preview');if(!up){pv.innerHTML='';return;}
+  const k={오답:0,결석:0,만점:0};up.rows.forEach(r=>{if(k[r.s.kind]!=null)k[r.s.kind]++;});
+  const nInd=up.rows.reduce((n,r)=>n+r.ind.length,0);
+  const exist=db.exams.filter(x=>x.bundle===bundleTitle(up.d));
+  const list=(arr,color)=>arr.length?`<div style="font-size:12px;color:${color};margin-top:6px;max-height:160px;overflow:auto">${arr.map(x=>'• '+esc(x)).join('<br>')}</div>`:'';
+  pv.innerHTML=`<div class="card" style="margin-top:10px"><strong>${esc(bundleTitle(up.d))}</strong>
+    <div style="font-size:13px;margin-top:4px">학생 ${up.rows.length}명 (오답 ${k.오답} · 결석 ${k.결석} · 만점 ${k.만점}) · 공통 ${up.common.length}문항 · 개별 문항 합계 ${nInd}개${exist.length?` · <b style="color:var(--amber)">이미 올린 묶음이에요 (${exist.length}명)</b>`:''}</div>
+    ${up.errs.length?`<div style="font-weight:700;color:var(--red);margin-top:8px">고쳐야 올릴 수 있어요 (${up.errs.length}건)</div>${list(up.errs,'var(--red)')}`:''}
+    ${up.warns.length?`<div style="font-weight:700;color:var(--amber);margin-top:8px">확인해 주세요 (${up.warns.length}건)</div>${list(up.warns,'var(--amber)')}`:''}
+    <div style="overflow-x:auto;margin-top:8px"><table class="simple"><thead><tr><th>학생</th><th>구분</th><th>개별</th><th>총 문항</th></tr></thead><tbody>${up.rows.map(r=>`<tr><td>${esc(r.u?r.u.name:(r.s.name||r.s.id))}</td><td>${esc(r.s.kind||'')}</td><td>${r.ind.length}</td><td>${r.ind.length+up.common.length}</td></tr>`).join('')}</tbody></table></div>
+    <button class="btn blue" style="margin-top:10px" ${up.errs.length?'disabled':''} onclick="uploadBundle()">학생 ${up.rows.length}명 시험 만들기</button></div>`;
+}
+async function uploadBundle(){
+  const up=bundleUpload;if(!up||up.errs.length)return;
+  const defPts=Math.max(1,parseInt(document.getElementById('bd-points').value)||5);
+  const timeLimit=readTimeLimit(document.getElementById('bd-time').value);
+  const list=buildBundleExams(up,defPts,timeLimit,readExtraMin(document.getElementById('bd-extra').value));const title=bundleTitle(up.d);
+  const exist=db.exams.filter(x=>x.bundle===title);
+  const ins=[],upd=[],skip=[];
+  list.forEach(e=>{const old=exist.find(x=>x.assignee_id===e.assignee_id);
+    if(!old)ins.push(e);else if(db.examResponses.some(r=>r.exam_id===old.id))skip.push(e.assignee_name);else upd.push([old,e]);});
+  if(!confirm(`"${title}"\n새로 만들기 ${ins.length}명${upd.length?` · 새 내용으로 바꾸기 ${upd.length}명`:''}${skip.length?`\n이미 시험을 본 ${skip.length}명(${skip.join(', ')})은 그대로 둬요.`:''}\n진행할까요?`))return;
+  if(ins.length){
+    const{data,error}=await sb.from('exams').insert(ins.map(e=>Object.assign({teacher_id:session.id},e))).select();
+    if(error){notify('올리기 실패: '+error.message+(/assignee|bundle/.test(error.message)?' (schema_add25.sql을 먼저 실행해야 해요)':''),'error');return;}
+    db.exams.unshift(...(data||[]));
+  }
+  let fail=0;
+  for(const[old,e]of upd){
+    const{error}=await sb.from('exams').update(e).eq('id',old.id);
+    if(error)fail++;else Object.assign(old,e);
+  }
+  bundleUpload=null;document.getElementById('bd-file').value='';document.getElementById('bd-preview').innerHTML='';
+  openGroups.add('e:'+up.d.school);
+  openGroups.add('b:'+title);
+  renderExamAdmin();
+  notify(`"${title}" 학생 ${ins.length+upd.length-fail}명 시험을 만들었어요.${skip.length?` (이미 본 ${skip.length}명은 그대로)`:''}${fail?` 실패 ${fail}명 — 다시 올려 주세요.`:''}`,fail?'error':'success');
 }
 
 /* ===================== 시험 — 학생 ===================== */
@@ -2546,8 +2764,17 @@ function myResp(ex){return db.examResponses.find(r=>r.exam_id===ex.id&&r.student
 async function loadExamByCode(){
   const code=document.getElementById('ex-code').value.trim().toUpperCase();
   if(!code){notify('공유코드를 입력하세요.','error');return;}
-  const ex=db.exams.find(x=>String(x.id).slice(0,8).toUpperCase()===code);
+  const ex=db.exams.find(x=>String(x.id).slice(0,8).toUpperCase()===code&&(!x.assignee_id||myAssignedExam(x)));
   if(!ex){notify('해당 코드의 시험을 찾을 수 없어요.','error');return;}
+  await openExam(ex);
+}
+// 나에게 온 시험(학생별 시험)은 코드 없이 바로 열어요
+async function openAssignedExam(id){
+  const ex=db.exams.find(x=>x.id===id&&myAssignedExam(x));if(!ex)return;
+  await openExam(ex);
+  document.getElementById('exam-take-area').scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function openExam(ex){
   stopExamTimers();
   // 다른 기기에서 이미 제출했는지 서버에서 다시 확인
   const{data:fresh}=await sb.from('exam_responses').select('*').eq('exam_id',ex.id).eq('student_name',session.name);
@@ -2564,7 +2791,7 @@ async function loadExamByCode(){
       const row={exam_id:ex.id,student_name:session.name,answers:{},score:0,correct_count:0,total_q:ex.total_q,points_earned:0,points_total:0,submitted_at:now,thoughts:{__submitted:false,__startedAt:now}};
       const{error}=await sb.from('exam_responses').upsert(row,{onConflict:'exam_id,student_name'});
       if(error){notify('시작 실패: '+error.message,'error');currentExamTaking=null;return;}
-      db.examResponses.push(row);
+      db.examResponses.push(row);renderMyAssignedExams();
     }else if(examTimeLeft(ex,myResp(ex))<=0){
       renderExamTake(ex,false);await submitExam(true);return;
     }
@@ -2614,16 +2841,18 @@ function onExamInput(){
 function renderExamTake(ex,readOnly){
   const el=document.getElementById('exam-take-area');
   const mine=myResp(ex);
-  const qs=(ex.questions||[]).map(q=>{
+  const nInd=(ex.questions||[]).filter(q=>qPart(q)==='개별').length,nCom=(ex.questions||[]).length-nInd;
+  const qs=(ex.questions||[]).map((q,i,arr)=>{
     const prevAns=mine&&mine.answers?(mine.answers[q.num]||''):'';
     const dis=readOnly?'disabled':'';
-    return `<div class="card">
+    const head=ex.bundle&&(i===0||qPart(arr[i-1])!==qPart(q))?`<div class="section-head" style="margin-top:14px"><h2 style="font-size:16px">${qPart(q)==='개별'?`① ${indivLabel(ex)} <span style="font-size:13px;color:var(--text2);font-weight:400">${nInd}문제</span>`:`${nInd?'② ':''}이번 주 복습테스트 <span style="font-size:13px;color:var(--text2);font-weight:400">${nCom}문제</span>`}</h2></div>`:'';
+    return `${head}<div class="card">
       <div class="row-between"><strong>${q.num}번</strong><span class="pill blue">${q.type==='obj'?'객관식':'주관식'} · ${q.points}점</span></div>
       ${q.type==='obj'?`<input class="form-input" id="eqa-${q.num}" type="number" min="1" max="5" placeholder="정답(1~5)" value="${esc(prevAns)}" style="margin-top:8px" oninput="onExamInput()" ${dis}>`:`<textarea class="form-input" id="eqa-${q.num}" rows="2" placeholder="답안 입력" style="margin-top:8px" oninput="onExamInput()" ${dis}>${esc(prevAns)}</textarea>`}
     </div>`;
   }).join('');
   el.innerHTML=`${ex.time_limit&&!readOnly?'<div class="exam-timer" id="exam-timer"></div>':''}
-    <div class="card"><span class="pill ${ex.category==='school'?'blue':'green'}">${examCatLabel(ex.category)}</span> <strong>${esc(ex.name)}</strong> <span style="color:var(--text2)">· 총 ${ex.total_q}문항${ex.time_limit?` · 제한 ${ex.time_limit}분`:''}</span>
+    <div class="card"><span class="pill ${ex.category==='school'?'blue':'green'}">${examCatLabel(ex.category)}</span> <strong>${esc(ex.bundle||ex.name)}</strong> <span style="color:var(--text2)">· 총 ${ex.total_q}문항${ex.time_limit?` · 제한 ${ex.time_limit}분`:''}</span>
       ${readOnly?'<div style="margin-top:6px"><span class="pill green">제출 완료</span> <span style="font-size:12px;color:var(--text2)">제출은 한 번만 할 수 있어요. 다시 보려면 쏠T에게 요청하세요.</span></div>':'<div style="margin-top:6px;font-size:12px;color:var(--amber)">제출은 한 번만 할 수 있어요. 제출 전에 답을 꼭 확인하세요.</div>'}</div>
     ${qs}
     ${readOnly?'':'<button class="btn blue" id="exam-submit-btn" onclick="submitExam(false)">제출하기</button>'}
@@ -2651,7 +2880,7 @@ async function submitExam(auto){
   const exist=myResp(ex);
   if(exist)Object.assign(exist,payload);else db.examResponses.push(payload);
   renderExamTake(ex,true);
-  renderMyExamResults();try{renderMyReportCard();}catch(e){}
+  renderMyExamResults();renderMyAssignedExams();try{renderMyReportCard();}catch(e){}
   notify(auto?'시간이 끝나 자동으로 제출됐어요.':'시험을 제출했습니다.',auto?'info':'success');
 }
 function renderExamResultBox(ex,resp){
@@ -2678,13 +2907,29 @@ async function toggleRevealAnswers(id){
   ex.answers_revealed=v;renderExamAdmin();
   notify(v?'정답을 공개했어요.':'정답 공개를 취소했어요.','success');
 }
+function renderMyAssignedExams(){
+  const el=document.getElementById('my-assigned-exams');if(!el||!session||session.role==='teacher')return;
+  const list=db.exams.filter(ex=>myAssignedExam(ex)&&!(myResp(ex)&&isSubmitted(myResp(ex))));
+  el.innerHTML=list.length?`<div class="section-head"><h2>나에게 온 시험</h2></div>`+list.map(ex=>{
+    const r=myResp(ex);const nInd=(ex.questions||[]).filter(q=>qPart(q)==='개별').length;
+    return `<div class="card row-between"><div><strong>${esc(ex.bundle||ex.name)}</strong><div style="font-size:12px;color:var(--text2);margin-top:2px">총 ${(ex.questions||[]).length}문항${nInd?` (${indivLabel(ex)} ${nInd}문제 포함)`:''}${ex.time_limit?` · 제한 ${ex.time_limit}분`:''}</div></div>
+      <button class="btn blue sm" onclick="openAssignedExam('${esc(ex.id)}')">${r?'이어서 풀기':'시작하기'}</button></div>`;
+  }).join(''):'';
+}
+// 시험 탭을 열 때 새로 온 시험이 있는지 서버에서 다시 확인
+async function refreshMyAssignedExams(){
+  if(!session||session.role==='teacher')return;
+  const{data,error}=await sb.from('exams').select('*').eq('assignee_id',session.id);
+  if(!error&&data)data.forEach(e=>{const o=db.exams.find(x=>x.id===e.id);if(o)Object.assign(o,e);else db.exams.unshift(e);});
+  renderMyAssignedExams();
+}
 function renderMyExamResults(){
   const el=document.getElementById('my-exam-results');
   const list=db.examResponses.filter(r=>r.student_name===session.name&&isSubmitted(r));
   if(!list.length){el.innerHTML='<div class="empty-hint">아직 응시한 시험이 없습니다.</div>';return;}
   el.innerHTML=list.map(r=>{
     const ex=db.exams.find(x=>x.id===r.exam_id);
-    return `<div class="card row-between"><span>${esc(ex?ex.name:'(삭제된 시험)')}</span><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">${ex?examScoreText(ex,r):r.score+'%'}${ex&&ex.answers_revealed?` <button class="btn sm" onclick="viewMyExam('${esc(ex.id)}')">정답 보기</button>`:''}</span></div>`;
+    return `<div class="card row-between"><span>${esc(ex?(ex.bundle||ex.name):'(삭제된 시험)')}</span><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">${ex?examScoreText(ex,r):r.score+'%'}${ex&&ex.answers_revealed?` <button class="btn sm" onclick="viewMyExam('${esc(ex.id)}')">정답 보기</button>`:''}</span></div>`;
   }).join('');
 }
 
@@ -3093,7 +3338,7 @@ function renderReportCardHTML(d){
   if(!d.student)return '<div class="empty-hint">학생 정보를 찾을 수 없습니다.</div>';
   const examRowsHtml=d.examRows.length?d.examRows.map(r=>{
     const ex=db.exams.find(x=>x.id===r.exam_id);
-    return `<tr><td>${esc(ex?ex.name:'(삭제된 시험)')}</td><td>${r.correct_count}/${r.total_q}</td><td>${ex&&descPending(ex,r)?`객관식 ${r.points_earned}/${examObjTotal(ex)}점 <span class="pill amber">주관식 채점 대기</span>`:r.score+'%'}</td></tr>`;
+    return `<tr><td>${esc(ex?(ex.bundle||ex.name):'(삭제된 시험)')}</td><td>${r.correct_count}/${r.total_q}</td><td>${ex&&descPending(ex,r)?`객관식 ${r.points_earned}/${examObjTotal(ex)}점 <span class="pill amber">주관식 채점 대기</span>`:ex&&ex.bundle?bundleScoreText(ex,r):r.score+'%'}</td></tr>`;
   }).join(''):'<tr><td colspan="3" style="color:var(--text2)">응시한 시험이 없습니다</td></tr>';
   return `
     <div class="card"><strong>${esc(d.student.name)}</strong> <span style="color:var(--text2)">(${esc(d.student.id)}) · ${esc(studentTag(d.student))}</span></div>
@@ -3202,6 +3447,16 @@ function rpSchoolStat(exId,school){
   const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]||a[0]-b[0]).slice(0,3).map(([n,c])=>`${n}번(${Math.round(c/rs.length*100)}%)`);
   return{avg,n:rs.length,top};
 }
+// 학생별 시험(묶음): 같은 학교·같은 묶음에서 공통 부분만으로 평균과 많이 틀린 문항 (ci = 공통 몇 번째)
+function rpBundleStat(bundle,school){
+  const ids=new Set(db.exams.filter(x=>x.bundle===bundle).map(x=>x.id));
+  const sts=db.examResponses.filter(r=>ids.has(r.exam_id)&&isSubmitted(r)&&(db.users.find(u=>u.role==='student'&&u.name===r.student_name)||{}).school===school)
+    .map(r=>partStat(db.exams.find(x=>x.id===r.exam_id),r,'공통')).filter(c=>c.n);
+  const avg=sts.length?Math.round(sts.reduce((a,c)=>a+c.score,0)/sts.length):null;
+  const cnt={};sts.forEach(c=>c.wrong.forEach(q=>{cnt[q.ci]=(cnt[q.ci]||0)+1;}));
+  const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]||a[0]-b[0]).slice(0,3).map(([ci,c])=>({ci:Number(ci),pct:Math.round(c/sts.length*100)}));
+  return{avg,n:sts.length,top};
+}
 function rpRange(ns){
   ns=[...ns].sort((a,b)=>a-b);const out=[];let s=null,p=null;const f=n=>'M'+pad2(n);
   const push=()=>out.push(s===p?f(s):f(s)+'~'+pad2(p));
@@ -3254,6 +3509,15 @@ function parentReportHTML(sid,note,start,end){
     const cs=certSortItems(db.certItems.filter(i=>certForSchool(i,u.school)&&i.due_date&&i.due_date>=w.ws&&i.due_date<=w.we));
     const I=cs.length?cs.map(i=>{const s=certSubOf(i.id,sid);return `${esc(i.title)} ${gray('('+rpMD(i.due_date)+' 마감)')} ${!s?red('<b>미제출</b>'):s.status==='approved'?`<b style="color:${C.green}">통과</b>`:s.status==='rejected'?red('<b>미통과</b>'):'<b>확인 중</b>'}`;}).join('<br>'):gray('마감 과제 없음');
     const T=d.exams.length?d.exams.map(({r,ex})=>{
+      if(ex&&ex.bundle){
+        // 학생마다 시험지가 달라요: 이번 주 공통 부분 점수·학교 평균·최다 오답 + 지난주 오답 다시 풀기는 따로
+        const c=partStat(ex,r,'공통'),i=partStat(ex,r,'개별'),st=rpBundleStat(ex.bundle,u.school);
+        const myNum=ci=>((ex.questions||[]).find(q=>q.ci===ci)||{}).num;
+        return `<b>${esc(ex.bundle)}</b><br>`+(c.n?`<b style="color:${C.blue}">${c.score}점</b> ${gray(`(${c.right}/${c.n})`+(st.avg!=null?` · 학교 평균 ${st.avg}점 · ${st.n}명 응시`:''))}`
+          +`<div style="font-size:12px">틀린 문항: ${c.wrong.length?c.wrong.map(q=>q.num).join(', ')+'번':`<span style="color:${C.green}">없음</span>`}</div>`
+          +(st.top.length?`<div style="font-size:12px;color:${C.sub}">학교 최다 오답: ${st.top.map(t=>`${myNum(t.ci)}번(${t.pct}%)`).join(', ')}</div>`:''):'')
+          +(i.n?`<div style="font-size:12px">${indivLabel(ex)} ${i.n}문제 중 <b>${i.right}개</b> 맞힘</div>`:'');
+      }
       const st=rpSchoolStat(r.exam_id,u.school);const wr=rpWrong(r,ex);
       return `<b>${esc(ex?ex.name:'시험')}</b><br><b style="color:${C.blue}">${r.score}점</b> ${gray(`(${r.correct_count}/${r.total_q})`+(st.avg!=null?` · 학교 평균 ${st.avg}점 · ${st.n}명 응시`:''))}`
         +`<div style="font-size:12px">틀린 문항: ${wr.length?wr.join(', ')+'번':`<span style="color:${C.green}">없음</span>`}</div>`

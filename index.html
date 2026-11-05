@@ -2256,9 +2256,10 @@ function gradeExam(ex,answers,descPoints){
   let pointsEarned=0,pointsTotal=0,correctCount=0;
   (ex.questions||[]).forEach(q=>{
     pointsTotal+=q.points||0;
-    if(q.type==='obj'){if(String(answers[q.num]||'').trim()!==''&&String(answers[q.num]).trim()===String(q.answer).trim()){pointsEarned+=q.points||0;correctCount++;}}
+    if(q.type==='obj'){const f=objFrac(q,answers[q.num]);pointsEarned+=(q.points||0)*f;if(f===1)correctCount++;}
     else if(descPoints&&descPoints[q.num]!=null){pointsEarned+=Math.min(descPoints[q.num],q.points||0);}
   });
+  pointsEarned=Math.round(pointsEarned*10)/10;
   return{correct_count:correctCount,points_earned:pointsEarned,points_total:pointsTotal,total_q:(ex.questions||[]).length,score:pointsTotal>0?Math.round(pointsEarned/pointsTotal*100):0};
 }
 function examScoreText(ex,r){
@@ -2269,14 +2270,35 @@ function examScoreText(ex,r){
 function examCatLabel(c){return c==='school'?'내신':'정규';}
 /* --- 학생별 시험 (묶음) : 문항마다 part '개별'(지난주 오답 다시 풀기) / '공통'(이번 주, ci = 공통 몇 번째) --- */
 function qPart(q){return q&&q.part==='개별'?'개별':'공통';}
-function qRight(q,ans){const a=String((ans||{})[q.num]??'').trim();return a!==''&&a===String(q.answer).trim();}
+/* --- 객관식 정답: 하나("3") 또는 여러 개("2,5,7" = 모두 고르시오). choices = 선지 수(없으면 5) --- */
+// "7, 2,5" → "2,5,7" (순서·띄어쓰기와 상관없이 비교)
+function normAns(v){return [...new Set(String(v??'').split(/[^0-9]+/).filter(Boolean).map(Number))].sort((x,y)=>x-y).join(',');}
+function qMulti(q){return !!(q&&q.type!=='desc'&&(q.multi||Number(q.choices)>5||normAns(q.answer).includes(',')));}
+function qChoices(q){const n=parseInt(q&&q.choices,10);if(n>=2)return n;return Math.max(5,...normAns(q&&q.answer).split(',').filter(Boolean).map(Number));}
+// 모두 고르시오 채점: 'all' = 전부 맞혀야 만점 / 'partial' = (맞게 고른 수 − 잘못 고른 수) ÷ 정답 수
+const MULTI_GRADE='all';
+// 객관식 한 문항에서 받는 비율 (0~1)
+function objFrac(q,a){
+  const A=normAns(a),K=normAns(q.answer);if(!A||!K)return 0;if(A===K)return 1;
+  if(MULTI_GRADE!=='partial'||!qMulti(q))return 0;
+  const k=K.split(','),sel=A.split(','),hit=sel.filter(x=>k.includes(x)).length;
+  return Math.max(0,(hit-(sel.length-hit))/k.length);
+}
+function qRight(q,ans){return objFrac(q,(ans||{})[q.num])===1;}
+// 모두 고르시오 결과 한 줄: "정답 3개 중 2개 고름 · 오답 1개 고름"
+function multiNote(q,a){
+  if(!qMulti(q))return '';const k=normAns(q.answer).split(',').filter(Boolean),sel=normAns(a).split(',').filter(Boolean);
+  const hit=sel.filter(x=>k.includes(x)).length,bad=sel.length-hit;
+  return `정답 ${k.length}개 중 ${hit}개 고름${bad?` · 오답 ${bad}개 고름`:''}`;
+}
+function fmtAns(v){const n=normAns(v);return n?n.split(',').join(', '):String(v??'');}
 // 한 부분(공통/개별)만 채점: 맞힌 문항 수, 점수(100점 환산), 틀린 문항
 function partStat(ex,r,part){
   const qs=((ex&&ex.questions)||[]).filter(q=>qPart(q)===part);
   const ans=(r&&r.answers)||{},dp=(r&&r.thoughts&&r.thoughts.__descPoints)||{};
   let right=0,earned=0,total=0;const wrong=[];
   qs.forEach(q=>{const p=q.points||0;total+=p;
-    if(q.type==='obj'){if(qRight(q,ans)){right++;earned+=p;}else wrong.push(q);}
+    if(q.type==='obj'){const f=objFrac(q,ans[q.num]);earned+=p*f;if(f===1)right++;else wrong.push(q);}
     else{const g=dp[q.num]!=null?Math.min(dp[q.num],p):0;earned+=g;if(p&&g>=p)right++;else wrong.push(q);}
   });
   return{n:qs.length,right,earned,total,score:total>0?Math.round(earned/total*100):(qs.length?Math.round(right/qs.length*100):0),wrong};
@@ -2334,7 +2356,7 @@ function tagStats(name,field='tag'){
     (ex.questions||[]).forEach(q=>{
       const key=q[field];if(!key)return;
       let got;
-      if(q.type==='obj')got=String(ans[q.num]||'').trim()!==''&&String(ans[q.num]).trim()===String(q.answer).trim()?1:0;
+      if(q.type==='obj')got=objFrac(q,ans[q.num]);
       else{if(!dp||dp[q.num]==null)return;got=q.points?Math.min(dp[q.num],q.points)/q.points:0;}
       const s=by[key]||(by[key]={tag:key,n:0,got:0,wrong:[]});
       s.n++;s.got+=got;if(got<1)s.wrong.push(`${ex.name} ${q.num}번`);
@@ -2397,10 +2419,10 @@ function addExamQRow(q){
     <select class="form-select exq-tag">${tagOptions(q&&q.tag)}</select>
     <select class="form-select exq-sub">${tagOptions(q&&q.subtag,'sub')}</select>
     <input class="form-input exq-points" type="number" value="2">
-    <input class="form-input exq-answer" placeholder="정답 (객관식은 숫자)">
+    <input class="form-input exq-answer" placeholder="정답 (여러 개면 2,5,7)">
     <input class="form-input exq-expl" placeholder="해설(선택)">
     <button class="btn red sm" type="button" onclick="this.closest('.exq-row').remove();renumberExamRows()">삭제</button>`;
-  if(q){const x={};['part','ci','from','pair','bank_id'].forEach(k=>{if(q[k]!=null)x[k]=q[k];});if(Object.keys(x).length)div.dataset.extra=JSON.stringify(x);} // 묶음 시험의 공통/개별 표시는 수정해도 그대로
+  if(q){const x={};['part','ci','from','pair','bank_id','choices','multi'].forEach(k=>{if(q[k]!=null)x[k]=q[k];});if(Object.keys(x).length)div.dataset.extra=JSON.stringify(x);} // 묶음 시험의 공통/개별 표시는 수정해도 그대로
   if(q){div.querySelector('.exq-type').value=q.type;div.querySelector('.exq-points').value=q.points;div.querySelector('.exq-answer').value=q.answer||'';div.querySelector('.exq-expl').value=q.explanation||'';}
   wrap.appendChild(div);
 }
@@ -2680,7 +2702,14 @@ async function readBundleFile(inp){
   const chkQ=(q,where)=>{
     const t=q.type||'obj';
     if(!['obj','desc'].includes(t))errs.push(`${where}: type은 obj 또는 desc여야 해요.`);
-    if(t==='obj'&&!/^[1-5]$/.test(String(q.answer??'').trim()))errs.push(`${where}: 객관식 정답은 1~5 숫자 하나여야 해요 (지금: "${q.answer??''}").`);
+    if(t==='obj'){
+      const nc=q.choices==null?5:Number(q.choices),raw=Array.isArray(q.answer)?q.answer.join(','):String(q.answer??'').trim();
+      const nums=raw.split(/\s*,\s*/).filter(x=>x!=='');
+      if(!(Number.isInteger(nc)&&nc>=5&&nc<=12))errs.push(`${where}: choices(선지 수)는 5~12 숫자여야 해요 (지금: "${q.choices}").`);
+      else if(!nums.length||nums.some(x=>!/^\d+$/.test(x)||+x<1||+x>nc))errs.push(`${where}: 정답은 1~${nc} 숫자여야 하고, 여러 개면 "2,5,7"처럼 쉼표로 써요 (지금: "${raw}").`);
+      else if(new Set(nums.map(Number)).size!==nums.length)errs.push(`${where}: 정답 번호가 겹쳐요 (지금: "${raw}").`);
+      if(q.multi!=null&&typeof q.multi!=='boolean')errs.push(`${where}: multi는 true 또는 false여야 해요.`);
+    }
     if(q.points!=null&&!(Number(q.points)>=0))errs.push(`${where}: 배점이 숫자가 아니에요.`);
     if(q.tag&&!tags.includes(q.tag))(badTag[q.tag]=badTag[q.tag]||[]).push(where);
   };
@@ -2710,7 +2739,9 @@ function readExtraMin(v){const n=parseInt(v,10);return isNaN(n)||n<0?0:Math.min(
 function bundleTitle(d){return String(d.title||`${d.school} ${d.week} 복습테스트`).trim();}
 function buildBundleExams(up,defPts,timeLimit,extra){
   const title=bundleTitle(up.d);
-  const mk=(q,num,extra)=>Object.assign({num,type:q.type||'obj',points:q.points!=null?Number(q.points):defPts,answer:String(q.answer??'').trim(),explanation:q.explanation||'',tag:q.tag||null,subtag:q.subtag||null,bank_id:q.bank_id??null},extra);
+  const mk=(q,num,extra)=>Object.assign({num,type:q.type||'obj',points:q.points!=null?Number(q.points):defPts,
+    answer:(q.type||'obj')==='obj'?normAns(Array.isArray(q.answer)?q.answer.join(','):q.answer):String(q.answer??'').trim()},
+    (q.type||'obj')==='obj'&&q.choices!=null&&Number(q.choices)!==5?{choices:Number(q.choices)}:{},q.multi?{multi:true}:{},{explanation:q.explanation||'',tag:q.tag||null,subtag:q.subtag||null,bank_id:q.bank_id??null},extra);
   return up.rows.map(({u,ind})=>{
     const qs=[];
     ind.forEach(q=>qs.push(mk(q,qs.length+1,{part:'개별',from:q.from??null,pair:q.pair||null})));
@@ -2722,10 +2753,11 @@ function renderBundlePreview(){
   const up=bundleUpload,pv=document.getElementById('bd-preview');if(!up){pv.innerHTML='';return;}
   const k={오답:0,결석:0,만점:0};up.rows.forEach(r=>{if(k[r.s.kind]!=null)k[r.s.kind]++;});
   const nInd=up.rows.reduce((n,r)=>n+r.ind.length,0);
+  const nMulti=up.common.filter(q=>qMulti(Object.assign({},q,{answer:Array.isArray(q.answer)?q.answer.join(','):q.answer}))).length;
   const exist=db.exams.filter(x=>x.bundle===bundleTitle(up.d));
   const list=(arr,color)=>arr.length?`<div style="font-size:12px;color:${color};margin-top:6px;max-height:160px;overflow:auto">${arr.map(x=>'• '+esc(x)).join('<br>')}</div>`:'';
   pv.innerHTML=`<div class="card" style="margin-top:10px"><strong>${esc(bundleTitle(up.d))}</strong>
-    <div style="font-size:13px;margin-top:4px">학생 ${up.rows.length}명 (오답 ${k.오답} · 결석 ${k.결석} · 만점 ${k.만점}) · 공통 ${up.common.length}문항 · 개별 문항 합계 ${nInd}개${exist.length?` · <b style="color:var(--amber)">이미 올린 묶음이에요 (${exist.length}명)</b>`:''}</div>
+    <div style="font-size:13px;margin-top:4px">학생 ${up.rows.length}명 (오답 ${k.오답} · 결석 ${k.결석} · 만점 ${k.만점}) · 공통 ${up.common.length}문항${nMulti?` (모두 고르시오 ${nMulti})`:''} · 개별 문항 합계 ${nInd}개${exist.length?` · <b style="color:var(--amber)">이미 올린 묶음이에요 (${exist.length}명)</b>`:''}</div>
     ${up.errs.length?`<div style="font-weight:700;color:var(--red);margin-top:8px">고쳐야 올릴 수 있어요 (${up.errs.length}건)</div>${list(up.errs,'var(--red)')}`:''}
     ${up.warns.length?`<div style="font-weight:700;color:var(--amber);margin-top:8px">확인해 주세요 (${up.warns.length}건)</div>${list(up.warns,'var(--amber)')}`:''}
     <div style="overflow-x:auto;margin-top:8px"><table class="simple"><thead><tr><th>학생</th><th>구분</th><th>개별</th><th>총 문항</th></tr></thead><tbody>${up.rows.map(r=>`<tr><td>${esc(r.u?r.u.name:(r.s.name||r.s.id))}</td><td>${esc(r.s.kind||'')}</td><td>${r.ind.length}</td><td>${r.ind.length+up.common.length}</td></tr>`).join('')}</tbody></table></div>
@@ -2824,7 +2856,7 @@ function startExamTimers(ex){
 }
 function collectExamAnswers(ex){
   const answers={};
-  (ex.questions||[]).forEach(q=>{const el=document.getElementById('eqa-'+q.num);answers[q.num]=el?el.value.trim():'';});
+  (ex.questions||[]).forEach(q=>{const el=document.getElementById('eqa-'+q.num);answers[q.num]=!el?'':el.dataset.multi?[...el.querySelectorAll('input:checked')].map(x=>x.value).join(','):el.value.trim();});
   return answers;
 }
 // 제한시간 시험은 입력할 때마다 답안을 임시 저장 (새로고침해도 이어서)
@@ -2838,6 +2870,12 @@ function onExamInput(){
     if(!error)r.answers=answers;
   },1500);
 }
+// 모두 고르시오: 1~N 번호를 눌러 여러 개 고르기 (누른 번호는 파랗게)
+function multiPickHtml(q,prev,dis){
+  const on=normAns(prev).split(',');
+  return `<div style="font-size:12px;color:var(--text2);margin-top:6px">맞는 것을 모두 누르세요 (다시 누르면 취소)</div>
+    <div class="mpick" id="eqa-${q.num}" data-multi="1" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${Array.from({length:qChoices(q)},(_,i)=>i+1).map(n=>`<label style="display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border,#d6dae1);border-radius:8px;padding:6px 10px;min-width:44px;cursor:pointer;font-weight:700"><input type="checkbox" value="${n}" ${on.includes(String(n))?'checked':''} onchange="onExamInput()" ${dis}>${n}</label>`).join('')}</div>`;
+}
 function renderExamTake(ex,readOnly){
   const el=document.getElementById('exam-take-area');
   const mine=myResp(ex);
@@ -2847,8 +2885,8 @@ function renderExamTake(ex,readOnly){
     const dis=readOnly?'disabled':'';
     const head=ex.bundle&&(i===0||qPart(arr[i-1])!==qPart(q))?`<div class="section-head" style="margin-top:14px"><h2 style="font-size:16px">${qPart(q)==='개별'?`① ${indivLabel(ex)} <span style="font-size:13px;color:var(--text2);font-weight:400">${nInd}문제</span>`:`${nInd?'② ':''}이번 주 복습테스트 <span style="font-size:13px;color:var(--text2);font-weight:400">${nCom}문제</span>`}</h2></div>`:'';
     return `${head}<div class="card">
-      <div class="row-between"><strong>${q.num}번</strong><span class="pill blue">${q.type==='obj'?'객관식':'주관식'} · ${q.points}점</span></div>
-      ${q.type==='obj'?`<input class="form-input" id="eqa-${q.num}" type="number" min="1" max="5" placeholder="정답(1~5)" value="${esc(prevAns)}" style="margin-top:8px" oninput="onExamInput()" ${dis}>`:`<textarea class="form-input" id="eqa-${q.num}" rows="2" placeholder="답안 입력" style="margin-top:8px" oninput="onExamInput()" ${dis}>${esc(prevAns)}</textarea>`}
+      <div class="row-between"><strong>${q.num}번</strong><span class="pill blue">${q.type==='obj'?(qMulti(q)?`모두 고르시오 · ${qChoices(q)}지선다`:'객관식'):'주관식'} · ${q.points}점</span></div>
+      ${q.type==='obj'&&qMulti(q)?multiPickHtml(q,prevAns,dis):q.type==='obj'?`<input class="form-input" id="eqa-${q.num}" type="number" min="1" max="${qChoices(q)}" placeholder="정답(1~${qChoices(q)})" value="${esc(prevAns)}" style="margin-top:8px" oninput="onExamInput()" ${dis}>`:`<textarea class="form-input" id="eqa-${q.num}" rows="2" placeholder="답안 입력" style="margin-top:8px" oninput="onExamInput()" ${dis}>${esc(prevAns)}</textarea>`}
     </div>`;
   }).join('');
   el.innerHTML=`${ex.time_limit&&!readOnly?'<div class="exam-timer" id="exam-timer"></div>':''}
@@ -2887,9 +2925,9 @@ function renderExamResultBox(ex,resp){
   const box=document.getElementById('exam-result-box');
   if(!box)return;
   // 정답·해설은 쏠T가 "정답 공개"를 눌러야 보여요
-  const wrong=(ex.questions||[]).filter(q=>q.type==='obj'&&String(resp.answers[q.num]||'').trim()!==String(q.answer).trim());
+  const wrong=(ex.questions||[]).filter(q=>q.type==='obj'&&!qRight(q,resp.answers));
   const detail=ex.answers_revealed
-    ?(wrong.length?wrong.map(q=>`<div class="card"><strong>${q.num}번</strong>${q.tag?` <span class="pill blue">${esc(q.tag)}</span>`:''}${q.subtag?` <span class="pill amber">${esc(q.subtag)}</span>`:''} 오답 · 내 답 ${esc(resp.answers[q.num]||'-')} · 정답 ${esc(q.answer)}${q.explanation?`<div style="color:var(--text2);margin-top:4px">${esc(q.explanation)}</div>`:''}</div>`).join(''):'<div class="empty-hint">객관식을 모두 맞혔어요!</div>')
+    ?(wrong.length?wrong.map(q=>`<div class="card"><strong>${q.num}번</strong>${q.tag?` <span class="pill blue">${esc(q.tag)}</span>`:''}${q.subtag?` <span class="pill amber">${esc(q.subtag)}</span>`:''} 오답 · 내 답 ${esc(fmtAns(resp.answers[q.num])||'-')} · 정답 ${esc(fmtAns(q.answer))}${qMulti(q)?`<div style="font-size:13px;color:var(--amber);margin-top:2px">${multiNote(q,resp.answers[q.num])}</div>`:''}${q.explanation?`<div style="color:var(--text2);margin-top:4px">${esc(q.explanation)}</div>`:''}</div>`).join(''):'<div class="empty-hint">객관식을 모두 맞혔어요!</div>')
     :'<div class="empty-hint">정답과 해설은 쏠T가 공개하면 볼 수 있어요.</div>';
   box.innerHTML=`<div class="card"><strong>채점 결과</strong> · ${examScoreText(ex,resp)}${resp.thoughts&&resp.thoughts.__autoSubmitted?' <span class="pill amber">시간 종료 자동 제출</span>':''}</div>${detail}`;
 }
@@ -3437,7 +3475,7 @@ function reportWeeks(s,e){
   }
   return out;
 }
-function rpWrong(r,ex){return((ex&&ex.questions)||[]).filter(q=>q.type!=='desc'&&q.answer!=null&&String((r.answers||{})[q.num]??'').trim()!==String(q.answer).trim()).map(q=>q.num);}
+function rpWrong(r,ex){return((ex&&ex.questions)||[]).filter(q=>q.type!=='desc'&&normAns(q.answer)!==''&&!qRight(q,r.answers)).map(q=>q.num);}
 // 같은 학교에서 그 시험을 본 학생들의 평균과 가장 많이 틀린 문항 3개
 function rpSchoolStat(exId,school){
   const ex=db.exams.find(x=>x.id===exId);

@@ -2569,7 +2569,10 @@ function renderExamAdmin(){
   const el=document.getElementById('exam-list');
   if(!db.exams.length){el.innerHTML='<div class="empty-hint">만든 시험이 없습니다.</div>';return;}
   const schs=schoolNames();
-  const schOf=ex=>schs.find(n=>(ex.name||'').includes(n)||(ex.name||'').includes(n.replace(/고$/,'')))||'';
+  // 학교 정하기: 학생별 시험은 받는 학생의 학교 → 이름에 학교 전체 이름("현암고") → 짧은 이름("현암") 순서
+  // (짧은 이름을 먼저 보면 "수지올가_현암고 …"가 '수지'에 걸려 수지고로 갔어요, 11-06)
+  const schOf=ex=>{const u=ex.assignee_id&&db.users.find(x=>x.id===ex.assignee_id);if(u&&u.school)return u.school;
+    const nm=`${ex.bundle||''} ${ex.name||''}`;return schs.find(n=>nm.includes(n))||schs.find(n=>nm.includes(n.replace(/고$/,'')))||'';};
   const card=ex=>{
     const code=String(ex.id).slice(0,8).toUpperCase();
     const list=db.examResponses.filter(r=>r.exam_id===ex.id);

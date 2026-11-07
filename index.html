@@ -2799,8 +2799,9 @@ function buildBundleExams(up,defPts,timeLimit,extra){
     ...['work','area','detail'].map(k=>String(q[k]??'').trim()?{[k]:String(q[k]).trim()}:{}),{explanation:q.explanation||'',tag:q.tag||null,subtag:q.subtag||null,bank_id:q.bank_id??null},extra);
   return up.rows.map(({u,ind})=>{
     const qs=[];
-    ind.forEach(q=>qs.push(mk(q,qs.length+1,{part:'개별',from:q.from??null,pair:q.pair||null})));
+    // 순서: 공통 1번부터 → 개별(지난주 오답 다시 풀기)이 뒤 (쏠T 결정 11-07). 채점·성적표는 part·ci 표시로 계산해서 순서와 상관없어요.
     up.common.forEach((q,i)=>qs.push(mk(q,qs.length+1,{part:'공통',ci:i+1})));
+    ind.forEach(q=>qs.push(mk(q,qs.length+1,{part:'개별',from:q.from??null,pair:q.pair||null})));
     return{name:`${title}_${u.name}`,category:'school',total_q:qs.length,questions:qs,time_limit:bundleTimeFor(qs,timeLimit,extra),bundle:title,assignee_id:u.id,assignee_name:u.name};
   });
 }
@@ -2936,10 +2937,11 @@ function renderExamTake(ex,readOnly){
   const el=document.getElementById('exam-take-area');
   const mine=myResp(ex);
   const nInd=(ex.questions||[]).filter(q=>qPart(q)==='개별').length,nCom=(ex.questions||[]).length-nInd;
+  const mk2=i=>nInd&&nCom?(i===0?'① ':'② '):''; // 먼저 나오는 부분이 ①
   const qs=(ex.questions||[]).map((q,i,arr)=>{
     const prevAns=mine&&mine.answers?(mine.answers[q.num]||''):'';
     const dis=readOnly?'disabled':'';
-    const head=ex.bundle&&(i===0||qPart(arr[i-1])!==qPart(q))?`<div class="section-head" style="margin-top:14px"><h2 style="font-size:16px">${qPart(q)==='개별'?`① ${indivLabel(ex)} <span style="font-size:13px;color:var(--text2);font-weight:400">${nInd}문제</span>`:`${nInd?'② ':''}이번 주 복습테스트 <span style="font-size:13px;color:var(--text2);font-weight:400">${nCom}문제</span>`}</h2></div>`:'';
+    const head=ex.bundle&&(i===0||qPart(arr[i-1])!==qPart(q))?`<div class="section-head" style="margin-top:14px"><h2 style="font-size:16px">${qPart(q)==='개별'?`${mk2(i)}${indivLabel(ex)} <span style="font-size:13px;color:var(--text2);font-weight:400">${nInd}문제</span>`:`${mk2(i)}이번 주 복습테스트 <span style="font-size:13px;color:var(--text2);font-weight:400">${nCom}문제</span>`}</h2></div>`:'';
     return `${head}<div class="card">
       <div class="row-between"><strong>${q.num}번</strong><span class="pill blue">${q.type==='obj'?(qMulti(q)?`모두 고르시오 · ${qChoices(q)}지선다`:'객관식'):'주관식'} · ${q.points}점</span></div>
       ${q.type==='obj'&&qMulti(q)?multiPickHtml(q,prevAns,dis):q.type==='obj'?`<input class="form-input" id="eqa-${q.num}" type="number" min="1" max="${qChoices(q)}" placeholder="정답(1~${qChoices(q)})" value="${esc(prevAns)}" style="margin-top:8px" oninput="onExamInput()" ${dis}>`:`<textarea class="form-input" id="eqa-${q.num}" rows="2" placeholder="답안 입력" style="margin-top:8px" oninput="onExamInput()" ${dis}>${esc(prevAns)}</textarea>`}

@@ -898,7 +898,7 @@ async function loadAll(attempt=0){
       sb.from('schools').select('*'),
       sb.from('grammar_enroll').select('*'),
       sb.from('app_settings').select('*'),
-      sb.from('clinic_slots').select('*')
+      sb.from('clinic_times').select('*')
     ]);
     if(u.error)throw new Error(u.error.message);
     if(v.error)throw new Error(v.error.message);
@@ -1720,14 +1720,13 @@ function renderStudentHome(){
   const row=(tone,tag,title,sub,btn,act)=>`<div class="h-row ${tone}"><div class="h-txt"><div class="h-tag">${tag}</div><div class="h-title">${title}</div>${sub?`<div class="h-sub">${sub}</div>`:''}</div><button class="btn${tone==='gray'?'':' blue'} sm" onclick="${act}">${btn}</button></div>`;
   const rows=[];
   const clinicRows=clinicHomeRows();
-  clinicRows.filter(r=>r.tone==='red').forEach(r=>rows.push(row(r.tone,r.tag,r.title,r.sub,r.btn,`goTab('s-clinic')`)));
+  const urgent=clinicRows.filter(r=>r.tone==='red').map(r=>row(r.tone,r.tag,r.title,r.sub,r.btn,`goTab('s-clinic')`)); // 쏠T 지정: 공지보다 위
   makeup.forEach(v=>{const p=getPct(sid,v.id);rows.push(row('red','보강 영상',esc(v.title),`${mdWd(v.class_date)} 결석한 수업이에요 · ${p}% 봤어요`,p>0?'이어서 보기':'보기',`openPlay('${esc(v.id)}')`));});
   fresh.forEach(v=>rows.push(row('blue','새 강의 영상',esc(v.title),v.class_date?`${mdWd(v.class_date)} 수업`:'','보기',`openPlay('${esc(v.id)}')`)));
   certs.slice(0,4).forEach(({item,state})=>rows.push(row(state==='open'?'amber':'red','인증 과제',esc(item.title),state==='rejected'?'통과하지 못했어요. 다시 해서 내 주세요.':certDueText(item),state==='rejected'?'다시 내기':'내러 가기',`goTab('s-cert')`)));
   if(certs.length>4)rows.push(`<div class="h-more" onclick="goTab('s-cert')">인증 과제 ${certs.length-4}개 더 보기 ›</div>`);
   clinicRows.filter(r=>r.tone!=='red').forEach(r=>rows.push(row(r.tone,r.tag,r.title,r.sub,r.btn,`goTab('s-clinic')`)));
   if(cur){const{title}=splitTitle(cur.set.lesson_title||cur.set.name);rows.push(row(weekOk?'gray':'blue','어휘 미션',`MISSION ${pad2(cur.no)} · ${esc(title)}`,weekOk?`이번 주 목표 ${VOCAB_WEEK_GOAL}개 달성! 더 해도 좋아요`:`이번 주 목표 ${VOCAB_WEEK_GOAL}개 중 ${weekDone}개 · 다 맞혀야 클리어예요`,cur.tries?'재도전':'도전하기',`goTab('s-vocab');openVocabStudy('${esc(cur.set.id)}')`));}
-  unread.slice(0,2).forEach(a=>rows.push(row('blue','새 공지',esc(a.title),'','읽기',`goTab('s-announce')`)));
   going.forEach(v=>{const p=getPct(sid,v.id);rows.push(row('gray','보던 영상',esc(v.title),`${p}% 봤어요`,'이어서 보기',`openPlay('${esc(v.id)}')`));});
   if(g&&g.next)rows.push(row('gray','문법 기초',`${g.next.no}강 ${esc(g.next.v.title)}`,`완강 ${g.done}/${g.total}강`,g.next.pct>0?'이어서 보기':'보기',`openPlay('${esc(g.next.v.id)}')`));
 
@@ -1739,8 +1738,10 @@ function renderStudentHome(){
       ${tile(st.length?`${weekOk?'✓ ':''}${weekDone}<small>/${VOCAB_WEEK_GOAL}</small>`:'-','이번 주 어휘','s-vocab',false)}
       ${tile(unread.length,'새 공지','s-announce',false)}
     </div>
+    ${urgent.length?`<div class="h-list" style="margin-top:16px">${urgent.join('')}</div>`:''}
+    ${homeAnnounceHTML(sid)}
     <div class="section-head" style="margin-top:22px"><h2>할 일</h2></div>
-    ${rows.length?`<div class="h-list">${rows.join('')}</div>`:'<div class="empty-hint">🎉 지금 할 일을 모두 끝냈어요!</div>'}`;
+    ${rows.length||urgent.length?(rows.length?`<div class="h-list">${rows.join('')}</div>`:'<div class="empty-hint">위 클리닉 지정을 확인해 주세요.</div>'):'<div class="empty-hint">🎉 지금 할 일을 모두 끝냈어요!</div>'}`;
 }
 function renderLectures(){
   const el=document.getElementById('lecture-grid');if(!el)return; // 일반 강의 탭은 없앴어요
@@ -3316,7 +3317,7 @@ async function setCertStatus(subId,status){
   notify(!had?'통과로 처리했습니다.':cleared?'통과로 처리하고 사진·영상을 서버에서 지웠어요.':'통과로 처리했어요. 사진·영상은 다음에 앱을 열 때 다시 지울게요.',cleared?'info':'error');
 }
 /* ===================== 클리닉 신청 ===================== */
-// 시간대는 누구나 읽고(clinic_slots), 신청 기록은 서버 함수로만 (학생은 자리 수·내 기록, 강사는 전체 명단 · schema_add26)
+// 시간대는 누구나 읽고(clinic_times), 신청 기록은 서버 함수로만 (학생은 자리 수·내 기록, 강사는 전체 명단 · schema_add26)
 // 두 종류: kind='assigned' 쏠T가 지정(학생은 확인 또는 못 오는 사유만, 취소 불가) / kind='self' 학생이 스스로 신청(시작 전까지 취소)
 function clinicStartAt(sl){const [y,m,d]=sl.date.split('-').map(Number);const [hh,mm]=String(sl.start_time||'00:00').split(':').map(Number);return new Date(y,m-1,d,hh,mm);}
 function clinicClosed(sl){return Date.now()>=clinicStartAt(sl).getTime();}
@@ -3394,10 +3395,13 @@ function clinicHomeRows(){
   list.forEach(sl=>{const b=db.clinicBookings.find(x=>x.slot_id===sl.id);if(!clinicAssigned(b))return;
     out.push({tone:b.confirmed_at||b.decline_reason?'gray':'red',tag:'클리닉 지정',title:`${mdWd(sl.date)} ${clinicTime(sl)} 쏠T가 불렀어요`,sub:b.decline_reason?'못 온다고 알렸어요':b.confirmed_at?'확인했어요':esc(b.reason||'확인하거나 못 오는 사유를 적어 주세요'),btn:b.confirmed_at||b.decline_reason?'보기':'확인하기'});});
   const mine=list.filter(sl=>{const b=db.clinicBookings.find(x=>x.slot_id===sl.id);return b&&!clinicAssigned(b);});
-  mine.slice(0,2).forEach(sl=>out.push({tone:'gray',tag:'클리닉',title:`${mdWd(sl.date)} ${clinicTime(sl)} 신청함`,sub:esc((db.clinicBookings.find(b=>b.slot_id===sl.id)||{}).memo||''),btn:'보기'}));
+  mine.slice(0,2).forEach(sl=>out.push({tone:'gray',tag:'클리닉',title:`신청함: ${mdWd(sl.date)} ${clinicTime(sl)}`,sub:esc((db.clinicBookings.find(b=>b.slot_id===sl.id)||{}).memo||''),btn:'보기'}));
+  // 지정도 신청도 없는 날: 열린 시간과 남은 자리
   const busy=new Set(list.filter(sl=>db.clinicBookings.some(b=>b.slot_id===sl.id)).map(sl=>sl.date));
-  const openDays=[...new Set(list.filter(sl=>!busy.has(sl.date)&&certForSchool(sl,session.school)&&clinicLeft(sl)!==0).map(sl=>sl.date))].sort();
-  if(openDays.length)out.push({tone:'blue',tag:'클리닉',title:`${openDays.slice(0,2).map(mdWd).join(', ')} 클리닉 신청 받는 중`,sub:'오고 싶으면 시간을 골라 신청하세요',btn:'신청하기'});
+  const open=list.filter(sl=>!busy.has(sl.date)&&certForSchool(sl,session.school)&&clinicLeft(sl)!==0);
+  const days=[...new Set(open.map(sl=>sl.date))].sort().slice(0,2);
+  days.forEach(d=>{const ts=open.filter(sl=>sl.date===d);
+    out.push({tone:'blue',tag:'클리닉 신청 가능',title:`${mdWd(d)} 클리닉`,sub:ts.map(sl=>`${clinicTime(sl)}${sl.capacity?` 남은 ${clinicLeft(sl)}자리`:''}`).join(' · '),btn:'신청하기'});});
   return out;
 }
 // --- 강사 ---
@@ -3585,26 +3589,57 @@ async function addAnnouncement(){
   const content=document.getElementById('an-content').value.trim();
   if(!title){notify('제목을 입력하세요.','error');return;}
   const row={id:uid('an_'),title,content};
-  const{error}=await sb.from('announcements').insert(row);
+  const{error}=await sb.from('announcements').insert(row);row.created_at=new Date().toISOString();
   if(error){notify('등록 실패: '+error.message+' (schema_add2.sql을 실행하셨는지 확인해주세요)','error');return;}
   db.announcements.unshift(row);
   document.getElementById('an-title').value='';document.getElementById('an-content').value='';
   renderAnnounceAdmin();
   notify('공지를 등록했습니다.','success');
 }
+let annEditId=null;
+async function saveAnnouncement(id){
+  const a=db.announcements.find(x=>x.id===id);if(!a)return;
+  const title=document.getElementById('ae-title').value.trim(),content=document.getElementById('ae-content').value.trim();
+  if(!title){notify('제목을 입력하세요.','error');return;}
+  const{error}=await sb.from('announcements').update({title,content}).eq('id',id);
+  if(error){notify('수정 실패: '+error.message,'error');return;}
+  Object.assign(a,{title,content});annEditId=null;renderAnnounceAdmin();notify('공지를 고쳤어요.','success');
+}
+async function deleteAnnouncement(id){
+  const a=db.announcements.find(x=>x.id===id);if(!a)return;
+  if(!confirm(`"${a.title}" 공지를 지울까요? 학생 화면에서도 사라져요.`))return;
+  await sb.from('announcement_reads').delete().eq('announcement_id',id);   // 읽음 기록 먼저 (막혀 있어도 공지는 지워요)
+  const{error}=await sb.from('announcements').delete().eq('id',id);
+  if(error){notify('삭제 실패: '+error.message,'error');return;}
+  db.announcements=db.announcements.filter(x=>x.id!==id);db.announcementReads=db.announcementReads.filter(r=>r.announcement_id!==id);
+  renderAnnounceAdmin();notify('공지를 지웠어요.','info');
+}
 function renderAnnounceAdmin(){
   const el=document.getElementById('announce-admin-list');
   if(!db.announcements.length){el.innerHTML='<div class="empty-hint">등록된 공지가 없습니다.</div>';return;}
   el.innerHTML=db.announcements.map(a=>{
+    if(annEditId===a.id)return `<div class="card"><div class="form-group"><label>제목</label><input class="form-input" id="ae-title" value="${esc(a.title)}"></div>
+      <div class="form-group"><label>내용</label><textarea class="form-input" id="ae-content" rows="4">${esc(a.content||'')}</textarea></div>
+      <div style="display:flex;gap:6px;margin-top:8px"><button class="btn blue sm" onclick="saveAnnouncement('${esc(a.id)}')">저장</button><button class="btn sm" onclick="annEditId=null;renderAnnounceAdmin()">취소</button></div></div>`;
     const students=db.users.filter(u=>u.role==='student'&&u.status==='active');
     const readIds=new Set(db.announcementReads.filter(r=>r.announcement_id===a.id).map(r=>r.student_id));
     const readN=students.filter(u=>readIds.has(u.id)).length;
     const unread=students.filter(u=>!readIds.has(u.id));
-    return `<div class="card"><div class="row-between"><strong>${esc(a.title)}</strong><span class="pill ${unread.length?'amber':'green'}">확인 ${readN}/${students.length}</span></div><div style="margin-top:6px;color:var(--text2);white-space:pre-wrap">${esc(a.content||'')}</div>
+    return `<div class="card"><div class="row-between" style="gap:8px"><strong>${esc(a.title)}</strong><span style="display:flex;gap:6px;align-items:center;flex-shrink:0"><span class="pill ${unread.length?'amber':'green'}">확인 ${readN}/${students.length}</span><button class="btn sm" onclick="annEditId='${esc(a.id)}';renderAnnounceAdmin()">수정</button><button class="btn red sm" onclick="deleteAnnouncement('${esc(a.id)}')">삭제</button></span></div><div style="margin-top:6px;color:var(--text2);white-space:pre-wrap">${esc(a.content||'')}</div>
       ${unread.length?`<div style="margin-top:8px;font-size:12px;color:var(--text2)">아직 확인 안 한 학생: ${unread.map(u=>esc(u.name)).join(', ')}</div>`:''}</div>`;
   }).join('');
 }
 
+/* --- 첫 화면 공지: 최신 2개 + 더보기 --- */
+function homeAnnounceHTML(sid){
+  if(!db.announcements.length)return '';
+  const list=db.announcements.slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))).slice(0,2);
+  const isRead=a=>db.announcementReads.some(r=>r.announcement_id===a.id&&r.student_id===sid);
+  const dt=a=>{if(!a.created_at)return '';const d=new Date(a.created_at);return `${d.getMonth()+1}/${d.getDate()}`;};
+  return `<div class="section-head" style="margin-top:22px"><h2>공지</h2><span class="h-more" style="padding:0;cursor:pointer" onclick="goTab('s-announce')">공지 더보기 ›</span></div>
+    <div class="h-list">${list.map(a=>`<div class="card" style="cursor:pointer;margin:0" onclick="goTab('s-announce')"><div class="row-between" style="gap:8px"><strong>${esc(a.title)}</strong><span style="display:flex;gap:6px;align-items:center;flex-shrink:0">${isRead(a)?'':'<span class="pill blue">새 공지</span>'}<span style="font-size:12px;color:var(--text3)">${dt(a)}</span></span></div>
+      ${a.content?`<div style="margin-top:4px;font-size:13px;color:var(--text2);white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(a.content)}</div>`:''}</div>`).join('')}</div>`;
+}
 /* ===================== 공지사항 — 학생 ===================== */
 function renderMyAnnounce(){
   refreshHome();

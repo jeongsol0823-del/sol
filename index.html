@@ -326,7 +326,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 .tabnav .ti{font-style:normal;margin-right:7px}
 @media(max-width:640px){.h-tiles{grid-template-columns:repeat(2,1fr)}.h-tile:nth-child(3){border-left:none}.h-tile:nth-child(n+3){border-top:1px solid var(--border)}}
 @media(max-width:899px){
-  #page-student .tabnav{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:10px 12px 12px;overflow:visible}
+  #page-student .tabnav{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:10px 12px 12px;overflow:visible}
   #page-student .tabnav button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px 7px;border:1px solid var(--border);border-radius:10px;background:#fff;font-size:12px;position:relative}
   #page-student .tabnav button.active{background:var(--ink);border-color:var(--ink);color:#fff}
   #page-student .tabnav .ti{margin:0;font-size:19px;line-height:1.2}
@@ -416,6 +416,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     <button data-t="t-exams" onclick="switchTab('teacher','t-exams')">시험</button>
     <button data-t="t-vocab" onclick="switchTab('teacher','t-vocab')">어휘<span id="vocab-tab-badge"></span></button>
     <button data-t="t-cert" onclick="switchTab('teacher','t-cert')">인증</button>
+    <button data-t="t-clinic" onclick="switchTab('teacher','t-clinic')">클리닉<span id="clinic-tab-badge"></span></button>
     <button data-t="t-attendance" onclick="switchTab('teacher','t-attendance')">출석</button>
     <button data-t="t-announce" onclick="switchTab('teacher','t-announce')">공지사항</button>
     <button data-t="t-report" onclick="switchTab('teacher','t-report')">성적표</button>
@@ -600,6 +601,23 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div id="cert-submission-list"></div>
     </div>
 
+    <div class="section" id="t-clinic">
+      <div class="section-head"><h2>클리닉</h2><span id="clinic-admin-sum" style="font-size:13px;color:var(--text2)"></span></div>
+      <details class="card" id="clinic-add-box" style="margin-bottom:14px" open><summary style="cursor:pointer;font-weight:600">클리닉 시간 열기</summary>
+        <div class="admin-form" style="margin-top:10px">
+          <div class="form-group"><label>날짜</label><input class="form-input" type="date" id="cl-date"></div>
+          <div class="form-group"><label>정원 (비우면 제한 없음)</label><input class="form-input" type="number" min="1" id="cl-cap" placeholder="예: 6"></div>
+          <div class="form-group"><label>시작</label><input class="form-input" type="time" id="cl-start" step="600"></div>
+          <div class="form-group"><label>끝</label><input class="form-input" type="time" id="cl-end" step="600"></div>
+          <div class="form-group full"><label>대상 학교</label><div id="cl-targets" class="chips"></div></div>
+          <div class="form-group full"><label>안내 (선택 · 예: 본관 3층, 숙제 가져오기)</label><input class="form-input" id="cl-note"></div>
+        </div>
+        <button class="btn blue sm" style="margin-top:8px" onclick="addClinicSlot()">열기</button>
+        <div style="font-size:11px;color:var(--text2);margin-top:6px">같은 날 여러 시간대를 열려면 시간만 바꿔 여러 번 누르세요. 학생은 시작 시각 전까지 신청·취소할 수 있어요.</div>
+      </details>
+      <div id="clinic-admin-list"></div>
+    </div>
+
     <div class="section" id="t-attendance">
       <div class="section-head"><h2>출석 체크</h2></div>
       <div class="card">
@@ -659,6 +677,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     <button data-t="s-review" onclick="switchTab('student','s-review')"><i class="ti">▶️</i>수업 영상</button>
     <button data-t="s-vocab" onclick="switchTab('student','s-vocab')"><i class="ti">📚</i>어휘</button>
     <button data-t="s-cert" onclick="switchTab('student','s-cert')"><i class="ti">✅</i>인증</button>
+    <button data-t="s-clinic" onclick="switchTab('student','s-clinic')"><i class="ti">🙋</i>클리닉</button>
     <button data-t="s-exams" onclick="switchTab('student','s-exams')"><i class="ti">📝</i>시험</button>
     <button data-t="s-qa" onclick="switchTab('student','s-qa')"><i class="ti">💬</i>질문</button>
     <button data-t="s-announce" onclick="switchTab('student','s-announce')"><i class="ti">📢</i>공지<span id="ann-tab-badge"></span></button>
@@ -679,6 +698,12 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
         <div id="grammar-head"></div>
         <div class="video-grid" id="grammar-grid"></div>
       </div>
+    </div>
+
+    <div class="section" id="s-clinic">
+      <div class="section-head"><h2>클리닉 신청</h2></div>
+      <div style="font-size:12px;color:var(--text2);margin:-4px 0 10px">시간을 고르고, 도움받고 싶은 것(작품·숙제·질문)을 짧게 적어 신청하세요. 시작 시각 전까지 취소할 수 있어요.</div>
+      <div id="clinic-my"></div>
     </div>
 
     <div class="section" id="s-qa">
@@ -806,7 +831,7 @@ const emptyDb=()=>({
   videoAccess:[],accessRequests:[],grammarEnroll:[],
   qaQuestions:[],
   exams:[],examResponses:[],
-  certWeeks:[],certItems:[],certSubmissions:[],
+  certWeeks:[],certItems:[],certSubmissions:[],clinicSlots:[],clinicBookings:[],clinicCounts:{},
   attendance:[],announcements:[],announcementReads:[],
   vocabSets:[],vocabWords:[],vocabAttempts:[],reportLinks:[],schools:[]
 });
@@ -860,7 +885,7 @@ async function selectAll(table,orderCols=['id']){
 }
 async function loadAll(attempt=0){
   try{
-    const [u,v,p,va,ar,ex,er,cw,ci,att,an,arr,vs2,vw2,va2,rl,sc,ge,st]=await Promise.all([
+    const [u,v,p,va,ar,ex,er,cw,ci,att,an,arr,vs2,vw2,va2,rl,sc,ge,st,cls]=await Promise.all([
       sb.from('users').select(USER_COLS), // 비밀번호 칸은 읽지 않아요 (서버에서도 막혀 있어요)
       sb.from('videos').select('*').order('created_at'),
       selectAll('progress',['student_id','video_id']),
@@ -879,7 +904,8 @@ async function loadAll(attempt=0){
       sb.from('report_links').select('*').order('created_at',{ascending:false}),
       sb.from('schools').select('*'),
       sb.from('grammar_enroll').select('*'),
-      sb.from('app_settings').select('*')
+      sb.from('app_settings').select('*'),
+      sb.from('clinic_slots').select('*')
     ]);
     if(u.error)throw new Error(u.error.message);
     if(v.error)throw new Error(v.error.message);
@@ -893,6 +919,7 @@ async function loadAll(attempt=0){
     db.reportLinks=(rl&&rl.data)||[];db.schools=(sc&&sc.data)||[];
     db.grammarEnroll=(ge&&ge.data)||[];db.grammarMissing=!!(ge&&ge.error);
     db.settings=Object.fromEntries(((st&&st.data)||[]).map(r=>[r.key,r.value]));
+    db.clinicSlots=(cls&&!cls.error&&cls.data)||[];db.clinicMissing=!!(cls&&cls.error); // 클리닉 표가 아직 없으면 조용히 빈 목록
   }catch(e){
     if(attempt<3){
       document.querySelector('.loading-text').textContent=`재연결 중... (${attempt+1}/3)`;
@@ -1171,6 +1198,7 @@ function launchTeacher(){
   loadQa().then(renderQaAdmin); // 질문은 강사 토큰으로 서버에서 받아와요
   renderExamAdmin();
   renderCertAdmin();loadCert().then(()=>{renderCertAdmin();cleanupCertPhotos();}); // 제출 기록은 강사 토큰으로 서버에서 받아와요
+  renderClinicAdmin();loadClinic().then(renderClinicAdmin); // 클리닉 신청 명단도 강사 토큰으로
   renderAttendanceForm();
   renderAnnounceAdmin();
   renderReportSelect();
@@ -1658,6 +1686,7 @@ function launchStudent(){
   loadQa().then(()=>{renderMyQa();renderMyQaFree();}); // 내 질문만 서버에서 받아와요
   renderMyExamResults();renderMyAssignedExams();
   loadCert().then(()=>{renderCertMy();renderMyReportCard();}); // 내 제출 기록만 서버에서 받아와요
+  renderClinicMy();loadClinic().then(()=>{renderClinicMy();refreshHome();}); // 클리닉: 자리 수와 내 신청만
   renderMyAttendance();
   renderMyAnnounce();
   renderMyReportCard();
@@ -1701,6 +1730,7 @@ function renderStudentHome(){
   fresh.forEach(v=>rows.push(row('blue','새 강의 영상',esc(v.title),v.class_date?`${mdWd(v.class_date)} 수업`:'','보기',`openPlay('${esc(v.id)}')`)));
   certs.slice(0,4).forEach(({item,state})=>rows.push(row(state==='open'?'amber':'red','인증 과제',esc(item.title),state==='rejected'?'통과하지 못했어요. 다시 해서 내 주세요.':certDueText(item),state==='rejected'?'다시 내기':'내러 가기',`goTab('s-cert')`)));
   if(certs.length>4)rows.push(`<div class="h-more" onclick="goTab('s-cert')">인증 과제 ${certs.length-4}개 더 보기 ›</div>`);
+  clinicHomeRows().forEach(r=>rows.push(row(r.tone,'클리닉',r.title,r.sub,r.btn,`goTab('s-clinic')`)));
   if(cur){const{title}=splitTitle(cur.set.lesson_title||cur.set.name);rows.push(row(weekOk?'gray':'blue','어휘 미션',`MISSION ${pad2(cur.no)} · ${esc(title)}`,weekOk?`이번 주 목표 ${VOCAB_WEEK_GOAL}개 달성! 더 해도 좋아요`:`이번 주 목표 ${VOCAB_WEEK_GOAL}개 중 ${weekDone}개 · 다 맞혀야 클리어예요`,cur.tries?'재도전':'도전하기',`goTab('s-vocab');openVocabStudy('${esc(cur.set.id)}')`));}
   unread.slice(0,2).forEach(a=>rows.push(row('blue','새 공지',esc(a.title),'','읽기',`goTab('s-announce')`)));
   going.forEach(v=>{const p=getPct(sid,v.id);rows.push(row('gray','보던 영상',esc(v.title),`${p}% 봤어요`,'이어서 보기',`openPlay('${esc(v.id)}')`));});
@@ -3289,6 +3319,128 @@ async function setCertStatus(subId,status){
   const cleared=had?await clearApprovedMedia([s]):true;
   renderCertAdmin();
   notify(!had?'통과로 처리했습니다.':cleared?'통과로 처리하고 사진·영상을 서버에서 지웠어요.':'통과로 처리했어요. 사진·영상은 다음에 앱을 열 때 다시 지울게요.',cleared?'info':'error');
+}
+/* ===================== 클리닉 신청 ===================== */
+// 시간대는 누구나 읽고(clinic_slots), 신청 기록은 서버 함수로만 (학생은 자리 수·내 신청, 강사는 전체 명단 · schema_add26)
+function clinicStartAt(sl){const [y,m,d]=sl.date.split('-').map(Number);const [hh,mm]=String(sl.start_time||'00:00').split(':').map(Number);return new Date(y,m-1,d,hh,mm);}
+function clinicClosed(sl){return Date.now()>=clinicStartAt(sl).getTime();}
+function clinicTime(sl){return `${String(sl.start_time||'').slice(0,5)}${sl.end_time?'~'+String(sl.end_time).slice(0,5):''}`;}
+function clinicSort(a,b){return a.date.localeCompare(b.date)||String(a.start_time).localeCompare(String(b.start_time));}
+async function loadClinic(){
+  db.clinicBookings=[];db.clinicCounts={};
+  if(!session||!sessionToken||db.clinicMissing)return;
+  if(session.role==='teacher'){const{data,error}=await sb.rpc('teacher_clinic_list',{p_token:sessionToken});db.clinicBookings=error?[]:(data||[]);}
+  else{const{data,error}=await sb.rpc('student_clinic_list',{p_token:sessionToken});if(!error&&data){db.clinicCounts=data.counts||{};db.clinicBookings=data.mine||[];}}
+}
+function clinicCount(slotId){return session&&session.role==='teacher'?db.clinicBookings.filter(b=>b.slot_id===slotId).length:(db.clinicCounts[slotId]||0);}
+function clinicLeft(sl){return sl.capacity?Math.max(0,sl.capacity-clinicCount(sl.id)):null;}
+// --- 학생 ---
+function clinicMySlots(){const today=ymd(new Date());return db.clinicSlots.filter(sl=>sl.date>=today&&certForSchool(sl,session.school)).sort(clinicSort);}
+function renderClinicMy(){
+  const el=document.getElementById('clinic-my');if(!el||!session)return;
+  if(db.clinicMissing){el.innerHTML='<div class="empty-hint">클리닉 신청은 곧 열려요.</div>';return;}
+  const list=clinicMySlots();
+  if(!list.length){el.innerHTML='<div class="empty-hint">지금 열린 클리닉이 없어요. 쏠T가 시간을 열면 여기에 보여요.</div>';return;}
+  const days={};list.forEach(sl=>(days[sl.date]=days[sl.date]||[]).push(sl));
+  el.innerHTML=Object.keys(days).sort().map(d=>{
+    const dd=daysUntil(d);
+    return `<div style="margin-bottom:14px"><div style="font-weight:700;margin:0 2px 6px">${mdWd(d)} ${dd===0?'<span class="pill red">오늘</span>':dd===1?'<span class="pill amber">내일</span>':''}</div>${days[d].map(sl=>{
+      const mine=db.clinicBookings.find(b=>b.slot_id===sl.id);const left=clinicLeft(sl);const closed=clinicClosed(sl);
+      const otherSameDay=!mine&&db.clinicBookings.some(b=>{const s2=db.clinicSlots.find(x=>x.id===b.slot_id);return s2&&s2.date===sl.date;});
+      const cap=sl.capacity?`남은 자리 <b>${left}</b>/${sl.capacity}`:'자리 제한 없음';
+      let act;
+      if(mine)act=`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--bg3)"><span class="pill green">신청함</span> <span style="font-size:13px">${esc(mine.memo||'(적은 내용 없음)')}</span></div>
+        ${closed?'':`<button class="btn sm" style="margin-top:6px" onclick="cancelClinic('${esc(sl.id)}')">신청 취소</button>`}`;
+      else if(closed)act='<div style="font-size:12px;color:var(--text3);margin-top:6px">신청이 끝났어요.</div>';
+      else if(left===0)act='<div style="font-size:12px;color:var(--red);margin-top:6px">자리가 다 찼어요.</div>';
+      else if(otherSameDay)act='<div style="font-size:12px;color:var(--text3);margin-top:6px">같은 날 다른 시간에 신청했어요. 바꾸려면 먼저 취소하세요.</div>';
+      else act=`<div style="display:flex;gap:6px;margin-top:8px"><input class="form-input" id="clm-${esc(sl.id)}" maxlength="100" placeholder="무엇을 도와줄까? (예: 누항사 숙제 12번)" style="flex:1;min-width:0"><button class="btn blue sm" onclick="bookClinic('${esc(sl.id)}')">신청</button></div>`;
+      return `<div class="card"><div class="row-between" style="gap:8px"><strong>${clinicTime(sl)}</strong><span style="font-size:12px;color:var(--text2)">${cap}</span></div>${sl.note?`<div style="font-size:12px;color:var(--text2);margin-top:2px">${esc(sl.note)}</div>`:''}${act}</div>`;
+    }).join('')}</div>`;
+  }).join('');
+}
+function clinicRpcFail(data,error){return error?error.message:data==='forbidden'?'다시 로그인해 주세요.':data;}
+async function bookClinic(slotId){
+  const inp=document.getElementById('clm-'+slotId);const memo=(inp&&inp.value||'').trim();
+  if(!memo){notify('무엇을 도와줄지 짧게 적어 주세요.','error');if(inp)inp.focus();return;}
+  const{data,error}=await sb.rpc('student_clinic_book',{p_token:sessionToken,p_slot_id:slotId,p_memo:memo});
+  const fail=clinicRpcFail(data,error);
+  await loadClinic();renderClinicMy();refreshHome();
+  if(fail){notify('신청하지 못했어요: '+fail,'error');return;}
+  notify('클리닉을 신청했어요.','success');
+}
+async function cancelClinic(slotId){
+  const{data,error}=await sb.rpc('student_clinic_cancel',{p_token:sessionToken,p_slot_id:slotId});
+  const fail=clinicRpcFail(data,error);
+  await loadClinic();renderClinicMy();refreshHome();
+  if(fail){notify('취소하지 못했어요: '+fail,'error');return;}
+  notify('신청을 취소했어요.','info');
+}
+// 홈 '할 일': 신청한 클리닉 또는 신청 받는 중인 날
+function clinicHomeRows(){
+  if(!session||db.clinicMissing)return[];
+  const list=clinicMySlots().filter(sl=>!clinicClosed(sl));const out=[];
+  const mine=list.filter(sl=>db.clinicBookings.some(b=>b.slot_id===sl.id));
+  mine.slice(0,2).forEach(sl=>out.push({tone:'gray',title:`${mdWd(sl.date)} ${clinicTime(sl)} 신청함`,sub:esc((db.clinicBookings.find(b=>b.slot_id===sl.id)||{}).memo||''),btn:'보기'}));
+  const myDays=new Set(mine.map(sl=>sl.date));
+  const openDays=[...new Set(list.filter(sl=>!myDays.has(sl.date)&&clinicLeft(sl)!==0).map(sl=>sl.date))].sort();
+  if(openDays.length)out.push({tone:'blue',title:`${openDays.slice(0,2).map(mdWd).join(', ')} 클리닉 신청 받는 중`,sub:'오고 싶으면 시간을 골라 신청하세요',btn:'신청하기'});
+  return out;
+}
+// --- 강사 ---
+let clinicShowPast=false;
+function renderClinicAdmin(){
+  const tg=document.getElementById('cl-targets');if(tg&&!tg.dataset.done){tg.innerHTML=certTargetPicker('cl',null);tg.dataset.done='1';}
+  const dt=document.getElementById('cl-date');if(dt&&!dt.value)dt.value=ymd(new Date(Date.now()+864e5));
+  const el=document.getElementById('clinic-admin-list');if(!el)return;const sumEl=document.getElementById('clinic-admin-sum');
+  if(db.clinicMissing){el.innerHTML='<div class="empty-hint">클리닉 표가 아직 없어요. schema_add26.sql을 먼저 실행해야 해요.</div>';return;}
+  const today=ymd(new Date());
+  const up=db.clinicSlots.filter(sl=>sl.date>=today).sort(clinicSort),past=db.clinicSlots.filter(sl=>sl.date<today).sort((a,b)=>-clinicSort(a,b));
+  const upN=up.reduce((n,sl)=>n+clinicCount(sl.id),0);
+  if(sumEl)sumEl.textContent=up.length?`앞으로 열린 시간 ${up.length}개 · 신청 ${upN}명`:'';
+  const slotHtml=sl=>{
+    const bs=db.clinicBookings.filter(b=>b.slot_id===sl.id).map(b=>({b,u:db.users.find(x=>x.id===b.student_id)})).sort((x,y)=>String(x.b.created_at).localeCompare(String(y.b.created_at)));
+    const n=bs.length;
+    return `<div class="card"><div class="row-between" style="gap:8px;align-items:flex-start">
+      <div><strong>${clinicTime(sl)}</strong> <span style="font-size:12px;color:var(--text2)">· 대상 ${esc(certTargetText(sl))}${sl.note?' · '+esc(sl.note):''}</span>
+        <div style="font-size:12px;margin-top:2px">신청 <b>${n}</b>${sl.capacity?`/${sl.capacity}명${n>=sl.capacity?' <span class="pill red">마감</span>':''}`:'명 (제한 없음)'}${clinicClosed(sl)?' · <span style="color:var(--text3)">신청 끝남</span>':''}</div></div>
+      <button class="btn red sm" onclick="deleteClinicSlot('${esc(sl.id)}')">닫기</button></div>
+      ${n?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px">${bs.map(({b,u},i)=>`<tr style="border-top:1px solid var(--border)"><td style="padding:6px 4px;width:22px;color:var(--text3)">${i+1}</td><td style="padding:6px 4px;white-space:nowrap">${esc(u?u.school||'':'')}</td><td style="padding:6px 4px;white-space:nowrap"><b>${esc(u?u.name:'(지운 학생)')}</b></td><td style="padding:6px 4px;width:100%">${esc(b.memo||'')}</td><td style="padding:6px 4px;white-space:nowrap"><button class="btn sm" onclick="removeClinicBooking('${esc(b.id)}')">빼기</button></td></tr>`).join('')}</table></div>`
+        :'<div style="font-size:12px;color:var(--text3);margin-top:6px">아직 신청한 학생이 없어요.</div>'}</div>`;
+  };
+  const day=list=>{const d={};list.forEach(sl=>(d[sl.date]=d[sl.date]||[]).push(sl));return d;};
+  const block=(d,list)=>`<div style="margin-bottom:14px"><div class="row-between" style="margin:0 2px 6px"><strong style="font-size:15px">${mdWd(d)}${d===today?' <span class="pill red">오늘</span>':daysUntil(d)===1?' <span class="pill amber">내일</span>':''}</strong><span style="font-size:12px;color:var(--text2)">신청 ${list.reduce((n,sl)=>n+clinicCount(sl.id),0)}명</span></div>${list.map(slotHtml).join('')}</div>`;
+  const ud=day(up),pd=day(past);
+  el.innerHTML=(up.length?Object.keys(ud).sort().map(d=>block(d,ud[d])).join(''):'<div class="empty-hint">열린 클리닉이 없어요. 위에서 시간을 여세요.</div>')+
+    (past.length?`<details style="margin-top:10px"${clinicShowPast?' open':''} ontoggle="clinicShowPast=this.open"><summary style="cursor:pointer;color:var(--text2);font-size:13px">지난 클리닉 ${Object.keys(pd).length}일</summary><div style="margin-top:8px">${Object.keys(pd).sort().reverse().map(d=>block(d,pd[d])).join('')}</div></details>`:'');
+}
+async function addClinicSlot(){
+  const date=document.getElementById('cl-date').value,start=document.getElementById('cl-start').value,end=document.getElementById('cl-end').value;
+  const capV=document.getElementById('cl-cap').value.trim(),cap=capV?parseInt(capV,10):null,note=document.getElementById('cl-note').value.trim();
+  if(!date||!start){notify('날짜와 시작 시각을 넣어 주세요.','error');return;}
+  if(end&&end<=start){notify('끝 시각이 시작보다 늦어야 해요.','error');return;}
+  if(capV&&!(cap>0)){notify('정원은 1명 이상이거나 비워 두세요.','error');return;}
+  const row={id:uid('cl_'),date,start_time:start,end_time:end||null,capacity:cap,targets:certReadTargets('cl'),note:note||null};
+  const fail=await teacherRpc('teacher_clinic_slot_save',{p_row:row});
+  if(fail){notify('열지 못했어요: '+fail,'error');return;}
+  row.created_at=new Date().toISOString();db.clinicSlots.push(row);
+  document.getElementById('cl-start').value='';document.getElementById('cl-end').value='';
+  renderClinicAdmin();notify(`${mdWd(date)} ${clinicTime(row)} 클리닉을 열었어요.`,'success');
+}
+async function deleteClinicSlot(id){
+  const sl=db.clinicSlots.find(x=>x.id===id);if(!sl)return;const n=clinicCount(id);
+  if(!confirm(`${mdWd(sl.date)} ${clinicTime(sl)} 클리닉을 닫을까요?${n?`\n\n신청한 학생 ${n}명의 신청도 함께 지워져요.`:''}`))return;
+  const fail=await teacherRpc('teacher_clinic_slot_delete',{p_id:id});
+  if(fail){notify('닫지 못했어요: '+fail,'error');return;}
+  db.clinicSlots=db.clinicSlots.filter(x=>x.id!==id);db.clinicBookings=db.clinicBookings.filter(b=>b.slot_id!==id);
+  renderClinicAdmin();notify('클리닉을 닫았어요.','info');
+}
+async function removeClinicBooking(id){
+  const b=db.clinicBookings.find(x=>x.id===id);if(!b)return;const u=db.users.find(x=>x.id===b.student_id);
+  if(!confirm(`${u?u.name:'이 학생'}의 신청을 뺄까요?`))return;
+  const fail=await teacherRpc('teacher_clinic_booking_delete',{p_id:id});
+  if(fail){notify('빼지 못했어요: '+fail,'error');return;}
+  db.clinicBookings=db.clinicBookings.filter(x=>x.id!==id);renderClinicAdmin();notify('신청을 뺐어요.','info');
 }
 /* ===================== 출석 — 강사 ===================== */
 function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}

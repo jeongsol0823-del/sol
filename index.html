@@ -326,7 +326,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
 .tabnav .ti{font-style:normal;margin-right:7px}
 @media(max-width:640px){.h-tiles{grid-template-columns:repeat(2,1fr)}.h-tile:nth-child(3){border-left:none}.h-tile:nth-child(n+3){border-top:1px solid var(--border)}}
 @media(max-width:899px){
-  #page-student .tabnav{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:10px 12px 12px;overflow:visible}
+  #page-student .tabnav{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:10px 12px 12px;overflow:visible}
   #page-student .tabnav button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px 7px;border:1px solid var(--border);border-radius:10px;background:#fff;font-size:12px;position:relative}
   #page-student .tabnav button.active{background:var(--ink);border-color:var(--ink);color:#fff}
   #page-student .tabnav .ti{margin:0;font-size:19px;line-height:1.2}
@@ -416,6 +416,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     <button data-t="t-exams" onclick="switchTab('teacher','t-exams')">시험</button>
     <button data-t="t-vocab" onclick="switchTab('teacher','t-vocab')">어휘<span id="vocab-tab-badge"></span></button>
     <button data-t="t-cert" onclick="switchTab('teacher','t-cert')">인증</button>
+    <button data-t="t-clinic" onclick="switchTab('teacher','t-clinic')">클리닉<span id="clinic-tab-badge"></span></button>
     <button data-t="t-attendance" onclick="switchTab('teacher','t-attendance')">출석</button>
     <button data-t="t-announce" onclick="switchTab('teacher','t-announce')">공지사항</button>
     <button data-t="t-report" onclick="switchTab('teacher','t-report')">성적표</button>
@@ -600,6 +601,16 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
       <div id="cert-submission-list"></div>
     </div>
 
+    <div class="section" id="t-clinic">
+      <div class="section-head"><h2>클리닉</h2><span id="clinic-admin-sum" style="font-size:13px;color:var(--text2)"></span></div>
+      <details class="card" id="clinic-add-box" style="margin-bottom:14px" open><summary style="cursor:pointer;font-weight:600">이번 주 클리닉 시간 열기</summary>
+        <div id="cl-form" style="margin-top:10px"></div>
+        <button class="btn blue sm" style="margin-top:8px" onclick="addClinicSlot()">열기</button>
+        <div style="font-size:11px;color:var(--text2);margin-top:6px">같은 날 여러 시간대는 시간만 바꿔 여러 번 누르세요. 지난주와 같으면 날짜 옆 '다음 주 같은 요일에 똑같이 열기'가 빨라요. 오라고 할 학생은 시간마다 '학생 지정'으로 골라요.</div>
+      </details>
+      <div id="clinic-admin-list"></div>
+    </div>
+
     <div class="section" id="t-attendance">
       <div class="section-head"><h2>출석 체크</h2></div>
       <div class="card">
@@ -659,6 +670,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     <button data-t="s-review" onclick="switchTab('student','s-review')"><i class="ti">▶️</i>수업 영상</button>
     <button data-t="s-vocab" onclick="switchTab('student','s-vocab')"><i class="ti">📚</i>어휘</button>
     <button data-t="s-cert" onclick="switchTab('student','s-cert')"><i class="ti">✅</i>인증</button>
+    <button data-t="s-clinic" onclick="switchTab('student','s-clinic')"><i class="ti">🙋</i>클리닉</button>
     <button data-t="s-exams" onclick="switchTab('student','s-exams')"><i class="ti">📝</i>시험</button>
     <button data-t="s-qa" onclick="switchTab('student','s-qa')"><i class="ti">💬</i>질문</button>
     <button data-t="s-announce" onclick="switchTab('student','s-announce')"><i class="ti">📢</i>공지<span id="ann-tab-badge"></span></button>
@@ -679,6 +691,12 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
         <div id="grammar-head"></div>
         <div class="video-grid" id="grammar-grid"></div>
       </div>
+    </div>
+
+    <div class="section" id="s-clinic">
+      <div class="section-head"><h2>클리닉 신청</h2></div>
+      <div style="font-size:12px;color:var(--text2);margin:-4px 0 10px">시간을 고르고, 도움받고 싶은 것(작품·숙제·질문)을 짧게 적어 신청하세요. 시작 시각 전까지 취소할 수 있어요.</div>
+      <div id="clinic-my"></div>
     </div>
 
     <div class="section" id="s-qa">
@@ -806,7 +824,7 @@ const emptyDb=()=>({
   videoAccess:[],accessRequests:[],grammarEnroll:[],
   qaQuestions:[],
   exams:[],examResponses:[],
-  certWeeks:[],certItems:[],certSubmissions:[],
+  certWeeks:[],certItems:[],certSubmissions:[],clinicSlots:[],clinicBookings:[],clinicCounts:{},
   attendance:[],announcements:[],announcementReads:[],
   vocabSets:[],vocabWords:[],vocabAttempts:[],reportLinks:[],schools:[]
 });
@@ -860,7 +878,7 @@ async function selectAll(table,orderCols=['id']){
 }
 async function loadAll(attempt=0){
   try{
-    const [u,v,p,va,ar,ex,er,cw,ci,att,an,arr,vs2,vw2,va2,rl,sc,ge,st]=await Promise.all([
+    const [u,v,p,va,ar,ex,er,cw,ci,att,an,arr,vs2,vw2,va2,rl,sc,ge,st,cls]=await Promise.all([
       sb.from('users').select(USER_COLS), // 비밀번호 칸은 읽지 않아요 (서버에서도 막혀 있어요)
       sb.from('videos').select('*').order('created_at'),
       selectAll('progress',['student_id','video_id']),
@@ -879,7 +897,8 @@ async function loadAll(attempt=0){
       sb.from('report_links').select('*').order('created_at',{ascending:false}),
       sb.from('schools').select('*'),
       sb.from('grammar_enroll').select('*'),
-      sb.from('app_settings').select('*')
+      sb.from('app_settings').select('*'),
+      sb.from('clinic_times').select('*')
     ]);
     if(u.error)throw new Error(u.error.message);
     if(v.error)throw new Error(v.error.message);
@@ -893,6 +912,7 @@ async function loadAll(attempt=0){
     db.reportLinks=(rl&&rl.data)||[];db.schools=(sc&&sc.data)||[];
     db.grammarEnroll=(ge&&ge.data)||[];db.grammarMissing=!!(ge&&ge.error);
     db.settings=Object.fromEntries(((st&&st.data)||[]).map(r=>[r.key,r.value]));
+    db.clinicSlots=(cls&&!cls.error&&cls.data)||[];db.clinicMissing=!!(cls&&cls.error); // 클리닉 표가 아직 없으면 조용히 빈 목록
   }catch(e){
     if(attempt<3){
       document.querySelector('.loading-text').textContent=`재연결 중... (${attempt+1}/3)`;
@@ -1171,6 +1191,7 @@ function launchTeacher(){
   loadQa().then(renderQaAdmin); // 질문은 강사 토큰으로 서버에서 받아와요
   renderExamAdmin();
   renderCertAdmin();loadCert().then(()=>{renderCertAdmin();cleanupCertPhotos();}); // 제출 기록은 강사 토큰으로 서버에서 받아와요
+  renderClinicAdmin();loadClinic().then(renderClinicAdmin); // 클리닉 신청 명단도 강사 토큰으로
   renderAttendanceForm();
   renderAnnounceAdmin();
   renderReportSelect();
@@ -1658,6 +1679,7 @@ function launchStudent(){
   loadQa().then(()=>{renderMyQa();renderMyQaFree();}); // 내 질문만 서버에서 받아와요
   renderMyExamResults();renderMyAssignedExams();
   loadCert().then(()=>{renderCertMy();renderMyReportCard();}); // 내 제출 기록만 서버에서 받아와요
+  renderClinicMy();loadClinic().then(()=>{renderClinicMy();refreshHome();}); // 클리닉: 자리 수와 내 신청만
   renderMyAttendance();
   renderMyAnnounce();
   renderMyReportCard();
@@ -1697,12 +1719,14 @@ function renderStudentHome(){
   const tile=(n,label,tab,warn)=>`<button type="button" class="h-tile${warn?' warn':''}" onclick="goTab('${tab}')"><b>${n}</b><span>${label}</span></button>`;
   const row=(tone,tag,title,sub,btn,act)=>`<div class="h-row ${tone}"><div class="h-txt"><div class="h-tag">${tag}</div><div class="h-title">${title}</div>${sub?`<div class="h-sub">${sub}</div>`:''}</div><button class="btn${tone==='gray'?'':' blue'} sm" onclick="${act}">${btn}</button></div>`;
   const rows=[];
+  const clinicRows=clinicHomeRows();
+  const urgent=clinicRows.filter(r=>r.tone==='red').map(r=>row(r.tone,r.tag,r.title,r.sub,r.btn,`goTab('s-clinic')`)); // 쏠T 지정: 공지보다 위
   makeup.forEach(v=>{const p=getPct(sid,v.id);rows.push(row('red','보강 영상',esc(v.title),`${mdWd(v.class_date)} 결석한 수업이에요 · ${p}% 봤어요`,p>0?'이어서 보기':'보기',`openPlay('${esc(v.id)}')`));});
   fresh.forEach(v=>rows.push(row('blue','새 강의 영상',esc(v.title),v.class_date?`${mdWd(v.class_date)} 수업`:'','보기',`openPlay('${esc(v.id)}')`)));
   certs.slice(0,4).forEach(({item,state})=>rows.push(row(state==='open'?'amber':'red','인증 과제',esc(item.title),state==='rejected'?'통과하지 못했어요. 다시 해서 내 주세요.':certDueText(item),state==='rejected'?'다시 내기':'내러 가기',`goTab('s-cert')`)));
   if(certs.length>4)rows.push(`<div class="h-more" onclick="goTab('s-cert')">인증 과제 ${certs.length-4}개 더 보기 ›</div>`);
+  clinicRows.filter(r=>r.tone!=='red').forEach(r=>rows.push(row(r.tone,r.tag,r.title,r.sub,r.btn,`goTab('s-clinic')`)));
   if(cur){const{title}=splitTitle(cur.set.lesson_title||cur.set.name);rows.push(row(weekOk?'gray':'blue','어휘 미션',`MISSION ${pad2(cur.no)} · ${esc(title)}`,weekOk?`이번 주 목표 ${VOCAB_WEEK_GOAL}개 달성! 더 해도 좋아요`:`이번 주 목표 ${VOCAB_WEEK_GOAL}개 중 ${weekDone}개 · 다 맞혀야 클리어예요`,cur.tries?'재도전':'도전하기',`goTab('s-vocab');openVocabStudy('${esc(cur.set.id)}')`));}
-  unread.slice(0,2).forEach(a=>rows.push(row('blue','새 공지',esc(a.title),'','읽기',`goTab('s-announce')`)));
   going.forEach(v=>{const p=getPct(sid,v.id);rows.push(row('gray','보던 영상',esc(v.title),`${p}% 봤어요`,'이어서 보기',`openPlay('${esc(v.id)}')`));});
   if(g&&g.next)rows.push(row('gray','문법 기초',`${g.next.no}강 ${esc(g.next.v.title)}`,`완강 ${g.done}/${g.total}강`,g.next.pct>0?'이어서 보기':'보기',`openPlay('${esc(g.next.v.id)}')`));
 
@@ -1714,8 +1738,10 @@ function renderStudentHome(){
       ${tile(st.length?`${weekOk?'✓ ':''}${weekDone}<small>/${VOCAB_WEEK_GOAL}</small>`:'-','이번 주 어휘','s-vocab',false)}
       ${tile(unread.length,'새 공지','s-announce',false)}
     </div>
+    ${urgent.length?`<div class="h-list" style="margin-top:16px">${urgent.join('')}</div>`:''}
+    ${homeAnnounceHTML(sid)}
     <div class="section-head" style="margin-top:22px"><h2>할 일</h2></div>
-    ${rows.length?`<div class="h-list">${rows.join('')}</div>`:'<div class="empty-hint">🎉 지금 할 일을 모두 끝냈어요!</div>'}`;
+    ${rows.length||urgent.length?(rows.length?`<div class="h-list">${rows.join('')}</div>`:'<div class="empty-hint">위 클리닉 지정을 확인해 주세요.</div>'):'<div class="empty-hint">🎉 지금 할 일을 모두 끝냈어요!</div>'}`;
 }
 function renderLectures(){
   const el=document.getElementById('lecture-grid');if(!el)return; // 일반 강의 탭은 없앴어요
@@ -3290,6 +3316,206 @@ async function setCertStatus(subId,status){
   renderCertAdmin();
   notify(!had?'통과로 처리했습니다.':cleared?'통과로 처리하고 사진·영상을 서버에서 지웠어요.':'통과로 처리했어요. 사진·영상은 다음에 앱을 열 때 다시 지울게요.',cleared?'info':'error');
 }
+/* ===================== 클리닉 신청 ===================== */
+// 시간대는 누구나 읽고(clinic_times), 신청 기록은 서버 함수로만 (학생은 자리 수·내 기록, 강사는 전체 명단 · schema_add26)
+// 두 종류: kind='assigned' 쏠T가 지정(학생은 확인 또는 못 오는 사유만, 취소 불가) / kind='self' 학생이 스스로 신청(시작 전까지 취소)
+function clinicStartAt(sl){const [y,m,d]=sl.date.split('-').map(Number);const [hh,mm]=String(sl.start_time||'00:00').split(':').map(Number);return new Date(y,m-1,d,hh,mm);}
+function clinicClosed(sl){return Date.now()>=clinicStartAt(sl).getTime();}
+function clinicTime(sl){return `${String(sl.start_time||'').slice(0,5)}${sl.end_time?'~'+String(sl.end_time).slice(0,5):''}`;}
+function clinicSort(a,b){return a.date.localeCompare(b.date)||String(a.start_time).localeCompare(String(b.start_time));}
+function clinicAssigned(b){return b&&b.kind==='assigned';}
+async function loadClinic(){
+  db.clinicBookings=[];db.clinicCounts={};
+  if(!session||!sessionToken||db.clinicMissing)return;
+  if(session.role==='teacher'){const{data,error}=await sb.rpc('teacher_clinic_list',{p_token:sessionToken});db.clinicBookings=error?[]:(data||[]);}
+  else{const{data,error}=await sb.rpc('student_clinic_list',{p_token:sessionToken});if(!error&&data){db.clinicCounts=data.counts||{};db.clinicBookings=data.mine||[];}}
+}
+function clinicCount(slotId){return session&&session.role==='teacher'?db.clinicBookings.filter(b=>b.slot_id===slotId).length:(db.clinicCounts[slotId]||0);}
+function clinicLeft(sl){return sl.capacity?Math.max(0,sl.capacity-clinicCount(sl.id)):null;}
+function clinicRpcFail(data,error){return error?error.message:data==='forbidden'?'다시 로그인해 주세요.':data;}
+// --- 학생 ---
+function clinicMySlots(){const today=ymd(new Date());return db.clinicSlots.filter(sl=>sl.date>=today&&(certForSchool(sl,session.school)||db.clinicBookings.some(b=>b.slot_id===sl.id))).sort(clinicSort);}
+function clinicAssignedCard(b,sl){
+  const st=b.decline_reason?`<div style="margin-top:6px;font-size:13px">못 온다고 알렸어요: ${esc(b.decline_reason)}</div>`:b.confirmed_at?'<div style="margin-top:6px"><span class="pill green">확인했어요</span></div>':'';
+  const ask=clinicClosed(sl)||b.confirmed_at||b.decline_reason?'':`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button class="btn blue sm" onclick="respondClinic('${esc(sl.id)}',true)">확인했어요</button><button class="btn sm" onclick="clinicDeclineOpen='${esc(sl.id)}';renderClinicMy()">못 와요 (사유 적기)</button></div>
+    ${clinicDeclineOpen===sl.id?`<div style="display:flex;gap:6px;margin-top:6px"><input class="form-input" id="cld-${esc(sl.id)}" maxlength="100" placeholder="못 오는 사유 (예: 학교 수행평가)" style="flex:1;min-width:0"><button class="btn sm" onclick="respondClinic('${esc(sl.id)}',false)">보내기</button></div>`:''}`;
+  return `<div class="card" style="border:2px solid var(--red)"><div class="row-between" style="gap:8px"><span><span class="pill red">쏠T 지정</span> <strong>${mdWd(sl.date)} ${clinicTime(sl)}</strong></span></div>
+    <div style="font-size:13px;margin-top:4px">쏠T가 클리닉에 오라고 했어요.${b.reason?` <b>${esc(b.reason)}</b>`:''}</div>${sl.note?`<div style="font-size:12px;color:var(--text2);margin-top:2px">${esc(sl.note)}</div>`:''}${st}${ask}
+    <div style="font-size:11px;color:var(--text3);margin-top:6px">지정된 클리닉은 취소할 수 없어요. 못 오면 사유를 적어 주세요.</div></div>`;
+}
+let clinicDeclineOpen=null;
+function renderClinicMy(){
+  const el=document.getElementById('clinic-my');if(!el||!session)return;
+  if(db.clinicMissing){el.innerHTML='<div class="empty-hint">클리닉 신청은 곧 열려요.</div>';return;}
+  const list=clinicMySlots();
+  const assigned=db.clinicBookings.filter(clinicAssigned).map(b=>({b,sl:list.find(s=>s.id===b.slot_id)})).filter(x=>x.sl);
+  const top=assigned.length?`<div style="margin-bottom:16px">${assigned.map(x=>clinicAssignedCard(x.b,x.sl)).join('')}</div>`:'';
+  if(!list.length){el.innerHTML=top+'<div class="empty-hint">지금 열린 클리닉이 없어요. 쏠T가 시간을 열면 여기에 보여요.</div>';return;}
+  const days={};list.forEach(sl=>(days[sl.date]=days[sl.date]||[]).push(sl));
+  el.innerHTML=top+(assigned.length?'<div style="font-weight:700;margin:0 2px 8px;color:var(--text2)">스스로 신청하기</div>':'')+Object.keys(days).sort().map(d=>{
+    const dd=daysUntil(d);
+    const dayMine=db.clinicBookings.filter(b=>{const s2=db.clinicSlots.find(x=>x.id===b.slot_id);return s2&&s2.date===d;});
+    return `<div style="margin-bottom:14px"><div style="font-weight:700;margin:0 2px 6px">${mdWd(d)} ${dd===0?'<span class="pill red">오늘</span>':dd===1?'<span class="pill amber">내일</span>':''}</div>${days[d].map(sl=>{
+      const mine=db.clinicBookings.find(b=>b.slot_id===sl.id);const left=clinicLeft(sl);const closed=clinicClosed(sl);
+      const cap=sl.capacity?`남은 자리 <b>${left}</b>/${sl.capacity}`:'자리 제한 없음';
+      let act;
+      if(mine&&clinicAssigned(mine))act='<div style="margin-top:8px"><span class="pill red">쏠T 지정</span> <span style="font-size:12px;color:var(--text2)">위에서 확인해 주세요</span></div>';
+      else if(mine)act=`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--bg3)"><span class="pill green">신청함</span> <span style="font-size:13px">${esc(mine.memo||'(적은 내용 없음)')}</span></div>
+        ${closed?'':`<button class="btn sm" style="margin-top:6px" onclick="cancelClinic('${esc(sl.id)}')">신청 취소</button>`}`;
+      else if(closed)act='<div style="font-size:12px;color:var(--text3);margin-top:6px">신청이 끝났어요.</div>';
+      else if(dayMine.length)act=`<div style="font-size:12px;color:var(--text3);margin-top:6px">${dayMine.some(clinicAssigned)?'이날은 쏠T가 지정한 클리닉이 있어요.':'같은 날 다른 시간에 신청했어요. 바꾸려면 먼저 취소하세요.'}</div>`;
+      else if(left===0)act='<div style="font-size:12px;color:var(--red);margin-top:6px">자리가 다 찼어요.</div>';
+      else act=`<div style="display:flex;gap:6px;margin-top:8px"><input class="form-input" id="clm-${esc(sl.id)}" maxlength="100" placeholder="무엇을 도와줄까? (예: 누항사 숙제 12번)" style="flex:1;min-width:0"><button class="btn blue sm" onclick="bookClinic('${esc(sl.id)}')">신청</button></div>`;
+      return `<div class="card"><div class="row-between" style="gap:8px"><strong>${clinicTime(sl)}</strong><span style="font-size:12px;color:var(--text2)">${cap}</span></div>${sl.note?`<div style="font-size:12px;color:var(--text2);margin-top:2px">${esc(sl.note)}</div>`:''}${act}</div>`;
+    }).join('')}</div>`;
+  }).join('');
+}
+async function clinicStudentCall(fn,args,okMsg){
+  const{data,error}=await sb.rpc(fn,Object.assign({p_token:sessionToken},args));
+  const fail=clinicRpcFail(data,error);
+  await loadClinic();renderClinicMy();refreshHome();
+  if(fail){notify('하지 못했어요: '+fail,'error');return false;}
+  notify(okMsg,'success');return true;
+}
+async function bookClinic(slotId){
+  const inp=document.getElementById('clm-'+slotId);const memo=(inp&&inp.value||'').trim();
+  if(!memo){notify('무엇을 도와줄지 짧게 적어 주세요.','error');if(inp)inp.focus();return;}
+  await clinicStudentCall('student_clinic_book',{p_slot_id:slotId,p_memo:memo},'클리닉을 신청했어요.');
+}
+async function cancelClinic(slotId){await clinicStudentCall('student_clinic_cancel',{p_slot_id:slotId},'신청을 취소했어요.');}
+async function respondClinic(slotId,ok){
+  let reason=null;
+  if(!ok){const inp=document.getElementById('cld-'+slotId);reason=(inp&&inp.value||'').trim();if(!reason){notify('못 오는 사유를 적어 주세요.','error');if(inp)inp.focus();return;}}
+  if(await clinicStudentCall('student_clinic_respond',{p_slot_id:slotId,p_ok:ok,p_reason:reason},ok?'확인했어요. 시간 맞춰 오세요!':'사유를 쏠T에게 보냈어요.'))clinicDeclineOpen=null;
+}
+// 홈 '할 일': 쏠T 지정(맨 위·빨강) → 신청한 것 → 신청 받는 중
+function clinicHomeRows(){
+  if(!session||db.clinicMissing)return[];
+  const list=clinicMySlots().filter(sl=>!clinicClosed(sl));const out=[];
+  list.forEach(sl=>{const b=db.clinicBookings.find(x=>x.slot_id===sl.id);if(!clinicAssigned(b))return;
+    out.push({tone:b.confirmed_at||b.decline_reason?'gray':'red',tag:'클리닉 지정',title:`${mdWd(sl.date)} ${clinicTime(sl)} 쏠T가 불렀어요`,sub:b.decline_reason?'못 온다고 알렸어요':b.confirmed_at?'확인했어요':esc(b.reason||'확인하거나 못 오는 사유를 적어 주세요'),btn:b.confirmed_at||b.decline_reason?'보기':'확인하기'});});
+  const mine=list.filter(sl=>{const b=db.clinicBookings.find(x=>x.slot_id===sl.id);return b&&!clinicAssigned(b);});
+  mine.slice(0,2).forEach(sl=>out.push({tone:'gray',tag:'클리닉',title:`신청함: ${mdWd(sl.date)} ${clinicTime(sl)}`,sub:esc((db.clinicBookings.find(b=>b.slot_id===sl.id)||{}).memo||''),btn:'보기'}));
+  // 지정도 신청도 없는 날: 열린 시간과 남은 자리
+  const busy=new Set(list.filter(sl=>db.clinicBookings.some(b=>b.slot_id===sl.id)).map(sl=>sl.date));
+  const open=list.filter(sl=>!busy.has(sl.date)&&certForSchool(sl,session.school)&&clinicLeft(sl)!==0);
+  const days=[...new Set(open.map(sl=>sl.date))].sort().slice(0,2);
+  days.forEach(d=>{const ts=open.filter(sl=>sl.date===d);
+    out.push({tone:'blue',tag:'클리닉 신청 가능',title:`${mdWd(d)} 클리닉`,sub:ts.map(sl=>`${clinicTime(sl)}${sl.capacity?` 남은 ${clinicLeft(sl)}자리`:''}`).join(' · '),btn:'신청하기'});});
+  return out;
+}
+// --- 강사 ---
+let clinicShowPast=false,clinicEditId=null,clinicAssignId=null;
+function clinicSlotForm(p,sl){
+  return `<div class="admin-form">
+    <div class="form-group"><label>날짜</label><input class="form-input" type="date" id="${p}-date" value="${esc(sl?sl.date:'')}"></div>
+    <div class="form-group"><label>정원 (비우면 제한 없음)</label><input class="form-input" type="number" min="1" id="${p}-cap" value="${sl&&sl.capacity?sl.capacity:''}" placeholder="예: 6"></div>
+    <div class="form-group"><label>시작</label><input class="form-input" type="time" id="${p}-start" step="600" value="${esc(sl?String(sl.start_time).slice(0,5):'')}"></div>
+    <div class="form-group"><label>끝</label><input class="form-input" type="time" id="${p}-end" step="600" value="${esc(sl&&sl.end_time?String(sl.end_time).slice(0,5):'')}"></div>
+    <div class="form-group full"><label>스스로 신청할 수 있는 학교</label><div class="chips">${certTargetPicker(p,sl)}</div></div>
+    <div class="form-group full"><label>안내 (선택 · 예: 학원 2관, 숙제 가져오기)</label><input class="form-input" id="${p}-note" value="${esc(sl&&sl.note||'')}"></div>
+  </div>`;
+}
+function clinicReadForm(p){
+  const date=document.getElementById(p+'-date').value,start=document.getElementById(p+'-start').value,end=document.getElementById(p+'-end').value;
+  const capV=document.getElementById(p+'-cap').value.trim(),cap=capV?parseInt(capV,10):null,note=document.getElementById(p+'-note').value.trim();
+  if(!date||!start)return '날짜와 시작 시각을 넣어 주세요.';
+  if(end&&end<=start)return '끝 시각이 시작보다 늦어야 해요.';
+  if(capV&&!(cap>0))return '정원은 1명 이상이거나 비워 두세요.';
+  return{date,start_time:start,end_time:end||null,capacity:cap,targets:certReadTargets(p),note:note||null};
+}
+function renderClinicAdmin(){
+  const fb=document.getElementById('cl-form');if(fb&&!fb.dataset.done){fb.innerHTML=clinicSlotForm('cl',null);fb.dataset.done='1';document.getElementById('cl-date').value=ymd(new Date(Date.now()+864e5));}
+  const el=document.getElementById('clinic-admin-list');if(!el)return;const sumEl=document.getElementById('clinic-admin-sum');
+  if(db.clinicMissing){el.innerHTML='<div class="empty-hint">클리닉 표가 아직 없어요. schema_add26.sql을 먼저 실행해야 해요.</div>';return;}
+  const today=ymd(new Date());
+  const up=db.clinicSlots.filter(sl=>sl.date>=today).sort(clinicSort),past=db.clinicSlots.filter(sl=>sl.date<today).sort((a,b)=>-clinicSort(a,b));
+  const upB=db.clinicBookings.filter(b=>up.some(sl=>sl.id===b.slot_id));
+  const declined=upB.filter(b=>b.decline_reason).length;
+  if(sumEl)sumEl.innerHTML=up.length?`앞으로 ${up.length}개 시간 · 지정 ${upB.filter(clinicAssigned).length}명 · 자율 ${upB.filter(b=>!clinicAssigned(b)).length}명${declined?` · <span class="pill red">못 옴 ${declined}</span>`:''}`:'';
+  const slotHtml=sl=>{
+    if(clinicEditId===sl.id)return `<div class="card">${clinicSlotForm('ce',sl)}<div style="display:flex;gap:6px;margin-top:8px"><button class="btn blue sm" onclick="saveClinicSlot('${esc(sl.id)}')">저장</button><button class="btn sm" onclick="clinicEditId=null;renderClinicAdmin()">취소</button></div></div>`;
+    const bs=db.clinicBookings.filter(b=>b.slot_id===sl.id).map(b=>({b,u:db.users.find(x=>x.id===b.student_id)}))
+      .sort((x,y)=>(clinicAssigned(y.b)-clinicAssigned(x.b))||String(x.b.created_at).localeCompare(String(y.b.created_at)));
+    const n=bs.length,na=bs.filter(x=>clinicAssigned(x.b)).length;
+    const stTxt=b=>!clinicAssigned(b)?esc(b.memo||''):b.decline_reason?`<span style="color:var(--red)">못 옴: ${esc(b.decline_reason)}</span>`:b.confirmed_at?'<span style="color:var(--green)">확인함</span>':'<span style="color:var(--text3)">아직 확인 안 함</span>';
+    const rows=bs.map(({b,u},i)=>`<tr style="border-top:1px solid var(--border)${clinicAssigned(b)?';background:var(--red-bg)':''}"><td style="padding:6px 4px;white-space:nowrap">${clinicAssigned(b)?'<span class="pill red">지정</span>':'<span class="pill blue">자율</span>'}</td><td style="padding:6px 4px;white-space:nowrap">${esc(u?u.school||'':'')}</td><td style="padding:6px 4px;white-space:nowrap"><b>${esc(u?u.name:'(지운 학생)')}</b></td><td style="padding:6px 4px;width:100%">${clinicAssigned(b)&&b.reason?`<span style="color:var(--text2)">${esc(b.reason)}</span> · `:''}${stTxt(b)}</td><td style="padding:6px 4px;white-space:nowrap"><button class="btn sm" onclick="removeClinicBooking('${esc(b.id)}')">빼기</button></td></tr>`).join('');
+    const assignBox=clinicAssignId!==sl.id?'':(()=>{
+      const inSlot=new Set(bs.map(x=>x.b.student_id));
+      const sts=db.users.filter(u=>u.role==='student'&&u.status==='active'&&!inSlot.has(u.id)).sort((a,b)=>String(a.school||'').localeCompare(String(b.school||''),'ko')||a.name.localeCompare(b.name,'ko'));
+      const bySc={};sts.forEach(u=>(bySc[u.school||'학교 미지정']=bySc[u.school||'학교 미지정']||[]).push(u));
+      return `<div style="margin-top:10px;padding:10px;border:1px dashed var(--red);border-radius:10px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px">오라고 할 학생 고르기</div>
+        ${Object.keys(bySc).map(sc=>`<div style="margin-bottom:6px"><div style="font-size:12px;color:var(--text2)">${esc(sc)}</div><div class="chips">${bySc[sc].map(u=>`<label class="chk"><input type="checkbox" class="cla-${esc(sl.id)}" value="${esc(u.id)}"> ${esc(u.name)}</label>`).join('')}</div></div>`).join('')}
+        <input class="form-input" id="cla-r-${esc(sl.id)}" maxlength="100" placeholder="지정 사유 (선택 · 학생에게 보여요. 예: 누항사 숙제 미제출)" style="margin-top:4px">
+        <div style="display:flex;gap:6px;margin-top:8px"><button class="btn red sm" onclick="assignClinic('${esc(sl.id)}')">지정하기</button><button class="btn sm" onclick="clinicAssignId=null;renderClinicAdmin()">닫기</button></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">지정은 정원과 상관없이 들어가요. 학생 앱 첫 화면에 '클리닉 지정' 알림이 떠요.</div></div>`;})();
+    return `<div class="card"><div class="row-between" style="gap:8px;align-items:flex-start;flex-wrap:wrap">
+      <div><strong>${clinicTime(sl)}</strong> <span style="font-size:12px;color:var(--text2)">· 자율 신청 ${esc(certTargetText(sl))}${sl.note?' · '+esc(sl.note):''}</span>
+        <div style="font-size:12px;margin-top:2px">지정 <b>${na}</b> · 자율 <b>${n-na}</b>${sl.capacity?` · 정원 ${sl.capacity}${n>=sl.capacity?' <span class="pill red">자율 마감</span>':''}`:' · 정원 없음'}${clinicClosed(sl)?' · <span style="color:var(--text3)">시작함</span>':''}</div></div>
+      <div style="display:flex;gap:6px;flex-shrink:0"><button class="btn sm" style="border-color:var(--red);color:var(--red)" onclick="clinicAssignId='${esc(sl.id)}';renderClinicAdmin()">학생 지정</button><button class="btn sm" onclick="clinicEditId='${esc(sl.id)}';renderClinicAdmin()">수정</button><button class="btn red sm" onclick="deleteClinicSlot('${esc(sl.id)}')">닫기</button></div></div>
+      ${n?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px">${rows}</table></div>`:'<div style="font-size:12px;color:var(--text3);margin-top:6px">아직 아무도 없어요.</div>'}${assignBox}</div>`;
+  };
+  const day=list=>{const d={};list.forEach(sl=>(d[sl.date]=d[sl.date]||[]).push(sl));return d;};
+  const block=(d,list,isPast)=>`<div style="margin-bottom:14px"><div class="row-between" style="margin:0 2px 6px;gap:8px;flex-wrap:wrap"><strong style="font-size:15px">${mdWd(d)}${d===today?' <span class="pill red">오늘</span>':daysUntil(d)===1?' <span class="pill amber">내일</span>':''}</strong><span style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--text2)">${list.reduce((n,sl)=>n+clinicCount(sl.id),0)}명<button class="btn sm" onclick="copyClinicDay('${d}')">다음 주 같은 요일에 똑같이 열기</button></span></div>${list.map(slotHtml).join('')}</div>`;
+  const ud=day(up),pd=day(past);
+  el.innerHTML=(up.length?Object.keys(ud).sort().map(d=>block(d,ud[d])).join(''):'<div class="empty-hint">열린 클리닉이 없어요. 위에서 시간을 열거나, 아래 지난 클리닉에서 \'다음 주 같은 요일에 똑같이 열기\'를 누르세요.</div>')+
+    (past.length?`<details style="margin-top:10px"${clinicShowPast?' open':''} ontoggle="clinicShowPast=this.open"><summary style="cursor:pointer;color:var(--text2);font-size:13px">지난 클리닉 ${Object.keys(pd).length}일</summary><div style="margin-top:8px">${Object.keys(pd).sort().reverse().map(d=>block(d,pd[d],true)).join('')}</div></details>`:'');
+}
+async function addClinicSlot(){
+  const r=clinicReadForm('cl');if(typeof r==='string'){notify(r,'error');return;}
+  const row=Object.assign({id:uid('cl_')},r);
+  const fail=await teacherRpc('teacher_clinic_slot_save',{p_row:row});
+  if(fail){notify('열지 못했어요: '+fail,'error');return;}
+  row.created_at=new Date().toISOString();db.clinicSlots.push(row);
+  document.getElementById('cl-start').value='';document.getElementById('cl-end').value='';
+  renderClinicAdmin();notify(`${mdWd(row.date)} ${clinicTime(row)} 클리닉을 열었어요.`,'success');
+}
+async function saveClinicSlot(id){
+  const sl=db.clinicSlots.find(x=>x.id===id);if(!sl)return;
+  const r=clinicReadForm('ce');if(typeof r==='string'){notify(r,'error');return;}
+  const fail=await teacherRpc('teacher_clinic_slot_save',{p_row:Object.assign({id},r)});
+  if(fail){notify('저장하지 못했어요: '+fail,'error');return;}
+  Object.assign(sl,r);clinicEditId=null;renderClinicAdmin();notify('클리닉 시간을 고쳤어요.','success');
+}
+// 그날 시간대를 7일 뒤 같은 요일에 그대로 열어요 (신청·지정은 복사하지 않아요)
+async function copyClinicDay(d){
+  const [y,m,dd]=d.split('-').map(Number);const nd=ymd(new Date(y,m-1,dd+7));
+  const src=db.clinicSlots.filter(sl=>sl.date===d);
+  const have=db.clinicSlots.filter(sl=>sl.date===nd).map(sl=>String(sl.start_time).slice(0,5));
+  const todo=src.filter(sl=>!have.includes(String(sl.start_time).slice(0,5)));
+  if(!todo.length){notify(`${mdWd(nd)}에 같은 시간이 이미 열려 있어요.`,'info');return;}
+  for(const sl of todo){
+    const row={id:uid('cl_'),date:nd,start_time:sl.start_time,end_time:sl.end_time,capacity:sl.capacity,targets:sl.targets,note:sl.note};
+    const fail=await teacherRpc('teacher_clinic_slot_save',{p_row:row});
+    if(fail){notify('열지 못했어요: '+fail,'error');renderClinicAdmin();return;}
+    row.created_at=new Date().toISOString();db.clinicSlots.push(row);
+  }
+  renderClinicAdmin();notify(`${mdWd(nd)}에 ${todo.length}개 시간을 열었어요. 필요하면 '수정'으로 바꾸세요.`,'success');
+}
+async function assignClinic(slotId){
+  const ids=[...document.querySelectorAll('.cla-'+slotId)].filter(c=>c.checked).map(c=>c.value);
+  if(!ids.length){notify('학생을 골라 주세요.','error');return;}
+  const reason=(document.getElementById('cla-r-'+slotId).value||'').trim();
+  const fail=await teacherRpc('teacher_clinic_assign',{p_slot_id:slotId,p_student_ids:ids,p_reason:reason||null});
+  if(fail){notify('지정하지 못했어요: '+fail,'error');return;}
+  await loadClinic();clinicAssignId=null;renderClinicAdmin();notify(`${ids.length}명을 클리닉에 지정했어요. 학생 앱에 알림이 떠요.`,'success');
+}
+async function deleteClinicSlot(id){
+  const sl=db.clinicSlots.find(x=>x.id===id);if(!sl)return;const n=clinicCount(id);
+  if(!confirm(`${mdWd(sl.date)} ${clinicTime(sl)} 클리닉을 닫을까요?${n?`\n\n지정·신청한 학생 ${n}명의 기록도 함께 지워져요.`:''}`))return;
+  const fail=await teacherRpc('teacher_clinic_slot_delete',{p_id:id});
+  if(fail){notify('닫지 못했어요: '+fail,'error');return;}
+  db.clinicSlots=db.clinicSlots.filter(x=>x.id!==id);db.clinicBookings=db.clinicBookings.filter(b=>b.slot_id!==id);
+  renderClinicAdmin();notify('클리닉을 닫았어요.','info');
+}
+async function removeClinicBooking(id){
+  const b=db.clinicBookings.find(x=>x.id===id);if(!b)return;const u=db.users.find(x=>x.id===b.student_id);
+  if(!confirm(`${u?u.name:'이 학생'}을(를) 이 클리닉에서 뺄까요?`))return;
+  const fail=await teacherRpc('teacher_clinic_booking_delete',{p_id:id});
+  if(fail){notify('빼지 못했어요: '+fail,'error');return;}
+  db.clinicBookings=db.clinicBookings.filter(x=>x.id!==id);renderClinicAdmin();notify('뺐어요.','info');
+}
 /* ===================== 출석 — 강사 ===================== */
 function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function renderAttendanceForm(){
@@ -3363,26 +3589,57 @@ async function addAnnouncement(){
   const content=document.getElementById('an-content').value.trim();
   if(!title){notify('제목을 입력하세요.','error');return;}
   const row={id:uid('an_'),title,content};
-  const{error}=await sb.from('announcements').insert(row);
+  const{error}=await sb.from('announcements').insert(row);row.created_at=new Date().toISOString();
   if(error){notify('등록 실패: '+error.message+' (schema_add2.sql을 실행하셨는지 확인해주세요)','error');return;}
   db.announcements.unshift(row);
   document.getElementById('an-title').value='';document.getElementById('an-content').value='';
   renderAnnounceAdmin();
   notify('공지를 등록했습니다.','success');
 }
+let annEditId=null;
+async function saveAnnouncement(id){
+  const a=db.announcements.find(x=>x.id===id);if(!a)return;
+  const title=document.getElementById('ae-title').value.trim(),content=document.getElementById('ae-content').value.trim();
+  if(!title){notify('제목을 입력하세요.','error');return;}
+  const{error}=await sb.from('announcements').update({title,content}).eq('id',id);
+  if(error){notify('수정 실패: '+error.message,'error');return;}
+  Object.assign(a,{title,content});annEditId=null;renderAnnounceAdmin();notify('공지를 고쳤어요.','success');
+}
+async function deleteAnnouncement(id){
+  const a=db.announcements.find(x=>x.id===id);if(!a)return;
+  if(!confirm(`"${a.title}" 공지를 지울까요? 학생 화면에서도 사라져요.`))return;
+  await sb.from('announcement_reads').delete().eq('announcement_id',id);   // 읽음 기록 먼저 (막혀 있어도 공지는 지워요)
+  const{error}=await sb.from('announcements').delete().eq('id',id);
+  if(error){notify('삭제 실패: '+error.message,'error');return;}
+  db.announcements=db.announcements.filter(x=>x.id!==id);db.announcementReads=db.announcementReads.filter(r=>r.announcement_id!==id);
+  renderAnnounceAdmin();notify('공지를 지웠어요.','info');
+}
 function renderAnnounceAdmin(){
   const el=document.getElementById('announce-admin-list');
   if(!db.announcements.length){el.innerHTML='<div class="empty-hint">등록된 공지가 없습니다.</div>';return;}
   el.innerHTML=db.announcements.map(a=>{
+    if(annEditId===a.id)return `<div class="card"><div class="form-group"><label>제목</label><input class="form-input" id="ae-title" value="${esc(a.title)}"></div>
+      <div class="form-group"><label>내용</label><textarea class="form-input" id="ae-content" rows="4">${esc(a.content||'')}</textarea></div>
+      <div style="display:flex;gap:6px;margin-top:8px"><button class="btn blue sm" onclick="saveAnnouncement('${esc(a.id)}')">저장</button><button class="btn sm" onclick="annEditId=null;renderAnnounceAdmin()">취소</button></div></div>`;
     const students=db.users.filter(u=>u.role==='student'&&u.status==='active');
     const readIds=new Set(db.announcementReads.filter(r=>r.announcement_id===a.id).map(r=>r.student_id));
     const readN=students.filter(u=>readIds.has(u.id)).length;
     const unread=students.filter(u=>!readIds.has(u.id));
-    return `<div class="card"><div class="row-between"><strong>${esc(a.title)}</strong><span class="pill ${unread.length?'amber':'green'}">확인 ${readN}/${students.length}</span></div><div style="margin-top:6px;color:var(--text2);white-space:pre-wrap">${esc(a.content||'')}</div>
+    return `<div class="card"><div class="row-between" style="gap:8px"><strong>${esc(a.title)}</strong><span style="display:flex;gap:6px;align-items:center;flex-shrink:0"><span class="pill ${unread.length?'amber':'green'}">확인 ${readN}/${students.length}</span><button class="btn sm" onclick="annEditId='${esc(a.id)}';renderAnnounceAdmin()">수정</button><button class="btn red sm" onclick="deleteAnnouncement('${esc(a.id)}')">삭제</button></span></div><div style="margin-top:6px;color:var(--text2);white-space:pre-wrap">${esc(a.content||'')}</div>
       ${unread.length?`<div style="margin-top:8px;font-size:12px;color:var(--text2)">아직 확인 안 한 학생: ${unread.map(u=>esc(u.name)).join(', ')}</div>`:''}</div>`;
   }).join('');
 }
 
+/* --- 첫 화면 공지: 최신 2개 + 더보기 --- */
+function homeAnnounceHTML(sid){
+  if(!db.announcements.length)return '';
+  const list=db.announcements.slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))).slice(0,2);
+  const isRead=a=>db.announcementReads.some(r=>r.announcement_id===a.id&&r.student_id===sid);
+  const dt=a=>{if(!a.created_at)return '';const d=new Date(a.created_at);return `${d.getMonth()+1}/${d.getDate()}`;};
+  return `<div class="section-head" style="margin-top:22px"><h2>공지</h2><span class="h-more" style="padding:0;cursor:pointer" onclick="goTab('s-announce')">공지 더보기 ›</span></div>
+    <div class="h-list">${list.map(a=>`<div class="card" style="cursor:pointer;margin:0" onclick="goTab('s-announce')"><div class="row-between" style="gap:8px"><strong>${esc(a.title)}</strong><span style="display:flex;gap:6px;align-items:center;flex-shrink:0">${isRead(a)?'':'<span class="pill blue">새 공지</span>'}<span style="font-size:12px;color:var(--text3)">${dt(a)}</span></span></div>
+      ${a.content?`<div style="margin-top:4px;font-size:13px;color:var(--text2);white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(a.content)}</div>`:''}</div>`).join('')}</div>`;
+}
 /* ===================== 공지사항 — 학생 ===================== */
 function renderMyAnnounce(){
   refreshHome();

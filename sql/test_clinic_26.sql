@@ -55,5 +55,5 @@ begin
   r := student_clinic_book('가짜', 'zz_slot', 'x');
   if r = 'forbidden' then ok := ok + 1; else bad := bad + 1; out := out || ' [11 가짜 토큰 통과!]'; end if;
 
-  raise exception 'TEST 통과 %/11 · 실패 % % (이 메시지는 시험을 되돌리려고 일부러 낸 오류예요. 남은 데이터 없음)', ok, bad, out;
+  raise exception 'TEST 통과 %/12 · 실패 % % (이 메시지는 시험을 되돌리려고 일부러 낸 오류예요. 남은 데이터 없음)', ok, bad, out;
 end $$;

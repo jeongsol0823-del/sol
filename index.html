@@ -3920,7 +3920,9 @@ function parentReportHTML(sid,note,start,end){
     }else V=vt.items.map(x=>{const{title}=splitTitle(x.s.lesson_title||x.s.name);return `M${pad2(x.no)} ${esc(title)} ${x.cleared?`<b style="color:${C.green}">완료</b>`:'<b>미완료</b>'}${x.best?` ${x.best.score}/${x.best.total}`:''}`;}).join('<br>');
     if(vt)V+=`<div style="color:${C.sub};font-size:11px">누적 ${vt.clearedAll}/${vt.total}개 완료</div>`;
     const cs=certSortItems(db.certItems.filter(i=>certForSchool(i,u.school)&&i.due_date&&i.due_date>=w.ws&&i.due_date<=w.we));
-    const I=cs.length?cs.map(i=>{const s=certSubOf(i.id,sid);return `${esc(i.title)} ${gray('('+rpMD(i.due_date)+' 마감)')} ${!s?red('<b>미제출</b>'):s.status==='approved'?`<b style="color:${C.green}">통과</b>`:s.status==='rejected'?red('<b>미통과</b>'):'<b>확인 중</b>'}`;}).join('<br>'):gray('마감 과제 없음');
+    // 늦게 제출: 학생 앱과 같은 기준(certLate, 마감일 다음 날 0시 10분 넘음) · 제출일을 함께 (쏠T 11-11)
+    const late=(i,s)=>certLate(i,s)?` · <b style="color:#c87400">늦게 제출</b>${gray('(제출일 '+rpMD(ymd(new Date(s.submitted_at)))+')')}`:'';
+    const I=cs.length?cs.map(i=>{const s=certSubOf(i.id,sid);return `${esc(i.title)} ${gray('('+rpMD(i.due_date)+' 마감)')} ${!s?red('<b>미제출</b>'):(s.status==='approved'?`<b style="color:${C.green}">통과</b>`:s.status==='rejected'?red('<b>미통과</b>'):'<b>확인 중</b>')+late(i,s)}`;}).join('<br>'):gray('마감 과제 없음');
     const T=d.exams.length?d.exams.map(({r,ex})=>{
       if(ex&&ex.bundle){
         // 학생마다 시험지가 달라요: 이번 주 공통 부분 점수·학교 평균·최다 오답 + 지난주 오답 다시 풀기는 따로

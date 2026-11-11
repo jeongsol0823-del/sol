@@ -171,3 +171,10 @@ grant execute on function teacher_clinic_slot_save(text, jsonb), teacher_clinic_
   student_clinic_list(text), student_clinic_book(text, text, text), student_clinic_cancel(text, text),
   student_clinic_respond(text, text, boolean, text)
   to anon, authenticated;
+
+-- ---------- 보안 잠금 (11-11 총괄이 Edge로 추가 실행함) ----------
+-- 두 표 모두 RLS를 켜고, 시간대만 누구나 읽게. 신청·지정은 정책 없음 → 위 서버 함수(security definer)로만.
+alter table clinic_times enable row level security;
+alter table clinic_signups enable row level security;
+drop policy if exists clinic_times_read on clinic_times;
+create policy clinic_times_read on clinic_times for select to anon, authenticated using (true);

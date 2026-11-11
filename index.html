@@ -581,12 +581,12 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
     </div>
 
     <div class="section" id="t-cert">
-      <div class="section-head"><h2>인증 주차 관리</h2></div>
-      <div class="card"><div style="display:flex;gap:8px"><input class="form-input" id="cw-name" placeholder="예: 8월 4주차" style="flex:1"><button class="btn blue sm" onclick="addCertWeek()">추가</button></div></div>
-      <div id="cert-week-list" style="margin:10px 0"></div>
-
-      <div class="section-head" style="margin-top:24px"><h2>인증 과제 등록</h2></div>
-      <div class="card">
+      <div class="section-head"><h2>숙제 인증</h2><span id="cert-admin-sum" style="font-size:13px;color:var(--text2)"></span></div>
+      <details class="card" id="cert-add-box" style="margin-bottom:14px"><summary style="cursor:pointer;font-weight:600">새 주차·과제 등록</summary>
+      <div style="margin-top:10px;font-size:12px;color:var(--text2)">① 주차 추가 (예: 수지고 11월 2주차)</div>
+      <div style="display:flex;gap:8px;margin-top:4px"><input class="form-input" id="cw-name" placeholder="예: 수지고 11월 2주차" style="flex:1"><button class="btn blue sm" onclick="addCertWeek()">추가</button></div>
+      <div style="margin-top:14px;font-size:12px;color:var(--text2)">② 과제 등록</div>
+      <div style="margin-top:4px">
         <div class="admin-form">
           <div class="form-group"><label>주차</label><select class="form-select" id="ci-week"></select></div>
           <div class="form-group"><label>과제 제목</label><input class="form-input" id="ci-title" placeholder="예: 어휘 30개 암기 확인"></div>
@@ -596,8 +596,7 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
         </div>
         <button class="btn blue sm" style="margin-top:8px" onclick="addCertItem()">과제 등록</button>
         <div style="font-size:11px;color:var(--text2);margin-top:6px">마감일이 지나면 학교별로 <b>미제출 학생</b>도 보여요.</div>
-      </div>
-      <div class="section-head" style="margin-top:24px"><h2>과제 목록 · 제출 현황</h2></div>
+      </div></details>
       <div id="cert-submission-list"></div>
     </div>
 
@@ -3152,16 +3151,54 @@ async function removeCertPhoto(url){
 
 /* --- 인증 — 강사 --- */
 let certEditId=null;
-function renderCertAdmin(){
-  const listEl=document.getElementById('cert-week-list');
-  listEl.innerHTML=db.certWeeks.length?db.certWeeks.map(w=>`<div class="card row-between"><span>${esc(w.name)}</span></div>`).join(''):'<div class="empty-hint">등록된 인증 주차가 없습니다.</div>';
-  const sel=document.getElementById('ci-week');
-  sel.innerHTML=db.certWeeks.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')||'<option value="">주차를 먼저 추가하세요</option>';
-  const tg=document.getElementById('ci-targets');if(tg&&!tg.dataset.done){tg.innerHTML=certTargetPicker('ci',null);tg.dataset.done='1';}
-  const subEl=document.getElementById('cert-submission-list');
-  if(!db.certItems.length){subEl.innerHTML='<div class="empty-hint">등록된 인증 과제가 없습니다.</div>';return;}
-  subEl.innerHTML=certSortItems(db.certItems).map(certItemAdminHtml).join('');
+// 주차 묶음: 주차 이름의 "11월 1주차"로 학교들을 한 묶음으로 모아요 (주차는 학교마다 따로 있어요)
+function certPeriod(w){
+  const m=String(w&&w.name||'').match(/(\d{1,2})\s*월\s*(\d)\s*주/);
+  if(!m)return{key:'n:'+(w?w.name:''),label:w?w.name:'주차 없음',ord:0};
+  const mo=+m[1],wk=+m[2],c=new Date(w.created_at||Date.now());
+  let y=c.getFullYear();if(mo-(c.getMonth()+1)>6)y--;   // 12월 주차를 1월에 만든 경우
+  return{key:`p:${y}-${mo}-${wk}`,label:`${mo}월 ${wk}주차`,ord:y*1000+mo*10+wk};
 }
+let certOpenGroups=null;   // 펼친 주차 묶음 (처음엔 가장 최근 주차만)
+function renderCertAdmin(){
+  const sel=document.getElementById('ci-week');
+  const weeksNew=db.certWeeks.slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  sel.innerHTML=weeksNew.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')||'<option value="">주차를 먼저 추가하세요</option>';
+  const tg=document.getElementById('ci-targets');if(tg&&!tg.dataset.done){tg.innerHTML=certTargetPicker('ci',null);tg.dataset.done='1';}
+  const subEl=document.getElementById('cert-submission-list');const sumEl=document.getElementById('cert-admin-sum');
+  if(!db.certWeeks.length&&!db.certItems.length){subEl.innerHTML='<div class="empty-hint">등록된 인증 과제가 없습니다. 위 \'새 주차·과제 등록\'에서 추가하세요.</div>';if(sumEl)sumEl.textContent='';return;}
+  // 주차 → 묶음
+  const groups={};
+  const gOf=w=>{const p=certPeriod(w);return groups[p.key]=groups[p.key]||Object.assign(p,{weeks:[],items:[]});};
+  db.certWeeks.forEach(w=>gOf(w).weeks.push(w));
+  db.certItems.forEach(it=>{const w=db.certWeeks.find(x=>x.id===it.week_id);gOf(w).items.push(it);});
+  const list=Object.values(groups).sort((a,b)=>b.ord-a.ord||a.label.localeCompare(b.label,'ko'));
+  if(!certOpenGroups)certOpenGroups=new Set(list.length?[list[0].key]:[]);
+  const stat=items=>{let tot=0,sub=0,pend=0,miss=0;items.forEach(it=>certStudents(it).forEach(u=>{const s=certState(it,certSubOf(it.id,u.id));tot++;if(s!=='open'&&s!=='missing')sub++;if(s==='pending')pend++;if(s==='missing')miss++;}));return{tot,sub,pend,miss};};
+  const allPend=stat(db.certItems).pend;
+  if(sumEl)sumEl.innerHTML=allPend?`<span class="pill amber">확인 대기 ${allPend}건</span>`:'확인 대기 없음';
+  const schoolOrder=schoolNames();
+  subEl.innerHTML=list.map((g,gi)=>{
+    const st=stat(g.items);
+    // 학교별: 과제 대상 학교(여러 곳이면 '여러 학교'), 주차 이름의 학교도 함께 써요
+    const bySc={};
+    g.items.forEach(it=>{const t=certTargets(it);const k=!t?'전체 학교':t.length>1?t.join('·'):t[0];(bySc[k]=bySc[k]||[]).push(it);});
+    g.weeks.forEach(w=>{const sc=schoolOrder.find(n=>String(w.name).startsWith(n));if(sc&&!bySc[sc])bySc[sc]=[];});
+    // 학교 순서: 마감이 빠른 학교 먼저 (수업 요일 순서와 같아요)
+    const due0=k=>bySc[k].map(it=>it.due_date||'9999').sort()[0]||'9999';
+    const scs=Object.keys(bySc).sort((a,b)=>due0(a).localeCompare(due0(b))||a.localeCompare(b,'ko'));
+    const body=scs.map(sc=>{const its=certSortItems(bySc[sc]);const s2=stat(its);
+      return `<div style="margin-top:12px"><div class="row-between" style="padding:0 2px 4px"><strong style="font-size:14px">${esc(sc)}</strong><span style="font-size:12px;color:var(--text2)">${its.length?`제출 ${s2.sub}/${s2.tot}${s2.pend?` · <b style="color:var(--amber,#d9822b)">확인 대기 ${s2.pend}</b>`:''}${s2.miss?` · <b style="color:var(--red)">미제출 ${s2.miss}</b>`:''}`:'과제 없음'}</span></div>
+        ${its.map(certItemAdminHtml).join('')}</div>`;}).join('');
+    const open=certOpenGroups.has(g.key);
+    return `<details class="cert-period" data-k="${esc(g.key)}"${open?' open':''} ontoggle="certToggleGroup(this)" style="border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:var(--bg2)">
+      <summary style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:16px;font-weight:700">${esc(g.label)}${gi===0?' <span class="pill blue">최근</span>':''}</span>
+        <span style="font-size:12px;color:var(--text2)">과제 ${g.items.length}개 · 제출 ${st.sub}/${st.tot}${st.pend?` · <span class="pill amber">확인 대기 ${st.pend}</span>`:''}${st.miss?` · <span style="color:var(--red)">미제출 ${st.miss}</span>`:''}</span>
+      </summary>${body||'<div class="empty-hint">과제가 없어요.</div>'}</details>`;
+  }).join('');
+}
+function certToggleGroup(el){const k=el.dataset.k;if(!certOpenGroups)certOpenGroups=new Set();if(el.open)certOpenGroups.add(k);else certOpenGroups.delete(k);}
 function certItemAdminHtml(item){
   const w=db.certWeeks.find(x=>x.id===item.week_id);
   if(certEditId===item.id){
@@ -3190,7 +3227,7 @@ function certItemAdminHtml(item){
     </div>`;
   const schoolHtml=schoolNames.map(sc=>{
     const g=groups[sc];const subs=g.filter(r=>r.sub);const miss=g.filter(r=>!r.sub);
-    return `<div class="cert-school"><div class="row-between"><strong style="font-size:13px">${esc(sc)}</strong><span style="font-size:12px;color:var(--text2)">제출 ${subs.length}/${g.length}</span></div>
+    return `<div class="cert-school"><div class="row-between"><strong style="font-size:13px">${schoolNames.length>1?esc(sc):''}</strong><span style="font-size:12px;color:var(--text2)">제출 ${subs.length}/${g.length}</span></div>
       ${subs.map(subRow).join('')||'<div style="color:var(--text2);font-size:12px;padding:4px 0">제출한 학생이 없어요.</div>'}
       ${miss.length?(past?`<div style="padding:6px 0;border-top:1px solid var(--border);font-size:13px"><span class="pill red">미제출 ${miss.length}명</span> ${miss.map(r=>esc(r.u.name)).join(', ')}</div>`
         :`<div style="padding:6px 0;border-top:1px solid var(--border);font-size:12px;color:var(--text3)">아직 안 낸 학생 ${miss.length}명 · ${item.due_date?'마감일이 지나면 이름이 보여요':'마감일을 정하면 마감 후 이름이 보여요'}</div>`):''}

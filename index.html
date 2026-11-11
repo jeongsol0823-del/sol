@@ -2354,11 +2354,11 @@ function areaHTML(items,C,o={}){
   const nums=list=>list.map(it=>`<span style="display:inline-block;border-radius:5px;padding:0 5px;margin-left:3px;font-size:${o.small?11:12}px;background:${it.ind?'#fff1e0':'rgba(127,127,127,.14)'};color:${it.ind?C.ind:'inherit'}">${it.num}번</span>`).join('');
   const fs=o.small?12:14;
   const works=tree.filter(w=>w.wrong).map(w=>`<div class="pb" style="border-left:3px solid ${C.red};padding:3px 0 3px 10px;margin:6px 0">
-    <div style="font-weight:700;font-size:${fs+1}px">${esc(w.key)} <span style="color:${C.red}">${w.n}문제 중 ${w.wrong}개 틀림</span></div>
-    ${w.kids.filter(a=>a.wrong).map(a=>`<div style="font-size:${fs}px;margin-left:4px">› ${esc(a.key)} <b style="color:${C.red}">${a.n}문제 중 ${a.wrong}개</b>${a.loose&&a.loose.length?nums(a.loose):''}</div>
+    <div data-kwn style="font-weight:700;font-size:${fs+1}px">${esc(w.key)} <span style="color:${C.red}">${w.n}문제 중 ${w.wrong}개 틀림</span></div>
+    ${w.kids.filter(a=>a.wrong).map(a=>`<div data-kwn style="font-size:${fs}px;margin-left:4px">› ${esc(a.key)} <b style="color:${C.red}">${a.n}문제 중 ${a.wrong}개</b>${a.loose&&a.loose.length?nums(a.loose):''}</div>
       ${a.kids.filter(d=>d.wrong).map(d=>`<div style="font-size:${fs-1}px;margin-left:20px;color:${C.sub}">› ${esc(d.key)} ${d.n}문제 중 ${d.wrong}개${nums(d.items)}</div>`).join('')}`).join('')}</div>`).join('');
   const okAreas=[];tree.forEach(w=>w.kids.forEach(a=>{if(!a.wrong)okAreas.push(`${w.key} › ${a.key}`);}));
-  return `${o.head!==false?`<div style="font-size:${fs}px;color:${C.sub};margin-bottom:2px">영역 표시 ${items.length}문제 중 <b style="color:${nW?C.red:C.green}">${nW}개 틀림</b>${anyInd?` · <span style="color:${C.ind}">주황 번호</span> = 지난주 오답 다시 풀기`:''}</div>`:''}
+  return `${o.head!==false?`<div data-kwn style="font-size:${fs}px;color:${C.sub};margin-bottom:2px">영역 표시 ${items.length}문제 중 <b style="color:${nW?C.red:C.green}">${nW}개 틀림</b>${anyInd?` · <span style="color:${C.ind}">주황 번호</span> = 지난주 오답 다시 풀기`:''}</div>`:''}
     ${works||`<div style="color:${C.green};font-weight:700;font-size:${fs}px">영역 표시한 문항을 모두 맞혔어요!</div>`}
     ${works&&okAreas.length?`<div class="pb" style="font-size:${fs-1}px;color:${C.green};margin-top:6px">✔ 다 맞힌 영역: ${okAreas.map(esc).join(' · ')}</div>`:''}`;
 }
@@ -3867,8 +3867,8 @@ function rpAreaHTML(u,start,end){
   const C={red:RP.red,sub:RP.sub,green:RP.green,ind:'#c87400'};
   const list=db.examResponses.filter(r=>r.student_name===u.name&&isSubmitted(r)&&inRange(r.submitted_at,start,end)).map(r=>({r,ex:db.exams.find(x=>x.id===r.exam_id)})).filter(x=>hasArea(x.ex))
     .sort((a,b)=>String(a.r.submitted_at||'').localeCompare(String(b.r.submitted_at||'')));
-  const blocks=list.map(({r,ex})=>{const h=areaHTML(areaItems(ex,r),C,{small:true});return h?`<div style="margin-top:8px"><div class="pb" style="font-family:${RP.TF};font-weight:700;font-size:13px">${esc(ex.bundle||ex.name)}</div>${h}</div>`:'';}).join('');
-  return blocks?`<div style="margin-top:14px;border-top:2px solid ${RP.blue};padding-top:8px"><div class="pb" style="font-family:${RP.TF};font-weight:700;font-size:15px">틀린 영역 <span style="font-family:${RP.BF};font-weight:400;font-size:12px;color:${RP.sub}">작품(문법 단원) › 영역 › 세부 영역 · 번호는 학생 시험지 번호</span></div>${blocks}</div>`:'';
+  const blocks=list.map(({r,ex})=>{const h=areaHTML(areaItems(ex,r),C,{small:true});return h?`<div style="margin-top:8px"><div class="pb" data-kwn style="font-family:${RP.TF};font-weight:700;font-size:13px">${esc(ex.bundle||ex.name)}</div>${h}</div>`:'';}).join('');
+  return blocks?`<div style="margin-top:14px;border-top:2px solid ${RP.blue};padding-top:8px"><div class="pb" data-kwn style="font-family:${RP.TF};font-weight:700;font-size:15px">틀린 영역 <span style="font-family:${RP.BF};font-weight:400;font-size:12px;color:${RP.sub}">작품(문법 단원) › 영역 › 세부 영역 · 번호는 학생 시험지 번호</span></div>${blocks}</div>`:'';
 }
 function rpRange(ns){
   ns=[...ns].sort((a,b)=>a-b);const out=[];let s=null,p=null;const f=n=>'M'+pad2(n);
@@ -3901,57 +3901,76 @@ function parentReportHTML(sid,note,start,end){
   const certAll=certSortItems(db.certItems.filter(i=>certForSchool(i,u.school)&&i.due_date&&i.due_date>=start&&i.due_date<=end));
   const miss=certAll.filter(i=>!certSubOf(i.id,sid)).map(i=>i.title);
   if(miss.length)L.push(`아직 제출하지 않은 숙제가 있습니다(${miss.join(', ')}). 늦더라도 어플에서 영상으로 꼭 제출해야 합니다. 내신 기간인 만큼 숙제를 잘 챙길 수 있도록 함께 살펴봐 주세요.`);
+  // 빨간 '꼭 확인해 주세요' 상자는 쏠T 11-11 결정으로 성적표에서 뺌 (미제출·미시청은 칸 배지로 보여요)
   const alert=L.length?`<div class="pb" style="border:2px solid ${C.red};background:#fff5f4;border-radius:10px;padding:10px 16px;margin-bottom:10px"><div style="font-family:${TF};font-weight:700;font-size:15px;color:${C.red}">꼭 확인해 주세요</div>${L.map(x=>`<div style="font-size:13px;line-height:1.6;color:${C.red};margin-top:3px">• ${esc(x)}</div>`).join('')}</div>`:'';
   const notice=!oldMiss.length&&newAbs.length?`<div class="pb" style="font-size:13px;color:${C.sub};background:#f1f2f5;border-radius:8px;padding:7px 14px;margin-bottom:10px">${newAbs.map(rpMK).join(', ')} 결석한 수업의 보강 영상을 어플에 올렸습니다. 이번 주 안에 수강해 주세요.</div>`:'';
-  const noteBox=note?`<div class="pb" style="background:${C.soft};border-radius:10px;padding:10px 16px;margin-bottom:10px"><div style="font-family:${TF};font-weight:700;font-size:15px;margin-bottom:3px">쏠T 한마디</div><div style="font-size:12.5px;line-height:1.65;white-space:pre-line">${esc(note)}</div></div>`:'';
+  const noteBox=note?`<div class="pb" style="background:${C.soft};border-radius:10px;padding:10px 16px;margin-bottom:10px"><div data-kwn style="font-family:${TF};font-weight:700;font-size:15px;margin-bottom:3px">쏠T 한마디</div><div style="font-size:12.5px;line-height:1.65;white-space:pre-line">${esc(note)}</div></div>`:'';
+  // 칸마다 결과를 색 배지로 먼저 크게, 부연 설명은 아래 작은 글씨로 (쏠T 11-11)
+  const BD={g:[C.green,'#e6f4ee'],r:[C.red,'#fdecea'],a:['#b35c00','#fff1e0'],b:[C.blue,'#e8eefb'],n:['#4b5563','#eef0f3']};
+  const bd=(t,k)=>`<span style="display:inline-block;font-family:${TF};font-weight:700;font-size:14px;line-height:1.35;padding:2px 10px;border-radius:999px;margin:0 4px 3px 0;color:${BD[k][0]};background:${BD[k][1]}">${t}</span>`;
+  const sm=(t,col)=>`<div style="font-size:11.5px;line-height:1.5;color:${col||C.sub}">${t}</div>`;
+  const item=(b,s)=>`<div style="margin-bottom:6px">${b}${s||''}</div>`;
+  const absSet=new Set(absent);
   const cells=w=>{
     const att=db.attendance.filter(a=>a.student_id===sid&&a.date>=w.from&&a.date<=w.to).sort((a,b)=>a.date.localeCompare(b.date));
     const A=att.length?att.map(a=>{
-      if(a.status!=='absent')return `${rpMD(a.date,1)} ${a.status==='late'?'지각':'출석'}`;
+      if(a.status!=='absent')return item(a.status==='late'?bd('지각','a'):bd('출석','g'),sm(rpMD(a.date,1)));
       const m=rpMakeup(u,a.date);
-      return red(`${rpMD(a.date,1)} 결석`)+(m.vs.length?' · 보강 '+(m.seen?`<span style="color:${C.green}">수강 완료</span>`:a.date>=lastWs?'이번 주 수강':red('미수강')):'');
-    }).join('<br>'):gray('수업 없음');
+      return item(bd('결석','r'),sm(rpMD(a.date,1))+(m.vs.length?sm('보강 영상 '+(m.seen?`<b style="color:${C.green}">수강 완료</b>`:a.date>=lastWs?'이번 주 안에 수강':`<b style="color:${C.red}">미수강</b>`)):''));
+    }).join(''):item(bd('수업 없음','n'));
     const d=weeklyReportData(sid,w.from,w.to);const vt=d.vocab&&d.vocab[0];
     let V;
-    if(!vt||!vt.items.length)V=red('푼 미션 없음');
-    else if(vt.items.length>3){
-      const done=vt.items.filter(x=>x.cleared).map(x=>x.no),todo=vt.items.filter(x=>!x.cleared).map(x=>x.no),tries=vt.items.reduce((a,x)=>a+x.tries,0);
-      V=`완료 ${done.length}개${done.length?' ('+rpRange(done)+')':''}${todo.length?' · 미완료 '+todo.length+'개 ('+rpRange(todo)+')':''} · 응시 ${tries}회`;
-    }else V=vt.items.map(x=>{const{title}=splitTitle(x.s.lesson_title||x.s.name);return `M${pad2(x.no)} ${esc(title)} ${x.cleared?`<b style="color:${C.green}">완료</b>`:'<b>미완료</b>'}${x.best?` ${x.best.score}/${x.best.total}`:''}`;}).join('<br>');
-    if(vt)V+=`<div style="color:${C.sub};font-size:11px">누적 ${vt.clearedAll}/${vt.total}개 완료</div>`;
+    if(!vt||!vt.items.length)V=item(bd('완료 0개','r'),sm('이번 주 푼 미션 없음')+(vt?sm(`누적 ${vt.clearedAll}/${vt.total}개 완료`):''));
+    else{
+      const done=vt.items.filter(x=>x.cleared),todo=vt.items.filter(x=>!x.cleared);
+      const det=vt.items.length>3
+        ?sm(`${done.length?'완료 '+rpRange(done.map(x=>x.no)):''}${todo.length?(done.length?' · ':'')+'미완료 '+rpRange(todo.map(x=>x.no)):''} · 응시 ${vt.items.reduce((a,x)=>a+x.tries,0)}회`)
+        :vt.items.map(x=>{const{title}=splitTitle(x.s.lesson_title||x.s.name);return sm(`M${pad2(x.no)} ${esc(title)} ${x.cleared?`<b style="color:${C.green}">완료</b>`:'미완료'}${x.best?` ${x.best.score}/${x.best.total}`:''}`);}).join('');
+      V=item(bd(`완료 ${done.length}개`,done.length?'g':'r')+(todo.length?bd(`미완료 ${todo.length}개`,'a'):''),det+sm(`누적 ${vt.clearedAll}/${vt.total}개 완료`));
+    }
     const cs=certSortItems(db.certItems.filter(i=>certForSchool(i,u.school)&&i.due_date&&i.due_date>=w.ws&&i.due_date<=w.we));
     // 늦게 제출: 학생 앱과 같은 기준(certLate, 마감일 다음 날 0시 10분 넘음) · 제출일을 함께 (쏠T 11-11)
-    const late=(i,s)=>certLate(i,s)?` · <b style="color:#c87400">늦게 제출</b>${gray('(제출일 '+rpMD(ymd(new Date(s.submitted_at)))+')')}`:'';
-    const I=cs.length?cs.map(i=>{const s=certSubOf(i.id,sid);return `${esc(i.title)} ${gray('('+rpMD(i.due_date)+' 마감)')} ${!s?red('<b>미제출</b>'):(s.status==='approved'?`<b style="color:${C.green}">통과</b>`:s.status==='rejected'?red('<b>미통과</b>'):'<b>확인 중</b>')+late(i,s)}`;}).join('<br>'):gray('마감 과제 없음');
+    const I=cs.length?cs.map(i=>{const s=certSubOf(i.id,sid);const lt=s&&certLate(i,s);
+      const b=!s?bd('미제출','r'):(s.status==='approved'?bd('통과','g'):s.status==='rejected'?bd('미통과','r'):bd('확인 중','b'))+(lt?bd('늦게 제출','a'):'');
+      return item(b,sm(`${esc(i.title)} · ${rpMD(i.due_date)} 마감${s&&s.submitted_at?` · 제출일 ${rpMD(ymd(new Date(s.submitted_at)))}`:''}`));}).join(''):item(bd('마감 과제 없음','n'));
     const T=d.exams.length?d.exams.map(({r,ex})=>{
       if(ex&&ex.bundle){
         // 학생마다 시험지가 달라요: 이번 주 공통 부분 점수·학교 평균·최다 오답 + 지난주 오답 다시 풀기는 따로
         const c=partStat(ex,r,'공통'),i=partStat(ex,r,'개별'),st=rpBundleStat(ex.bundle,u.school);
         const myNum=ci=>((ex.questions||[]).find(q=>q.ci===ci)||{}).num;
-        return `<b>${esc(ex.bundle)}</b><br>`+(c.n?`<b style="color:${C.blue}">${c.score}점</b> ${gray(`(${c.right}/${c.n})`+(st.avg!=null?` · 학교 평균 ${st.avg}점 · ${st.n}명 응시`:''))}`
-          +`<div style="font-size:12px">틀린 문항: ${c.wrong.length?c.wrong.map(q=>q.num).join(', ')+'번':`<span style="color:${C.green}">없음</span>`}</div>`
-          +(st.top.length?`<div style="font-size:12px;color:${C.sub}">학교 최다 오답: ${st.top.map(t=>`${myNum(t.ci)}번(${t.pct}%)`).join(', ')}</div>`:''):'')
-          +(i.n?`<div style="font-size:12px">${indivLabel(ex)} ${i.n}문제 중 <b>${i.right}개</b> 맞힘</div>`:'');
+        return item((c.n?bd(`${c.score}점`,'b'):'')+(i.n?bd(`다시 풀기 ${i.right}/${i.n}`,'n'):''),
+          sm(`<b style="color:${C.ink}">${esc(ex.bundle)}</b>`)
+          +(c.n?sm(`공통 ${c.right}/${c.n}문제`+(st.avg!=null?` · 학교 평균 ${st.avg}점 · ${st.n}명 응시`:''))
+            +sm(`틀린 문항: ${c.wrong.length?c.wrong.map(q=>q.num).join(', ')+'번':`<span style="color:${C.green}">없음</span>`}`)
+            +(st.top.length?sm(`학교 최다 오답: ${st.top.map(t=>`${myNum(t.ci)}번(${t.pct}%)`).join(', ')}`):''):'')
+          +(i.n?sm(`${indivLabel(ex)} ${i.n}문제 중 ${i.right}개 맞힘`):''));
       }
       const st=rpSchoolStat(r.exam_id,u.school);const wr=rpWrong(r,ex);
-      return `<b>${esc(ex?ex.name:'시험')}</b><br><b style="color:${C.blue}">${r.score}점</b> ${gray(`(${r.correct_count}/${r.total_q})`+(st.avg!=null?` · 학교 평균 ${st.avg}점 · ${st.n}명 응시`:''))}`
-        +`<div style="font-size:12px">틀린 문항: ${wr.length?wr.join(', ')+'번':`<span style="color:${C.green}">없음</span>`}</div>`
-        +(st.top.length?`<div style="font-size:12px;color:${C.sub}">학교 최다 오답: ${st.top.join(', ')}</div>`:'');
-    }).join('<div style="height:6px"></div>'):gray('응시한 시험 없음');
-    // 강의 영상(11-07): 그 주 수업 날짜의 강의 영상 N개 중 M개 시청(90% 이상 = 시청)
+      return item(bd(`${r.score}점`,'b'),sm(`<b style="color:${C.ink}">${esc(ex?ex.name:'시험')}</b>`)+sm(`${r.correct_count}/${r.total_q}문제`+(st.avg!=null?` · 학교 평균 ${st.avg}점 · ${st.n}명 응시`:''))
+        +sm(`틀린 문항: ${wr.length?wr.join(', ')+'번':`<span style="color:${C.green}">없음</span>`}`)+(st.top.length?sm(`학교 최다 오답: ${st.top.join(', ')}`):''));
+    }).join(''):item(bd('응시 없음','n'));
+    // 강의 영상(11-07): 결석한 날 영상만 꼭 볼 영상(빨강), 출석한 날 영상은 원하면 보는 영상(빨간 '안 봄' 없음) (쏠T 11-11)
     const lv=db.videos.filter(v=>isLecture(v)&&v.class_date&&v.class_date>=w.from&&v.class_date<=w.to&&videoFor(v,u)).sort((a,b)=>a.class_date.localeCompare(b.class_date));
-    const lm=lv.filter(v=>getPct(sid,v.id)>=HOME_VIDEO_DONE).length;
-    const L=lv.length?`${lv.length}개 중 <b style="color:${lm===lv.length?C.green:C.ink}">${lm}개</b> 시청`+`<div style="font-size:12px;color:${C.sub}">${lv.map(v=>{const p=getPct(sid,v.id);return `${esc(v.title)} ${p>=HOME_VIDEO_DONE?`<span style="color:${C.green}">✔</span>`:p>0?p+'%':red('안 봄')}`;}).join('<br>')}</div>`:gray('강의 영상 없음');
+    const seen=v=>getPct(sid,v.id)>=HOME_VIDEO_DONE;
+    const req=lv.filter(v=>absSet.has(v.class_date)),opt=lv.filter(v=>!absSet.has(v.class_date));
+    let L='';
+    if(lv.length){
+      const rs=req.filter(seen).length,os=opt.filter(seen).length;
+      const badges=(req.length?bd(rs===req.length?`보강 시청 ${rs}/${req.length}`:`보강 미시청 ${req.length-rs}개`,rs===req.length?'g':'r'):'')
+        +(opt.length?bd(`복습 시청 ${os}/${opt.length}`,os?'g':'n'):'');
+      const line=(v,need)=>{const p=getPct(sid,v.id);return sm(`${esc(v.title)} ${p>=HOME_VIDEO_DONE?`<span style="color:${C.green}">✔</span>`:p>0?p+'%':need?`<b style="color:${C.red}">안 봄</b>`:'안 봄'}`);};
+      L=item(badges,(req.length?sm('결석한 수업 영상은 꼭 시청해야 합니다','#9aa1b0'):'')+req.map(v=>line(v,true)).join('')+opt.map(v=>line(v,false)).join(''));
+    }else L=item(bd('강의 영상 없음','n'));
     return{A,V,I,T,L,nL:lv.length};
   };
   const cc=weeks.map(cells);
   const th=`padding:8px 10px;font-family:${TF};font-weight:700;font-size:14px;text-align:left;border-bottom:2px solid ${C.blue}`;
   const tr=(k,key)=>`<tr class="pb"><td style="padding:8px 10px;border-top:1px solid ${C.line};font-family:${TF};font-weight:700;font-size:13px;color:${C.sub};white-space:nowrap;vertical-align:top">${k}</td>${cc.map(c=>`<td style="padding:8px 10px;border-top:1px solid ${C.line};font-size:13px;line-height:1.55;vertical-align:top">${c[key]}</td>`).join('')}</tr>`;
-  const table=`<table style="width:100%;border-collapse:collapse;table-layout:fixed"><colgroup><col style="width:78px">${weeks.map(()=>'<col>').join('')}</colgroup><tr class="pb"><th style="${th}"></th>${weeks.map(w=>`<th style="${th}">${w.label} <span style="font-family:${BF};font-weight:400;font-size:12px;color:${C.sub}">${rpMD(w.ws)}~${rpMD(w.we)}</span></th>`).join('')}</tr>${tr('출석','A')}${tr('어휘 미션','V')}${tr('인증 과제','I')}${tr('시험','T')}${cc.some(c=>c.nL)?tr('강의 영상','L'):''}</table>`;
+  const table=`<table style="width:100%;border-collapse:collapse;table-layout:fixed"><colgroup><col style="width:78px">${weeks.map(()=>'<col>').join('')}</colgroup><tr class="pb" data-kwn><th style="${th}"></th>${weeks.map(w=>`<th style="${th}">${w.label} <span style="font-family:${BF};font-weight:400;font-size:12px;color:${C.sub}">${rpMD(w.ws)}~${rpMD(w.we)}</span></th>`).join('')}</tr>${tr('출석','A')}${tr('어휘 미션','V')}${tr('인증 과제','I')}${tr('시험','T')}${cc.some(c=>c.nL)?tr('강의 영상','L'):''}</table>`;
   return `<div style="width:794px;box-sizing:border-box;padding:36px 44px 30px;background:#fff;color:${C.ink};font-family:${BF},sans-serif">
     <div class="pb" style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid ${C.blue};padding-bottom:10px;margin-bottom:14px"><div><div style="font-family:${TF};font-weight:700;font-size:12px;color:${C.blue}">정말 쏠쏠한 국어</div><div style="font-family:${TF};font-weight:700;font-size:25px">주간 학습 리포트</div></div>
     <div style="text-align:right"><div style="font-family:${TF};font-weight:700;font-size:20px">${esc(u.name)} 학생</div><div style="font-size:12px;color:${C.sub}">${esc(u.school||'')} ${u.grade||''}학년 · ${rpMD(start,1)} ~ ${rpMD(end,1)}</div></div></div>
-    ${alert}${notice}${noteBox}${table}${rpAreaHTML(u,start,end)}
+    ${notice}${noteBox}${table}${rpAreaHTML(u,start,end)}
     <div class="pb" style="font-size:11px;color:#9aa1b0;text-align:center;margin-top:12px">정말 쏠쏠한 국어 · 쏠T · ${rpMK(start)} ~ ${rpMK(end)} 기록</div></div>`;
 }
 function reportRange(){
@@ -3977,6 +3996,25 @@ function renderReportPreview(){
   inner.style.transform=`scale(${k})`;el.style.height=Math.ceil(inner.firstElementChild.offsetHeight*k)+'px';
 }
 
+// 성적표 쪽 나누기 위치: 잎 덩어리(표의 줄 tr, 안에 블록이 없는 div)와 '다음과 붙이기'(data-kwn) 머리를 넘지 않는 가장 아래 빈 곳
+function reportCuts(page,pageH){
+  const top0=page.getBoundingClientRect().top,total=page.scrollHeight;
+  const atoms=[...page.querySelectorAll('tr,div')].filter(el=>el.tagName==='TR'?true:!el.closest('tr')&&!el.querySelector('div,table,tr'))
+    .map(el=>{const r=el.getBoundingClientRect();return{t:r.top-top0,b:r.bottom-top0,k:el.hasAttribute('data-kwn')};}).filter(a=>a.b>a.t).sort((x,y)=>x.t-y.t);
+  const spans=atoms.map((a,i)=>{if(!a.k)return[a.t,a.b];const nx=atoms.slice(i+1).find(x=>x.t>=a.b-1);return[a.t,nx?nx.b:a.b];});
+  const ok=y=>!spans.some(([t,b])=>t<y-0.5&&y+0.5<b);
+  const tops=[...new Set(atoms.map(a=>Math.round(a.t)))].sort((x,y)=>x-y);
+  const cuts=[0];let start=0;
+  while(total-start>(cuts.length===1?pageH:pageH-40)){
+    const lim=start+(cuts.length===1?pageH:pageH-40)-30; // 둘째 쪽부터는 위 여백만큼 덜 담고, 아래 여백 30
+    let best=null;for(const y of tops){if(y>start+40&&y<=lim&&ok(y))best=y;}
+    let cut;
+    if(best==null)cut=lim; // 한 덩어리가 한 쪽보다 길 때만 어쩔 수 없이 자름
+    else{const prev=Math.max(start,...atoms.filter(a=>a.b<=best+0.5).map(a=>a.b));cut=Math.round((prev+best)/2);}
+    cuts.push(cut);start=cut;
+  }
+  cuts.push(total);return cuts;
+}
 async function buildReportPdf(sid,note,start,end){
   await loadPdfLibs();
   try{await Promise.all(["700 20px 'RP Title'","400 14px 'RP Body'","700 14px 'RP Body'"].map(f=>document.fonts.load(f,'가')));}catch(e){}
@@ -3988,19 +4026,9 @@ async function buildReportPdf(sid,note,start,end){
     if(document.fonts&&document.fonts.ready)await document.fonts.ready;
     const page=host.firstElementChild;const scale=2;
     const canvas=await html2canvas(page,{scale,backgroundColor:'#ffffff',useCORS:true,logging:false});
-    // 줄이 페이지 경계에서 잘리지 않게 블록 단위로 페이지를 나눔
-    const pageH=Math.floor(794*297/210);const top0=page.getBoundingClientRect().top;
-    // 표의 첫 줄이 넘어가면 제목까지 같이 다음 쪽으로 (제목만 덩그러니 남지 않게)
-    const blocks=[...page.querySelectorAll('.pb')].filter(el=>!el.querySelector('.pb')).map(el=>{
-      const r=el.getBoundingClientRect();let t=r.top-top0;
-      const box=el.parentElement&&el.parentElement.closest('.pb');
-      if(box){const bt=box.getBoundingClientRect().top-top0;if(t-bt<170)t=bt;}
-      return[t,r.bottom-top0];}).sort((a,b)=>a[0]-b[0]);
-    const total=page.scrollHeight;const cuts=[0];let start=0;
-    const room=i=>i===0?pageH:pageH-40; // 둘째 쪽부터는 위 여백만큼 덜 담음
-    for(const [t,b] of blocks){if(b-start>room(cuts.length-1)-40&&t>start){cuts.push(t-12);start=t-12;}}
-    while(total-start>pageH){start+=pageH;cuts.push(start);} // 아주 긴 블록 대비
-    cuts.push(total);
+    // 쪽 나누기: 글줄·표의 한 줄·상자를 깨지지 않는 덩어리로 보고, 덩어리 사이 빈 곳에서만 잘라요 (쏠T 11-11)
+    const pageH=Math.floor(794*297/210);
+    const cuts=reportCuts(page,pageH);const total=page.scrollHeight;
     const pdf=new jspdf.jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
     for(let i=0;i<cuts.length-1;i++){
       const sy=Math.round(cuts[i]*scale),sh=Math.round((cuts[i+1]-cuts[i])*scale);if(sh<=0)continue;

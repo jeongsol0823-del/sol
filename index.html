@@ -424,7 +424,15 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
   <div class="content">
 
     <div class="section active" id="t-students">
-      <div class="section-head"><h2>학생 계정 만들기</h2></div>
+      <!-- 쏠T 11-12: 결석 후 영상 확인을 맨 위에, 학생 줄은 주차별 출결·영상, 계정 만들기는 맨 아래 접는 칸으로 -->
+      <div id="absvid-box"></div>
+      <div class="section-head" id="pending-head"><h2>가입 승인 대기</h2></div>
+      <div id="pending-list"></div>
+      <div class="section-head" style="margin-top:8px"><h2>학생 목록</h2></div>
+      <div class="vhint">최근 4주 출결이에요. 결석한 주에는 그날 수업 영상(복습·강의)을 봤는지 함께 보여요(영상마다 90% 이상 = 봤음). 학교·학년 바꾸기, 비밀번호, 이름 수정, 삭제는 줄 끝 <b>관리</b> 버튼에 있어요.</div>
+      <div id="active-list"></div>
+      <div id="na-result"></div>
+      <details class="form-fold" id="acct-fold" style="margin-top:24px"><summary>＋ 학생 계정 만들기 · 학교 목록</summary>
       <div class="card">
         <div class="admin-form">
           <div class="form-group"><label>이름</label><input class="form-input" id="na-name" placeholder="예: 김민준"></div>
@@ -437,15 +445,11 @@ mark{background:rgba(245,158,11,.28);color:var(--text);border-radius:3px;padding
         <button class="btn blue" style="margin-top:6px" onclick="createStudent()">계정 만들기</button>
         <div class="vhint" style="margin:8px 0 0">학교가 목록에 없으면 아래 <b>학교 목록</b>에서 먼저 추가하세요. 만든 계정은 바로 로그인할 수 있어요.</div>
       </div>
-      <div id="na-result"></div>
-      <div class="card" style="margin-top:20px"><div style="font-weight:600;margin-bottom:6px">학교 목록</div>
+      <div class="card" style="margin-top:12px"><div style="font-weight:600;margin-bottom:6px">학교 목록</div>
         <div id="school-list" style="display:flex;gap:6px;flex-wrap:wrap"></div>
         <div style="display:flex;gap:6px;margin-top:10px"><input class="form-input" id="school-new" placeholder="예: 수지고" style="flex:1"><button class="btn sm" onclick="addSchool()">학교 추가</button></div>
         <div class="vhint" style="margin:8px 0 0">학년은 매년 3월 1일에 한 학년씩 자동으로 올라가요.</div></div>
-      <div class="section-head" id="pending-head" style="margin-top:20px"><h2>가입 승인 대기</h2></div>
-      <div id="pending-list"></div>
-      <div class="section-head" style="margin-top:24px"><h2>학생 목록 &amp; 진도</h2></div>
-      <div id="active-list"></div>
+      </details>
     </div>
 
     <div class="section" id="t-videos">
@@ -1225,35 +1229,112 @@ function foldGroup(key,title,count,extra,body){
 }
 // 학교 목록 순서대로 정렬 (없는 학교·기타는 뒤로)
 function schoolOrder(a,b){const o=schoolNames();const ia=o.indexOf(a),ib=o.indexOf(b);return (ia<0?999:ia)-(ib<0?999:ib)||a.localeCompare(b);}
+/* ---- 결석 후 영상 확인 (쏠T 11-12): 결석한 날의 수업 영상(복습·강의)은 결석생만 꼭 봐야 함, 영상마다 90% 이상 = 봤음 ---- */
+const absVidFilter={sch:'',wk:'',doneOpen:false};
+const stuManageOpen=new Set(); // 관리 칸을 펼쳐 둔 학생 (다시 그려도 그대로)
+const AV_ST={none:['red','✗ 안 봄'],part:['amber','△ 일부'],done:['green','✓ 봤음'],novid:['gray','영상 없음']};
+// 그 날짜가 든 주(월~일)와 이름 — 성적표 주차와 같은 방식(그 주 목요일 기준)
+function weekOf(d){const m=rpDate(d);m.setDate(m.getDate()-((m.getDay()+6)%7));const th=new Date(m);th.setDate(m.getDate()+3);return{ws:ymd(m),we:addDays(ymd(m),6),label:`${th.getMonth()+1}월 ${Math.ceil(th.getDate()/7)}주차`};}
+function fmtStamp(t){if(!t)return'';const x=new Date(t);if(isNaN(x))return'';return `${x.getMonth()+1}/${x.getDate()} ${String(x.getHours()).padStart(2,'0')}:${String(x.getMinutes()).padStart(2,'0')}`;}
+function mdWd(d){return fmtMD(d)+'('+'일월화수목금토'[rpDate(d).getDay()]+')';}
+// 결석한 날 그 학생이 꼭 볼 영상(그 수업 날짜·같은 학교·학년, 문법 기초 제외)과 시청 상태
+function absentVideoState(u,date){
+  const vs=db.videos.filter(v=>v.class_date===date&&!isGrammar(v)&&videoFor(v,u)).sort((a,b)=>String(a.title).localeCompare(String(b.title)));
+  let last=0;
+  const items=vs.map(v=>{const p=db.progress.find(x=>x.student_id===u.id&&x.video_id===v.id);const t=p&&p.updated_at?new Date(p.updated_at).getTime():0;if(t>last)last=t;return{v,pct:p?Math.round(p.percent||0):0};});
+  const done=items.filter(i=>i.pct>=HOME_VIDEO_DONE).length;
+  const state=!items.length?'novid':done===items.length?'done':items.some(i=>i.pct>0)?'part':'none';
+  return{items,done,n:items.length,state,last:last?new Date(last).toISOString():''};
+}
+function absentVideoList(){
+  const out=[];
+  for(const a of db.attendance){
+    if(a.status!=='absent')continue;
+    const u=db.users.find(x=>x.id===a.student_id&&x.role==='student'&&x.status==='active');
+    if(!u||u.name==='테스트')continue; // 테스트 계정은 빼고
+    out.push(Object.assign({u,date:a.date,week:weekOf(a.date)},absentVideoState(u,a.date)));
+  }
+  const rank={none:0,part:1,novid:2,done:3};
+  return out.sort((a,b)=>rank[a.state]-rank[b.state]||a.date.localeCompare(b.date)||schoolOrder(a.u.school||'',b.u.school||'')||a.u.name.localeCompare(b.u.name));
+}
+function absVidPill(s){const[k,t]=AV_ST[s.state];return `<span class="pill ${k}">${s.state==='novid'?t:'영상 '+t+(s.state==='done'?'':' '+s.done+'/'+s.n)}</span>`;}
+function renderAbsentVideos(){
+  const el=document.getElementById('absvid-box');if(!el)return;
+  const all=absentVideoList();
+  if(!all.length){el.innerHTML='';return;}
+  const F=absVidFilter;
+  const schools=[...new Set(all.map(r=>r.u.school||''))].sort(schoolOrder);
+  const weeks=[...new Map(all.map(r=>[r.week.ws,r.week])).values()].sort((a,b)=>b.ws.localeCompare(a.ws));
+  if(F.sch&&!schools.includes(F.sch))F.sch='';
+  if(F.wk&&!weeks.some(w=>w.ws===F.wk))F.wk='';
+  const L=all.filter(r=>(!F.sch||(r.u.school||'')===F.sch)&&(!F.wk||r.week.ws===F.wk));
+  const todo=L.filter(r=>r.state!=='done'),done=L.filter(r=>r.state==='done');
+  const c=k=>L.filter(r=>r.state===k).length;
+  const chip=(v,label)=>`<button class="btn sm${F.sch===v?' blue':''}" onclick="absVidFilter.sch='${esc(v)}';renderAbsentVideos()">${esc(label)}</button>`;
+  const row=r=>{const[k,t]=AV_ST[r.state];
+    const vl=r.n?r.items.map(i=>`${esc(String(i.v.title).replace(/^\[[^\]]*\]\s*/,''))} <b style="color:var(--${i.pct>=HOME_VIDEO_DONE?'green':i.pct>0?'amber':'red'})">${i.pct>=HOME_VIDEO_DONE?'✓':i.pct+'%'}</b>`).join(' · '):'그날 수업 영상이 아직 없어요. 영상 관리에서 이 수업 날짜로 올리면 이 학생에게 열려요.';
+    return `<div class="alert-row" style="align-items:flex-start;flex-wrap:nowrap">
+      <div style="display:flex;gap:10px;align-items:flex-start;min-width:0;flex:1"><span class="pill ${k}" style="font-size:12px;margin-top:2px">${t}</span>
+        <div style="min-width:0"><div><strong>${esc(r.u.name)}</strong> <span style="font-size:12px;color:var(--text2)">${esc(r.u.school||'학교 미입력')} · ${esc(r.week.label)} · ${mdWd(r.date)} 결석${r.n?` · 영상 ${r.done}/${r.n}`:''}</span></div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px;line-height:1.55">${vl}</div></div></div>
+      <div style="font-size:12px;color:var(--text3);text-align:right;white-space:nowrap">${r.last?'마지막 시청<br>'+fmtStamp(r.last):'시청 기록 없음'}</div></div>`;};
+  el.innerHTML=`<div class="card${todo.length?' alert-card':''}" style="margin-bottom:18px">
+    <div class="row-between"><strong style="font-size:15px">결석 후 영상 확인</strong><span style="display:flex;gap:4px;flex-wrap:wrap"><span class="pill red">안 봄 ${c('none')}</span><span class="pill amber">일부 ${c('part')}</span>${c('novid')?`<span class="pill gray">영상 없음 ${c('novid')}</span>`:''}<span class="pill green">다 봄 ${done.length}</span></span></div>
+    <div class="vhint" style="margin:4px 0 8px">결석한 날의 수업 영상(복습·강의)은 결석한 학생만 꼭 봐야 해요. 영상마다 90% 이상 보면 ‘봤음’, 조금 봤으면 ‘일부’예요. 시간은 마지막으로 본 때예요.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px">${chip('','전체')}${schools.map(s=>chip(s,s||'학교 미입력')).join('')}
+      <select class="date-in" style="font-size:13px;padding:5px 8px" onchange="absVidFilter.wk=this.value;renderAbsentVideos()"><option value="">모든 주차</option>${weeks.map(w=>`<option value="${w.ws}"${F.wk===w.ws?' selected':''}>${esc(w.label)}</option>`).join('')}</select></div>
+    ${todo.length?todo.map(row).join(''):'<div style="font-size:13px;color:var(--text2);padding:8px 0">이 조건에서 영상을 다 보지 않은 결석생은 없어요.</div>'}
+    ${done.length?`<details style="margin-top:6px"${F.doneOpen?' open':''} ontoggle="absVidFilter.doneOpen=this.open"><summary style="font-size:12px;color:var(--text2);cursor:pointer">다 본 학생 ${done.length}건 보기</summary>${done.map(row).join('')}</details>`:''}
+  </div>`;
+}
+function toggleStuManage(id){
+  stuManageOpen[stuManageOpen.has(id)?'delete':'add'](id);
+  const tr=document.getElementById('stm-'+id);if(tr)tr.hidden=!stuManageOpen.has(id);
+}
 function renderActive(){
+  renderAbsentVideos();
   const el=document.getElementById('active-list');
   const active=db.users.filter(u=>u.role==='student'&&u.status==='active');
   if(!active.length){el.innerHTML='<div class="empty-hint">등록된 학생이 없습니다.</div>';return;}
+  // 최근 4주(이번 주 포함) — 결석한 주에는 그날 영상 시청 배지를 함께
+  const cur=weekOf(todayStr());
+  const weeks=[3,2,1,0].map(k=>weekOf(addDays(cur.ws,-7*k)));
+  const cell=(u,w)=>{
+    const recs=db.attendance.filter(a=>a.student_id===u.id&&a.date>=w.ws&&a.date<=w.we).sort((a,b)=>a.date.localeCompare(b.date));
+    if(!recs.length)return `<span style="font-size:12px;color:var(--text3)">${w.ws===cur.ws?'아직 없음':'기록 없음'}</span>`;
+    return recs.map(a=>{
+      if(a.status!=='absent')return `<span class="pill ${a.status==='late'?'amber':'green'}" title="${fmtMD(a.date)}">${a.status==='late'?'지각':'출석'}</span>`;
+      return `<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start"><span class="pill red">결석 ${mdWd(a.date)}</span>${absVidPill(absentVideoState(u,a.date))}</div>`;
+    }).join(' ');
+  };
   const row=u=>{
-    const myProg=db.progress.filter(p=>p.student_id===u.id);
-    const watched=myProg.length;
-    const avg=watched?Math.round(myProg.reduce((a,p)=>a+(p.percent||0),0)/watched):0;
     const flags=videoFlagsFor(u.id);
     const fast=flags.filter(f=>f.fast).length,skip=flags.filter(f=>f.skip).length,away=flags.filter(f=>f.away).length;
+    const id=esc(u.id),open=stuManageOpen.has(u.id);
     return `<tr>
-      <td>${esc(u.name)}${nameTaken(u.name,u.id)?' <span class="pill red">동명이인</span>':''}<div style="font-size:11px;color:var(--text3)">${esc(u.id)}</div></td>
-      <td style="white-space:nowrap"><select class="date-in" id="st-school-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}','school')"><option value="">학교 미입력</option>${[...new Set(schoolNames().concat(u.school?[u.school]:[]))].map(n=>`<option value="${esc(n)}"${u.school===n?' selected':''}>${esc(n)}</option>`).join('')}</select>
-        <select class="date-in" id="st-grade-${esc(u.id)}" onchange="updateStudentInfo('${esc(u.id)}')">${gradeOptionsHtml(todayStr(),gradeAt(u),'학년')}</select></td>
-      <td>${watched} / ${db.videos.filter(v=>hasAccess(u.id,v.id)).length}개 시청${grammarOk(u.id)?' <span class="pill blue">문법</span>':''}</td>
-      <td>${avg}%</td>
+      <td><strong>${esc(u.name)}</strong>${nameTaken(u.name,u.id)?' <span class="pill red">동명이인</span>':''}${grammarOk(u.id)?' <span class="pill blue">문법</span>':''}<div style="font-size:11px;color:var(--text3)">${id}</div></td>
+      ${weeks.map(w=>`<td>${cell(u,w)}</td>`).join('')}
       <td>${fast?`<span class="pill amber">배속 ${fast}</span> `:''}${skip?`<span class="pill red">건너뜀 ${skip}</span> `:''}${away?`<span class="pill red">이탈 ${away}</span>`:''}${!fast&&!skip&&!away?'<span style="color:var(--text3)">-</span>':''}</td>
-      <td style="white-space:nowrap"><button class="btn sm" onclick="showStudentPw('${esc(u.id)}')">비번 보기</button> <button class="btn sm" onclick="resetStudentPw('${esc(u.id)}')">새 비번</button> <button class="btn sm" onclick="renameStudent('${esc(u.id)}')">이름 수정</button> <button class="btn red sm" onclick="removeStudent('${esc(u.id)}')">삭제</button><div id="pw-${esc(u.id)}" style="font-size:12px;margin-top:4px"></div></td>
-    </tr>`;
+      <td style="white-space:nowrap;text-align:right"><button class="btn sm" onclick="toggleStuManage('${id}')">관리 ▾</button></td>
+    </tr>
+    <tr id="stm-${id}"${open?'':' hidden'}><td colspan="${weeks.length+3}" style="background:var(--bg2)">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <select class="date-in" id="st-school-${id}" onchange="updateStudentInfo('${id}','school')"><option value="">학교 미입력</option>${[...new Set(schoolNames().concat(u.school?[u.school]:[]))].map(n=>`<option value="${esc(n)}"${u.school===n?' selected':''}>${esc(n)}</option>`).join('')}</select>
+        <select class="date-in" id="st-grade-${id}" onchange="updateStudentInfo('${id}')">${gradeOptionsHtml(todayStr(),gradeAt(u),'학년')}</select>
+        <button class="btn sm" onclick="showStudentPw('${id}')">비번 보기</button> <button class="btn sm" onclick="resetStudentPw('${id}')">새 비번</button> <button class="btn sm" onclick="renameStudent('${id}')">이름 수정</button> <button class="btn red sm" onclick="removeStudent('${id}')">삭제</button>
+      </div><div id="pw-${id}" style="font-size:12px;margin-top:4px"></div></td></tr>`;
   };
   // 학교별로 묶어서 접고 펼 수 있게 (학교 목록 순서, 학교 미입력은 맨 뒤)
   const order=schoolNames();
   const groups=[...new Set(active.map(u=>u.school||''))].sort((a,b)=>(!a)-(!b)||((order.indexOf(a)+1||999)-(order.indexOf(b)+1||999))||a.localeCompare(b));
+  const missIds=new Set(absentVideoList().filter(r=>r.state==='none'||r.state==='part').map(r=>r.u.id));
   el.innerHTML=groups.map(sch=>{
     const list=active.filter(u=>(u.school||'')===sch).sort((a,b)=>a.name.localeCompare(b.name));
     const warn=list.reduce((n,u)=>n+(videoFlagsFor(u.id).some(f=>f.skip||f.away)?1:0),0);
+    const miss=list.filter(u=>missIds.has(u.id)).length;
     return `<details class="sch-group" data-sch="${esc(sch)}"${openSchools.has(sch)?' open':''} ontoggle="openSchools[this.open?'add':'delete'](this.dataset.sch)">
-      <summary><span class="sch-name">${esc(sch||'학교 미입력')}</span><span class="sch-cnt">${list.length}명</span>${warn?`<span class="pill red">영상 확인 ${warn}명</span>`:''}</summary>
-      <div style="overflow-x:auto"><table class="simple" style="min-width:860px"><thead><tr><th>이름</th><th>학교·학년</th><th>시청 현황</th><th>평균 진도</th><th>영상 확인</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>
+      <summary><span class="sch-name">${esc(sch||'학교 미입력')}</span><span class="sch-cnt">${list.length}명</span>${miss?`<span class="pill red">결석 영상 안 봄 ${miss}명</span>`:''}${warn?`<span class="pill amber">영상 경고 ${warn}명</span>`:''}</summary>
+      <div style="overflow-x:auto"><table class="simple" style="min-width:760px"><thead><tr><th>이름</th>${weeks.map(w=>`<th>${esc(w.label)}${w.ws===cur.ws?' <span style="font-weight:400;color:var(--text3)">(이번 주)</span>':''}</th>`).join('')}<th>영상 경고</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>
     </details>`;
   }).join('');
 }
@@ -3557,7 +3638,7 @@ async function saveAttendance(){
   }
   const n=await autoGrantAbsentees(date);
   notify(`출석을 저장했습니다.${n?` 결석한 학생 ${n}명에게 그날 수업 영상을 열어줬어요.`:''}`,'success');
-  renderAttendanceForm();renderVideoAdmin();renderAccessAdmin();
+  renderAttendanceForm();renderVideoAdmin();renderAccessAdmin();renderActive();
 }
 function renderAttendanceHistory(){
   const el=document.getElementById('att-history');
@@ -3880,7 +3961,7 @@ function rpRange(ns){
 // 결석한 날의 보강 영상 (그 학생에게 해당하는 것)과 시청 여부
 function rpMakeup(u,date){
   const vs=db.videos.filter(v=>v.class_date===date&&!isGrammar(v)&&videoFor(v,u));
-  return{vs,seen:vs.length>0&&vs.every(v=>db.progress.some(p=>p.student_id===u.id&&p.video_id===v.id))};
+  return{vs,seen:vs.length>0&&vs.every(v=>getPct(u.id,v.id)>=HOME_VIDEO_DONE)}; // 쏠T 11-12: 학생관리와 같이 90% 이상 = 봤음 (다음 성적표부터)
 }
 // note = 전체 공지(모든 학생 같음), personal = 이 학생 개별 안내 (쏠T 11-11: 두 상자로 나눔, 결석 보강 안내는 개별 상자로)
 function parentReportHTML(sid,note,start,end,personal){

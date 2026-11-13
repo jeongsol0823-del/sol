@@ -838,7 +838,7 @@ let db=emptyDb();
 let ytApiReady=false;
 window.onYouTubeIframeAPIReady=function(){ytApiReady=true;};
 let ytPlayer=null,currentVid=null,currentStartPos=0;
-let watchedSet=new Set(),lastPos=-1,totalDur=0,maxRateSeen=1;
+let watchedSet=new Set(),lastPos=-1,totalDur=0,maxRateSeen=1,lastTickAt=0,lastRate=1;
 let trackTimer=null,saveTimer=null;
 let rateSec={},baseRateSec={}; // 배속별 시청 초 (이번 재생분 / 저장돼 있던 값)
 let awayCount=0,awaySec=0,baseAwayCount=0,baseAwaySec=0,awayStart=0,lastPlayingAt=0; // 재생 중 다른 화면으로 나간 횟수·시간 (이번 재생분 / 저장돼 있던 값)
@@ -1937,26 +1937,42 @@ function onYTState(e){
   const dot=document.getElementById('live-dot');
   if(e.data===YT.PlayerState.PLAYING){dot.classList.add('active');startTracking();}
   else{
-    dot.classList.remove('active');stopTracking();
-    if(e.data===YT.PlayerState.ENDED){if(totalDur>0)for(let i=0;i<=Math.floor(totalDur);i++)watchedSet.add(i);updateTrackUI(100);scheduleSave();}
+    dot.classList.remove('active');
+    if(trackTimer)trackStep(); // 멈추기 직전까지 실제로 재생된 부분 마저 세기 (쏠T 11-14: 끝까지 가도 전체를 채우지 않음)
+    stopTracking();
+    if(e.data===YT.PlayerState.ENDED)scheduleSave();
   }
+}
+// 진도 = 실제로 재생된 구간만 (쏠T 11-14). 1초 시계 횟수가 아니라 재생 위치로 세요:
+// 지난번 확인 뒤 흐른 실제 시간 × 배속만큼 위치가 나아갔으면 그 사이 구간을 본 것으로 쳐요(휴대폰에서 시계가 느려도 손해 없음).
+// 그보다 훨씬 많이 나아갔으면 넘긴 것이라 세지 않아요. 같은 구간은 한 번만 세요(watchedSet).
+function trackStep(){
+  if(!ytPlayer||!ytPlayer.getCurrentTime)return;
+  if(totalDur===0){try{totalDur=ytPlayer.getDuration()||0;}catch(e){}if(totalDur===0)return;document.getElementById('trk-total').textContent=fmtTime(totalDur);}
+  const now=Date.now();
+  const cur=Math.floor(ytPlayer.getCurrentTime());
+  let rateNow=1;
+  try{rateNow=ytPlayer.getPlaybackRate()||1;}catch(e){}
+  if(lastPos>=0&&cur>lastPos&&lastTickAt){
+    const dt=(now-lastTickAt)/1000;
+    const allowed=dt*Math.max(rateNow,lastRate)*1.25+1.5; // 재생으로 갈 수 있는 거리 + 여유
+    if(cur-lastPos<=allowed){for(let i=lastPos;i<=cur;i++)watchedSet.add(i);}
+    else watchedSet.add(cur);
+  }else watchedSet.add(cur);
+  lastPos=cur;lastTickAt=now;lastRate=rateNow;
+  lastPlayingAt=now;
+  if(rateNow>maxRateSeen)maxRateSeen=rateNow;
+  const k=String(rateNow);rateSec[k]=(rateSec[k]||0)+1;
+  checkPlayWarnings(rateNow);
+  const pct=Math.min(Math.round((watchedSet.size/totalDur)*100),100);
+  updateTrackUI(pct);scheduleSave();
 }
 function startTracking(){
   stopTracking();
-  trackTimer=setInterval(()=>{
-    if(!ytPlayer||!ytPlayer.getCurrentTime)return;
-    if(totalDur===0){try{totalDur=ytPlayer.getDuration()||0;}catch(e){}if(totalDur===0)return;document.getElementById('trk-total').textContent=fmtTime(totalDur);}
-    const cur=Math.floor(ytPlayer.getCurrentTime());
-    if(lastPos>=0&&cur>lastPos&&cur-lastPos<=3){for(let i=lastPos;i<=cur;i++)watchedSet.add(i);}
-    else{watchedSet.add(cur);}
-    lastPos=cur;
-    lastPlayingAt=Date.now();
-    let rateNow=1;
-    try{const rate=ytPlayer.getPlaybackRate();rateNow=rate;if(rate>maxRateSeen)maxRateSeen=rate;const k=String(rate);rateSec[k]=(rateSec[k]||0)+1;}catch(e){}
-    checkPlayWarnings(rateNow);
-    const pct=Math.min(Math.round((watchedSet.size/totalDur)*100),100);
-    updateTrackUI(pct);scheduleSave();
-  },1000);
+  // 다시 재생할 때는 지금 위치에서 새로 시작 (멈춘 동안 옮긴 구간은 세지 않음)
+  lastPos=-1;lastTickAt=0;
+  trackTimer=setInterval(trackStep,1000);
+  trackStep();
 }
 function stopTracking(){if(trackTimer){clearInterval(trackTimer);trackTimer=null;}}
 function scheduleSave(){
